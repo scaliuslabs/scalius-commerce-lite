@@ -24,6 +24,17 @@
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-1 -1 26 26'%3E%3Cpath d='M12 1.6l3.1 6.6 7.2.9-5.3 5 1.4 7.1L12 17.7l-6.4 3.5L7 14.1l-5.3-5 7.2-.9z'/%3E%3C/svg%3E") repeat-x left center / var(--sc-star) var(--sc-star);
 }
 
+/*
+ * A rating a buyer reads on their own pages (a review's stars, the review form's star picker): both colours read at
+ * 3:1 on the surface (WCAG 1.4.11). The filled stars are the rating amber taken toward the page's words (darker on a
+ * light page, lighter on a dark one), the empty stars the palette's muted words. Under a theme's look a private page's
+ * `rating` row sets both (private-tokens.ts).
+ */
+.sc-rating {
+  --sc-star-on: color-mix(in srgb, var(--theme-rating, #f59e0b) 55%, var(--foreground));
+  --sc-star-off: var(--muted-foreground);
+}
+
 @media (forced-colors: active) {
   .sc-stars {
     forced-color-adjust: none;

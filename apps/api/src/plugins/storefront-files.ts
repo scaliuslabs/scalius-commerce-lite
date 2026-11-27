@@ -5,12 +5,17 @@
 // (immutable, by release) and its isolate loader reads the module. A file is
 // served only for the app's current release and only when its bytes still
 // match the index. Bundled apps never come here: their files are compiled
-// into the storefront.
+// into the storefront. A release's `buyer-chrome.css` (the store's reading of
+// its stylesheet for the buyer's own pages) is served only under a mark of
+// this checker's version for those exact bytes (buyer-chrome-check.ts).
 
 import type { Database } from "@scalius/database/client";
 import { getPluginInstallation } from "@scalius/core/modules/plugins";
+import { getSystemKv } from "@scalius/core/utils/system-kv";
+import { BUYER_CHROME_CSS_VERSION } from "@scalius/shared/plugins/buyer-chrome-css";
+import { buyerChromeMarkAllows, buyerChromeMarkKey, readBuyerChromeMark } from "@scalius/shared/plugins/buyer-chrome-mark";
 import { sha256Hex } from "@scalius/shared/plugins/registry";
-import { STOREFRONT_FILE_PATH, storefrontFileContentType } from "@scalius/shared/plugins/storefront-protocol";
+import { STOREFRONT_BUYER_CHROME_FILE, STOREFRONT_FILE_PATH, storefrontFileContentType } from "@scalius/shared/plugins/storefront-protocol";
 
 /** Where one storefront file of a release is stored (private prefix: never served by the media host). */
 export function pluginStorefrontFileKey(pluginId: string, version: string, sha256: string, path: string): string {
@@ -25,12 +30,16 @@ export function pluginStorefrontIndexKey(pluginId: string, version: string, sha2
 export interface StorefrontFile {
   bytes: Uint8Array;
   contentType: string;
+  /** `buyer-chrome.css` only: the checker version whose mark allows these bytes. */
+  checker?: number;
 }
 
 /**
  * One storefront file of an installed app's current release, checked against
  * the release's index; null when the app, the release or the file is not
- * there (a bundled app's files are the storefront's own).
+ * there (a bundled app's files are the storefront's own), or, for
+ * `buyer-chrome.css`, when this checker's mark does not allow its bytes
+ * (`unmarked`: the maintenance check's own read, before it marks them).
  */
 export async function readPluginStorefrontFile(
   env: Pick<Env, "BUCKET">,
@@ -38,6 +47,7 @@ export async function readPluginStorefrontFile(
   pluginId: string,
   release: string,
   path: string,
+  options: { unmarked?: boolean } = {},
 ): Promise<StorefrontFile | null> {
   const contentType = storefrontFileContentType(path);
   if (!contentType || !STOREFRONT_FILE_PATH.test(path) || !/^[0-9a-f]{64}$/.test(release)) return null;
@@ -56,5 +66,7 @@ export async function readPluginStorefrontFile(
   if (!object || !("arrayBuffer" in object)) return null;
   const bytes = new Uint8Array(await object.arrayBuffer());
   if (await sha256Hex(bytes) !== digest) return null;
-  return { bytes, contentType };
+  if (path !== STOREFRONT_BUYER_CHROME_FILE || options.unmarked) return { bytes, contentType };
+  const mark = readBuyerChromeMark(await getSystemKv(db, buyerChromeMarkKey(pluginId, release)));
+  return buyerChromeMarkAllows(mark, digest) ? { bytes, contentType, checker: BUYER_CHROME_CSS_VERSION } : null;
 }

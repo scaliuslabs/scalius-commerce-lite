@@ -11,7 +11,8 @@ import {
   type StorefrontSection,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
-import type { GalleryEntry } from "./entries";
+import { GALLERY_ACCOUNT_PAGES, type GalleryEntry } from "./entries";
+import { galleryAccountAnswer } from "./account";
 import { fixtureProductSoldOut, GALLERY_CUSTOMER, GALLERY_KIT } from "./cart-seed";
 import {
   BANGLA_STORE_NAME,
@@ -38,6 +39,7 @@ import {
 import { fixtureObject, objectMediaIds } from "./objects";
 import { NOOR_EXTENSION, noorSectionSurfaces } from "./noor";
 import { GALLERY_LISTING_EXTENSION } from "./listing-app-extension";
+import { GALLERY_CHROME_EXTENSION, GALLERY_FORGED_CHROME_EXTENSION, galleryProbeChromeApp } from "./chrome-app-extension";
 
 /**
  * The fixture API lives on the gallery server under the entry's id, so the
@@ -129,8 +131,13 @@ function layout(entry: GalleryEntry) {
     currency: { code: "BDT", symbol: "৳", decimalPlaces: 2, priceIncrementMinor: 100 },
     ...(markets(entry) ? { markets: markets(entry) } : {}),
     theme,
-    ...(entry.scenario.noor || entry.scenario.listingApp
-      ? { appExtensions: [...(entry.scenario.noor === "active" ? [NOOR_EXTENSION] : []), ...(entry.scenario.listingApp ? [GALLERY_LISTING_EXTENSION] : [])] }
+    ...(entry.scenario.noor || entry.scenario.listingApp || entry.scenario.buyerChrome
+      ? { appExtensions: [
+        ...(entry.scenario.noor === "active" ? [NOOR_EXTENSION] : []),
+        ...(entry.scenario.listingApp ? [GALLERY_LISTING_EXTENSION] : []),
+        ...(entry.scenario.buyerChromeApp ? [galleryProbeChromeApp(entry.scenario.buyerChromeApp)].filter((app) => app !== null)
+          : entry.scenario.buyerChrome ? [entry.scenario.buyerChrome === "forged" ? GALLERY_FORGED_CHROME_EXTENSION : GALLERY_CHROME_EXTENSION] : []),
+      ] }
       : {}),
     brand: { logo: theme.brand.logo ? mediaAsset(GALLERY_LOGO_ID, `${STORE_NAME} logo`) : null, darkLogo: null, footerLogo: null, favicon: null },
     storeShape: galleryStoreShape(entry),
@@ -447,6 +454,11 @@ const PROTECTION_INPUTS = {
 export const unansweredReads = new Map<string, Set<string>>();
 
 function answer(entry: GalleryEntry, path: string, search: URLSearchParams): unknown {
+  // The account's pages: the signed-in buyer's own reads (gallery/account.ts).
+  if ((GALLERY_ACCOUNT_PAGES as readonly string[]).includes(entry.page)) {
+    const own = galleryAccountAnswer(path.replace(/^\/api\/v1/, ""));
+    if (own !== undefined) return own;
+  }
   const theme = entryTheme(entry);
   if (path === "/api/v1/storefront/layout") return layout(entry);
   if (path === "/api/v1/storefront/homepage") {

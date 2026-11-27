@@ -184,6 +184,7 @@ export function parseStoredPluginGrant(value: string | null): PluginGrantRequest
   // Dimensions added later read as their default when a stored grant predates them.
   if (raw.storefrontCode !== undefined && typeof raw.storefrontCode !== "boolean") return null;
   if (raw.storefrontPixel !== undefined && typeof raw.storefrontPixel !== "boolean") return null;
+  if (raw.storefrontBuyerPages !== undefined && typeof raw.storefrontBuyerPages !== "boolean") return null;
   const connect = raw.storefrontConnect === undefined ? [] : stringList(raw.storefrontConnect);
   if (connect === null) return null;
   const features = raw.features === undefined ? [] : stringList(raw.features);
@@ -199,6 +200,7 @@ export function parseStoredPluginGrant(value: string | null): PluginGrantRequest
     storefrontCode: raw.storefrontCode === true,
     storefrontConnect: connect,
     storefrontPixel: raw.storefrontPixel === true,
+    storefrontBuyerPages: raw.storefrontBuyerPages === true,
     buyerFiles: raw.buyerFiles === true,
     features,
     messageRecipients,

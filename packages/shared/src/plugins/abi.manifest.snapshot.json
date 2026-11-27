@@ -8739,6 +8739,10 @@
            }
           ]
          }
+        },
+        "buyerPages": {
+         "type": "boolean",
+         "const": true
         }
        },
        "required": [

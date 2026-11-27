@@ -1,22 +1,22 @@
 {
- "checker": 10,
- "policy": 1,
+ "checker": 11,
+ "policy": 2,
  "css": {
   "store's own pages": {},
   "cart shape tokens": {
-   "cart": "127639b1jpud33"
+   "cart": "9jggdt48y7y1"
   },
   "payment step tokens": {
-   "checkout": "1i0z0cj7ll69b"
+   "checkout": "15ji5ka1urz2sc"
   },
   "page paint, cart named": {
-   "cart": "15gp6n81ozc9ie"
+   "cart": "1wppxfiybtf34"
   },
   "dark scheme cart tokens": {
-   "cart": "11bw694c2zb78"
+   "cart": "1m214ze1sb6hc6"
   },
   "the reference cart, both schemes": {
-   "cart": "otx401xv0at1"
+   "cart": "1yejswg6kih0e"
   },
   "refused: unreadable total": {},
   "refused: a figure in a heading": {},

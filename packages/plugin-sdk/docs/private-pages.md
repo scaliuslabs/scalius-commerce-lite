@@ -1,6 +1,6 @@
 # Design the buyer's private pages
 
-The cart, checkout, payment, receipt and account pages are a buyer's own pages: they hold a cart, an address, a phone number and a code. No theme or app script runs there, and no theme markup or CSS. You design them with data the store draws:
+The cart, checkout, payment, receipt and account pages are a buyer's own pages: they hold a cart, an address, a phone number and a code. No theme or app script runs there, and no theme markup or CSS beside the store's parts. You design them with data the store draws (and, where the buyer does not pay, your header and footer draw inert in a shadow root: [below](#your-header-and-footer-on-the-buyers-own-pages)):
 
 - you **arrange** the store's parts and the apps' targets, and choose each part's variant;
 - you give the store's parts, and the apps' blocks the store draws, their **look through typed tokens** (colours per scheme, sizes, radii, fonts, columns);
@@ -9,7 +9,7 @@ The cart, checkout, payment, receipt and account pages are a buyer's own pages: 
 
 The store writes every CSS rule from your values, checks every colour a buyer reads, and keeps what a buyer must see and do. A rendered gate ([below](#the-rendered-gate)) draws themes in a real browser and fails when anything a buyer must read or use is lost.
 
-This page covers the cart page, the payment step and the cart drawer, and the look of the receipt and the account. A private page takes no sections: `pages.templates` has no cart template (one with sections is refused with reason `private_page_template`), and no section of the homepage, a landing page or another template draws there. The drawer opens over public pages and is part of each of them: its arrangement, words and icons come from here, and its look comes from your public stylesheet through the same hooks. The receipt and the account take their look from tokens here too ([below](#the-receipt-and-the-account)); their parts keep the store's order, and their card order, receipt width and account menu are still the closed choices in [themes.md](themes.md#templates). Quick checkout (the page that places an order without scripts) takes the store's look and the closed choices there.
+This page covers the cart page, the payment step and the cart drawer, and the look of the receipt and the account. A private page takes no sections: `pages.templates` has no cart template (one with sections is refused with reason `private_page_template`), and no section of the homepage, a landing page or another template draws there. The drawer opens over public pages and is part of each of them: its arrangement, words and icons come from here, and its look comes from your public stylesheet through the same hooks. The receipt and the account take their look from tokens here too ([below](#the-receipt-and-the-account)); their parts keep the store's order, and their card order, receipt width and account menu are still the closed choices in [themes.md](themes.md#templates). Quick checkout (the page that places an order without scripts) takes the store's look and the closed choices there; [the routes each key reaches](#the-routes-each-key-reaches) lists every buyer page and its look.
 
 Each page is compiled, served and refused on its own: a page is in token mode only where you gave it tokens (or, with a page paint, where you name it), and it serves only its own look. A page takes your theme-wide choices (the page paint's token mode, where the controls sit) only when you **name** it: `pages.<page>` holds an arrangement other than the store's, or `tokens.<page>` is set (`{}` is enough). A page you do not name, a page that joins this model in a later release included, draws as the store does under your theme until you name it.
 
@@ -33,7 +33,7 @@ A theme arranges the store's parts and gives them tokens. It writes no markup an
 
 | You set | Refused |
 | --- | --- |
-| `chrome: "theme"` (your own header and footer) | `not_available` |
+| `chrome: "theme"` (your own header and footer here: declare `buyerPages: true` on your header and footer skins instead, [below](#your-header-and-footer-on-the-buyers-own-pages)) | `not_available` |
 | `search` (the store's search in your header) | `not_available` |
 | `css` (a stylesheet) | `not_available` |
 | `assets` (files for a stylesheet) | `not_available` |
@@ -141,7 +141,7 @@ Each page names its **style targets**, the elements of its parts that take a loo
 
 - the table has a row for every style target at every place your arrangement puts it, for each palette a buyer can see (light, dark or both): each app node kind and tone at each of the page's targets, and again inside each app box that paints a surface; the store's dialogs; every filled button; a field and a field label in every box that holds fields; the store's chrome and its controls;
 - a row holds a solid surface (or a gradient's points), the colour of the target's own words, its muted, link and error words, its border and focus ring, its hover surface (a step from the surface that its words still read on), and for a field its placeholder and error border;
-- each is your token where you set one, else a default that reads on the surface beneath: a dark box gives its untouched children readable words, a field keeps its own surface, and Place order or Confirm left at the palette's fill on a box where it would not show takes one that does;
+- each is your token where you set one, else a default that reads on the surface beneath: a dark box gives its untouched children readable words, a field keeps its own surface, and Place order, Confirm or Pay left at the palette's fill on a box where it would not show takes one that does;
 - the page stands on the theme's page paint unless your `page` tokens give it a surface, so every row on the page, the store's defaults included, is checked along the whole paint;
 - the store writes exactly those rows as CSS and checks exactly those rows ([floors](#floors)). Inside the page, the store's own palette classes read the nearest row, so no translucent tint and no palette colour decides a colour there. The page is drawn from its arrangement (the store's default one if you set none), so the table's places are the page's.
 
@@ -158,7 +158,7 @@ A page with no token that you do not name with a page paint is drawn exactly as 
 | `border` | A colour | Its border (a field's, the stepper's, the fold bar's and Go back's at 3:1 on what is around it) |
 | `ring` | A colour | The focus ring of what is inside it; a field's or a button's own |
 | `placeholder`, `invalid` | A colour | A field's placeholder and error border |
-| `border-width`, `radius` | Whole pixels: 0–4, 0–32 | Those properties; `border-width: 0` draws no border, so a field or an outlined control is then found by its own fill (3:1); 2 or more, solid, may find Place order or Confirm by its edge (see Floors) |
+| `border-width`, `radius` | Whole pixels: 0–4, 0–32 | Those properties; `border-width: 0` draws no border, so a field or an outlined control is then found by its own fill (3:1); 2 or more, solid, may find the main action (Place order, Confirm, Pay) by its edge (see Floors) |
 | `border-style` | `solid`, `dashed`, `dotted`, `none` | `border-style`; `none` as `border-width: 0` |
 | `shadow` | `none`, `sm`, `md`, `lg` | A fixed `box-shadow` |
 | `padding`, `gap` | 0–48 px | Those, at most 4% of the screen's width on a phone; a padding is never under 4px nor under 30% of the radius, so focus rings and rounded corners stay on the box's surface |
@@ -182,14 +182,14 @@ No value is text CSS reads as code: no `var()`, no `calc()`, no `url()`, no font
 
 A target is a **box** (a surface that holds other things), a **field** (its own surface and words; its border, focus ring and error border read on the box around it), a **control** (a button, a stepper, a toggle: its focus ring reads on what is around it) or **text** (words on a surface). It stands on the row of the place it is drawn.
 
-A buyer must find each control and field where it stands (WCAG 1.4.11, 3:1 on what is around it), and the anatomy says how (`boundary=` in the [anatomy reference](#anatomy-reference)): a **filled** button (Place order, Confirm) by its fill, or by a drawn edge where its fill does not read there (a brand yellow on a light card: `"border": "#111111", "border-width": 2`, solid, at 3:1, over a fill still clearly a colour of its own); an **outlined** one (the stepper, the fold's bar, Go back) and every field by its border, or, where your tokens draw none (`border-width: 0`, `border-style: none`), by its own fill. A field drawn as a box around its input (the phone number with its country code) is that box. The check reads the edge the page draws, never one it does not.
+A buyer must find each control and field where it stands (WCAG 1.4.11, 3:1 on what is around it), and the anatomy says how (`boundary=` in the [anatomy reference](#anatomy-reference)): the page's **main action** (Place order, Confirm, Pay) by its fill, or by a drawn edge where its fill does not read there (a brand yellow on a light card: `"border": "#111111", "border-width": 2`, solid, at 3:1, over a fill still clearly a colour of its own); an **outlined** control (the stepper, the fold's bar, Go back) and every field by its border, or, where your tokens draw none (`border-width: 0`, `border-style: none`), by its own fill. A field drawn as a box around its input (the phone number with its country code) is that box. The check reads the edge the page draws, never one it does not.
 
 | Target | What it is | Kind | Stands on |
 | --- | --- | --- | --- |
 | `page` | The page itself | box (`background`) | the page paint, when it paints nothing |
 | `frame` | The page frame (its width) | box | `page` |
-| `action` | Every filled button the store draws without a target of its own | control (`primary`) | every box |
-| `input` | Every field on the page and in its dialogs | field (`background`) | each box that holds fields: the discount part, the details form, a line's inputs, a dialog, the market and language forms, an app's target |
+| `action` | Every button or link the store fills with its action colour and gives no target of its own: found by its words, which read 4.5:1 on its fill. A mark the store fills that is no button and no part of its own (an unread dot, a progress bar's done steps) is drawn in its row's `link` colour instead | control (`primary`) | every box of the store's it may stand on (its focus ring reads there): never an app's box (apps draw their own buttons there) nor a box of words only (`bare`: a message, an add-on's lines, what a buyer agrees to) |
+| `input` | Every field on the page and in its dialogs (a file input is drawn by its button, an outlined button: no field) | field (`background`) | each box that holds fields: the discount part, the details form, a line's inputs, a dialog, the market and language forms, an app's target |
 | `field-label` | Every field's label, and a group of fields' legend | text | each box that holds fields |
 | `notice` | Each notice | box | where `notices` sits |
 | `lines` | The lines card | box (`card`) | where `lines` sits |
@@ -257,7 +257,7 @@ The store draws an app's block from typed nodes ([commerce hooks](commerce-hooks
 
 The tones are `neutral`, `info`, `success`, `warning` and `critical`; critical words default to the error colour.
 
-A button's tones are its own: fill `ui.button.primary` ("Add Now") and a protected line's `critical` "Remove" keeps its own look. Each tone reads on the surface it sits on, and no `ui.button` key, in any tone, is drawn larger or heavier than the store's own action on the page (Place order on the cart): `prominence` otherwise. The cart drawer's buttons carry the same `data-tone` for your public stylesheet.
+A button's tones are its own: fill `ui.button.primary` ("Add Now") and a protected line's `critical` "Remove" keeps its own look. Each tone's words read on the surface it sits on (its fill, where you give it one), and no `ui.button` key, in any tone, is drawn larger or heavier than the store's own action on the page (Place order on the cart): `prominence` otherwise. The cart drawer's buttons carry the same `data-tone` for your public stylesheet.
 
 **What a box holds.** A banner, a toned stack and a disclosure draw their children on their own surface. When you give one a surface (`background` or `gradient`), every kind and tone it can hold gets a row inside it (a banner: its buttons only; an app's box: that app's nodes only), checked on that box in each scheme: a link or a price inside an amber offer row is checked on amber, not on the line, and so is a link inside a sentence there (the sentence paints nothing of its own). A box that paints nothing adds no rows. A node writes only the colours you set for it and reads the rest from the row it stands on, so its rule is the same in every box at any depth. A field or a field label drawn in an app's painted box is checked on it too.
 
@@ -267,14 +267,18 @@ The check reads every row of every palette's table:
 
 | What | Must read at | On |
 | --- | --- | --- |
-| Every word (text, muted, link, error, placeholder) | 4.5:1 | its surface and every point of a gradient; a row's words also on its hover surface |
+| Every word (text, muted, link, error, placeholder) | 4.5:1 | its surface and every point of a gradient; a row's words (a box's muted and link words too) also on its hover surface |
 | A field's border and error border | 3:1 | the box around the field |
-| A filled button's fill (Place order, Confirm), or its drawn edge: a solid border of at least 2px (`border-width` set, `border-style` unset or `solid`) over a fill clearly a colour of its own (CIE76 40 from every point around it: a fill near the dock with an edge is Go back's look and is refused); an outlined control's or a field's border, or its own fill where no border is drawn | 3:1 | what is around it |
+| The main action's fill (Place order, Confirm, Pay), or its drawn edge: a solid border of at least 2px (`border-width` set, `border-style` unset or `solid`) over a fill clearly a colour of its own (CIE76 40 from every point around it: a fill near the dock with an edge is Go back's look and is refused); an outlined control's or a field's border, or its own fill where no border is drawn | 3:1 | what is around it |
 | Every focus ring | 3:1 | what is around the control or field; a box's rings on the box |
 | The total's amount | its size at least every money row's, every add-on line's, its own label's, a line price's and an app's words drawn in the summary (`ui.*` at `cart.page.summary`, or naming no target); its weight at least the rows'; its words' contrast on the summary at least the strongest of the rows' words (their own, their amounts', a discount's). Its size is drawn at least at the largest of those, so a narrow summary never shrinks it under rows the store keeps at their size | the summary |
 | The total's label | its size at least every money row's | the summary |
 | Place order | its size and weight at least the store's other filled buttons' (`action`) | the page |
 | Confirm | its size and weight at least Go back's | the dialog |
+
+**Every state a buyer reads.** A box's words (its own, muted and link) read on its hover surface too, where it has one (a card that is a link); a control's words read on its hover surface. Where no hover surface keeps every word readable, or the one that does is too near the surface to be seen (under 3 apart, CIE76), the box has none, and a hovered control in it is underlined instead. A segmented control's chosen option (the sign-in dialog's Email or Phone) is marked by its weight and a tick, so it differs from the others by more than colour and its focus ring stays its own. An edit dialog is a card shown over the page: it always paints its card's surface, even where the page beneath paints the same.
+
+**What the check never reads, for good.** Ordinary buttons and app buttons are found by their words; only the main action's box is checked against its surroundings. A button's words read 4.5:1 on its fill (a saturated yellow button on a white card shows plainly, whatever its luminance), so its fill, and an outlined button's border (the store's Cancel or Show code, an app's), are its look, never checked against what is around it. A control dimmed while it is off (`disabled`) is not checked: it is dimmed to say it does nothing. These hold in every release: a later check of them would be a new refusal.
 
 A refusal names the theme key and the pair that set it, and the scheme: `summary-rows: text #eeeeee on #ffffff is 1.16:1 in the light colours, under the 4.5:1 a buyer needs.` A theme key's bad pair is refused once, however many rows read it.
 
@@ -334,28 +338,53 @@ The words a part's variant draws are the store's: "Remove" (সরান) for `r
 
 ## The receipt and the account
 
-The receipt (`/order-success`: the confirmation and the order's status view, and the theme editor's sample receipt) and the account's dashboard and order page take **tokens** (`tokens.receipt`, `tokens.account`), checked by the same colour table and floors as the cart: contrast per scheme, and the total never drawn smaller than another money row. They are not arranged yet: an arrangement other than the store's own for `pages.receipt` or `pages.account` is refused (`not_available`). Their parts are named in the [anatomy](#anatomy-reference) so the names stay when arranging comes.
+The receipt (`/order-success`: the confirmation and the order's status view, and the theme editor's sample receipt) and every page of the account (its orders, an order, the profile with its addresses and saved cards, the inbox and a thread, warranties, reviews, gift cards and downloads, and a guest's warranty claim thread) take **tokens** (`tokens.receipt`, `tokens.account`), checked by the same colour table and floors as the cart: contrast per scheme, and the total never drawn smaller than another money row. They are not arranged yet: an arrangement other than the store's own for `pages.receipt` or `pages.account` is refused (`not_available`). Their parts are named in the [anatomy](#anatomy-reference) so the names stay when arranging comes.
 
-A thing that is the same thing as on the cart has the cart's name: `page`, `frame`, `action`, `input`, `field-label`, the dialogs (`dialog`, `dialog-title`, …), the money rows (`summary`, `summary-heading`, `summary-rows`, `summary-total`, `summary-total-label`, `summary-add-on`, `summary-add-on-detail`), and an order's line (`line`, `line-image`, `line-title`, `line-details`, `line-price`; the receipt's line image takes no `fit`: it is the image itself, with no box around it). Both pages draw the store's public header and footer (the store's own markup in its closed variants and the palette's colours; on a buyer's page no app's header skin, component, stylesheet or script draws there) and, on phones, the theme's tab bar where it has one. That chrome is outside the page's root and takes the palette, not these tokens, so `chrome`, `scheme` and `localization` are not theirs.
+A thing that is the same thing as on the cart has the cart's name: `page`, `frame`, `action`, `input`, `field-label`, the dialogs (`dialog`, `dialog-title`, …), the money rows (`summary`, `summary-heading`, `summary-rows`, `summary-total`, `summary-total-label`, `summary-add-on`, `summary-add-on-detail`), and an order's line (`line`, `line-image`, `line-title`, `line-details`, `line-price`; the receipt's line image takes no `fit`: it is the image itself, with no box around it). Both pages draw the store's public header and footer (the store's own markup in its closed variants and the palette's colours), or your header and footer skins where they declare `buyerPages: true` ([below](#your-header-and-footer-on-the-buyers-own-pages)); no app component, script or stylesheet in the page's head draws there; and, on phones, the theme's tab bar where it has one. That chrome is outside the page's root and takes the palette, not these tokens, so `chrome`, `scheme` and `localization` are not theirs.
 
 | Page | Target | What it is | Kind |
 | --- | --- | --- | --- |
 | Receipt | `status`, `status-mark`, `status-title`, `status-message`, `status-steps` | The order's state: its mark, its title (the page's `h1`), its message and next steps | box, text on its own surface, text, text (muted), box |
+| Receipt | `status-retry`, `submit` | A way to pay again under the state (each method the order may still be paid with: one press starts it), and the card form's Pay. Each starts a payment, so each is a main action: a way to pay again is outlined, found by its border at 3:1 on the state's box (by its fill where you draw no border); Pay by its fill at 3:1 on what is around it, or by a solid border of 2px or more, as the payment step's Pay. `action` never reaches them; unset, Pay takes the palette's fill where it reads there, else its inverse | control (edge), control (fill) |
 | Receipt | `tracking` | Where the order is (the status view) | box (`background`) |
-| Receipt | `order`, `order-facts`, `status-badge` | The order card; its facts (the order number, placed, state, payment); a state's pill | box (`background`), text, text on its own surface |
+| Receipt | `order`, `order-facts`, `status-badge` | The order card; its facts (the order number, placed, state, payment); a state's pill among them | box (`background`), text, text on its own surface |
 | Receipt | `delivery`, `section-heading`, `delivery-contact` | Where it goes, its heading, the buyer's own name, address and contact | box, text, text |
 | Receipt | `lines`, `lines-heading` | What was bought, its heading; each line under it | box, text |
-| Receipt | `conversation` | The order's conversation with the store (it holds the reply form) | box (`card`) |
+| Receipt | `conversation`, `message`, `message-own` | The order's conversation with the store (it holds the reply form); each of the store's messages, and each of the buyer's own. Unset, a message's surface comes from the conversation's row: the store's a step from it (its hover surface), the buyer's its `link` colour | box (`card`), box, box |
+| Receipt | `rating` | A review's stars under a line: the filled stars its `text`, the empty ones its `muted`, each read at 3:1 on the line (WCAG 1.4.11; unset, the store's amber, taken toward the page's words until it reads). The rating is in words beside the stars; in the review form a chosen star is filled, an unchosen one outlined | text (graphic, 3:1) |
 | Receipt | (none) | The recommendations: public product cards on the store's own look and the palette's page, never in token mode and no row of the table | |
 | Account | `navigation`, `nav-item`, `nav-current`, `sign-out` | The menu, each page in it, the current page (its marker is its `link` colour), Sign out | box, control (muted), control, control (muted) |
 | Account | `heading-title`, `heading-intro`, `heading-back` | The page's `h1`, its intro, the way back | text, text (muted), control |
 | Account | `content` | The page's content; it holds the apps' targets `account.overview`, `account.order`, `account.profile`. It takes no tokens: most account pages draw no box around it, so what stands in it stands on the page | box (no tokens) |
-| Account | `card`, `card-title`, `status-badge` | Every account card, its heading, a state's pill | box (`card`), text, text on its own surface |
+| Account | `card`, `card-title`, `status-badge` | Every account card (an order, a warranty, a review, a gift card, a download, an inbox row, a profile section; an edit dialog is a card over the page), its heading, a state's pill in it. A card that is a link draws its focus ring inside its edge, on the card it is checked on | box (`card`), text, text on its own surface |
+| Account | `payment-choices` | An order's payment methods to choose between: the chosen one's edge in its `link` colour, the others' in its `border` colour, and a dot in the chosen one's round mark (never colour alone, as on the payment step). Unset, the two are chosen clearly apart (3:1, or CIE76 40) on whatever surface it stands on; a pair you set both of is refused when alike, as on the payment step | box (`link`, `border`) |
+| Account | `submit` | Pay for the chosen method (what is left to pay, or again after a failed payment): a main action, found by its fill at 3:1 on its card or by a solid border of 2px or more, as the payment step's Pay; `action` never reaches it | control (fill) |
+| Account | `nav-badge` | A tab's count (Inbox 2): a pill filled with the menu's `link` colour unless you set its own, its number readable on it | text on its own surface |
+| Account | `action-critical` | Every filled button that removes something (Remove an address, Remove a saved card): found by its words on its fill, as `action` is | control (`destructive`) |
+| Account | `conversation`, `message`, `message-own` | An order's conversation, an inbox thread and a guest's claim thread (each holds its reply form); the store's messages and the buyer's own, as on the receipt | box (`card`), box, box |
+| Account | `rating` | A review's stars, in the reviews' cards and under an order's line, as on the receipt (unset, the amber taken toward the words of the box they stand on) | text (graphic, 3:1) |
 | Account | `delivery-message`, `delivery-reveal` | A line's delivery message and the button that reveals it (with no border drawn, its fill reads 3:1 on the message, as Sign out's does) | box, control |
 
 The money summary sits in the receipt's `order` card and in an account order's `card`. An order's `line` holds the apps' `order.line.after` (drawn under a line only where an app answered for it). The apps' blocks take the same `ui.<kind>…` rows as on the cart, at these pages' targets (`order.confirmation`, `account.order`, `order.line.after` on the receipt; `account.overview`, `account.order`, `account.profile`, `order.line.after` in the account).
 
-What a theme cannot lose: the receipt's state, order card (its number, its state, every money row and the total), delivery card (the buyer's contact), lines, actions and conversation, and the account's menu with Sign out, its heading and its content are mandatory parts; no token hides anything (every word reads at its floor, sizes are at least 12px). Nothing here changes what a page reads or who may read it: a delivery message is still revealed only on the signed-in account's order page. The other account pages (profile, reviews, warranties, gift cards, downloads, inbox) carry the shell's hooks but not the look yet.
+What a theme cannot lose: the receipt's state, order card (its number, its state, every money row and the total), delivery card (the buyer's contact), lines, actions and conversation, and the account's menu with Sign out, its heading and its content are mandatory parts; no token hides anything (every word reads at its floor, sizes are at least 12px). Nothing here changes what a page reads or who may read it: a delivery message is still revealed only on the signed-in account's order page.
+
+### The routes each key reaches
+
+Which of the buyer's routes each key's tokens reach is one table in the store's code (`PRIVATE_PAGE_ROUTES`): the pages read it, this list prints it and a test holds every page of the storefront to it. A key reaches exactly these routes, now and later: a route that gains a look of its own later gains a new key, so no theme's look moves onto a page it was not written for.
+
+```text
+cart /cart
+cartDrawer (over public pages: no route of its own)
+checkout /checkout
+receipt /order-success
+account /account /account/orders/[id] /account/profile /account/inbox /account/inbox/[id] /account/warranties /account/reviews /account/gift-cards /account/downloads /warranty-claims/[orderId]/[claimId]
+store-look /track-order /checkout/quick /checkout/continue/[continuationId] /agent/continue/[continuationId] /cart/recover/[token] /payment-recovery /gift-card-balance /newsletter /newsletter/confirm /newsletter/unsubscribe
+no-theme /account/licence-key /account/delivery-message
+```
+
+- `store-look`: these take the store's look (the palette and the store's own markup); any may gain a page key of its own later. Order tracking is not the receipt: its lookup and code forms are not the receipt's parts, and its status view shows none of the buyer's contact, conversation or actions the receipt's key promises.
+- `no-theme`: these show one secret (a licence key, a delivery message) with nothing else on the page: no theme, no palette, no look.
 
 ## The add-on row
 
@@ -370,7 +399,7 @@ A row with no details is a plain row of its title and amount. On the cart page a
 
 ## The store's controls
 
-The cart page and the payment step draw only the store's chrome: its checkout header, no theme or app header or footer. The receipt and the account draw the store's public header and footer ([below](#the-receipt-and-the-account)). The phone tab bar never draws where the buyer is paying (the cart, the checkout and quick checkout, buy now, payment recovery); the receipt and the account pages keep it. `controls` places the store's controls on each page you name (a page you do not name keeps them in the store's header):
+The cart page and the payment step draw only the store's chrome: its checkout header, no theme or app header or footer. The receipt and the account draw the store's public header and footer ([below](#the-receipt-and-the-account)), or yours where your skins ask ([below](#your-header-and-footer-on-the-buyers-own-pages)); then the store's light or dark switch and its market and language forms sit in a strip after your footer, outside your shadow root. The phone tab bar never draws where the buyer is paying (the cart, the checkout and quick checkout, buy now, payment recovery); the receipt and the account pages keep it. `controls` places the store's controls on each page you name (a page you do not name keeps them in the store's header):
 
 | `controls` | Where |
 | --- | --- |
@@ -380,6 +409,27 @@ The cart page and the payment step draw only the store's chrome: its checkout he
 
 The controls are the light or dark switch (`data-host="scheme"`), when the theme offers it (`tokens.colorSchemeToggle`), and the market and language forms (`data-host="localization"`, the same plain forms as the public footer's), when the store sells in several. Their look is the `chrome`, `scheme` and `localization` rows. Under the store's default look (a look not yet compiled by this build) they sit in the header.
 
+## Your header and footer on the buyer's own pages
+
+Declare `buyerPages: true` on your header and footer skins and they draw on the buyer's pages where nothing is paid: the account (its sign-in view too), the receipt, order tracking, warranty claims, the gift-card balance and the newsletter pages. Never on the cart, checkout, buy now or payment recovery, nor on a receipt with a payment step (a payment it waits on, or a retry of any method): the store's own chrome draws there. A page shows both of yours or neither: when one cannot draw, the store draws its own header and footer. A receipt with no order to show that offers a link to finish paying counts as a payment step too. A Super Admin approves it (the consent screen lists it); until then the store's header and footer draw.
+
+```ts
+skins: [
+  { id: "header", target: "header", name: "Header", settings: [...], buyerPages: true },
+  { id: "footer", target: "footer", name: "Footer", settings: [...], buyerPages: true },
+],
+```
+
+What changes there:
+
+- **Your markup is rebuilt inert.** Same skin, same projection, `context.page.kind === "buyer"` and `context.page.path` the page's first segment (`/account`, never an order's path): hide what a buyer does not need there (search, category rows, a mega menu). No island loads (its markup stays, unwrapped), and no form, field, select, text area or label is kept, your search form included: use `searchOpener()` on a button or link for the store's search. A button is kept only as `type="button"` with `colorSchemeToggle()`, `openCart()` or `searchOpener()`, or with a `popovertarget` naming one of your popovers. `accountLink()`, `whenSignedIn()`/`whenSignedOut()`, `stickyHeader()` and `<CartCount />` keep working. `style` keeps only custom properties with plain values (`style={{ "--logo-width": "180px" }}`). Links keep their `href` only to a URL of the store's own projection (`data.routes`, the header's `menu` and `categories`, the footer's `menus`, `store.social`, `policies`), a browsing path of the store (home, products, categories, collections, brands, search, content pages, the blog, the account, order tracking, the cart) or a fragment: a link setting's value, even one the merchant kept from your template, does not leave the store there. A link off the store gets `rel="noopener noreferrer"`. Images load from the page's image hosts, never from `/apps/` or `/api/`. Your slots draw nothing.
+- **Menus are the store's panels.** Nothing you style is ever in the top layer on these pages. Each of your popovers that one of your `type="button"` elements names with `popovertarget` leaves your region and is drawn inside the store's own panel: a side **drawer** when it carries `menuDrawer()` (or `data-panel="drawer"`), else a **menu** placed under the button that opened it. The store draws the panel's box, backdrop, a title bar with the store's name and "Menu", and its close button; your popover's markup sits inside it, in its own shadow root with your sheet, without its `popover` attribute (so style it as a plain block: `:popover-open` never matches there). The panel is announced as "Menu", the store's word: an `aria-label` of yours stays on your element inside it. Give each popover its own id: two popovers with one id, or a popover your button names that the rebuild leaves out, draw the store's own header and footer. Your button opens the store's panel; a button inside the popover with `popovertargetaction="hide"` closes it. A drawer always leaves a strip of the page and a menu a margin on every side; a press there, the close button or Escape closes it. In-flow dropdowns that hang below the header are clipped (below), so use popovers for menus on buyer pages.
+- **It draws inside a shadow root, in a frame of the store's.** Your stylesheet applies there and only there, after the store's base (Tailwind's preflight and the page's font and colour). The page's selectors do not reach your markup and yours do not reach the page; the store's tokens (`--background`, `--primary`, …) are custom properties and inherit in. `:root` matches nothing in a shadow root: write `:root, :host { … }` for your variables, and style the colour scheme on the host, which the store keeps in step with the page: `:host([data-color-scheme="dark"]) .logo-light { display: none }`. Nothing you draw shows outside your header's or footer's box (its outline, shadows, filters, fixed and absolute layers are clipped by the store's frame), a sticky element scrolls with the page, the header is at most half the screen tall and the footer at most one screen.
+- **The store writes your stylesheet itself.** On these pages the browser never loads your `styles.css`. `scalius-plugin pack` writes, beside it, the store's own reading of it, `storefront/buyer-chrome.css`: your sheet parsed and written again in ASCII. The upload accepts the release only when that file is exactly what the store writes; buyer pages import it from the store's own path. So your sheet must be UTF-8 with no byte-order mark and no `@charset`, with no parse error a browser would recover from (a string broken by a line, a malformed `url()`, an unclosed comment, string or brace, a stray backslash), no CSS nesting (no rule or `@media` inside a rule, no `&`, no `:scope`), and only `@media`, `@supports`, `@layer`, `@container`, `@keyframes` and `@starting-style` (no `@import`, `@font-face`, `@property`, `@scope`, `@counter-style`, `@namespace`, `@page`); no `:host-context()`, and `:host` only at the start of a selector, alone or with attribute selectors (`:host([data-color-scheme="dark"]) .x`, never `:host(:is(...))`, `:host:has(...)` or `:is(:host)`). Every `url()` and `image-set()` URL must be one of your own public files (`url(public/x.svg)`, written `./public/x.svg`) or a fragment (`url(#glow)`): no other path, host or `data:`, no `var()` inside `image-set()`, and no `attr()` anywhere. A pack or an upload that breaks any of this is refused; a release without the file draws the store's own chrome on buyer pages. When a store update changes this check, the store checks your release's file again after it deploys (a release at a time); until then, and if the new check refuses it, buyer pages draw the store's own header and footer, and your app's log says why. Pack again with the current SDK and ship a release. Fonts there come from the store's theme fonts, inherited.
+- **Requests carry no buyer.** A request your CSS or markup makes from a buyer page never reaches your app's backend, and on any page an image, stylesheet or font request to `/apps/<your app>/…` carries no signed-in buyer: only a navigation or a script's fetch does.
+
+What stays yours to check: that your header and footer read well without their search and dropdowns, at 320px, and that a buyer can reach the account's own menu without scrolling past a tall header.
+
 ## What the store guarantees, and what is yours
 
 | The store guarantees | Yours |
@@ -387,7 +437,7 @@ The controls are the light or dark switch (`data-host="scheme"`), when the theme
 | No theme markup and no theme CSS: every rule is written from typed values, and in token mode every colour comes from the one table the save checks. | Choosing tokens that read well together beyond the floors. |
 | Place order with its total is always on screen: it is the page's last box (`dock`), docked at the bottom edge while its place is not in view, at every width and under every arrangement, with no script. | Its look: the `dock`, `submit` and `legal` tokens. |
 | The terms sit in the dock beside Place order: the sentence, or the required tick box, which posts with the details form it sits outside of. | |
-| Every row of the table reads at its floor, in every scheme a buyer sees. Place order and Confirm are found by their fill or by a solid edge of at least 2px over a fill of their own, never drawn as plain words or as an outlined button. | Which of the two: a fill that reads, or your brand's fill with an edge. |
+| Every row of the table reads at its floor, in every scheme a buyer sees. Place order, Confirm and Pay are found by their fill or by a solid edge of at least 2px over a fill of their own, never drawn as plain words or as an outlined button. | Which of the two: a fill that reads, or your brand's fill with an edge. |
 | The total is never drawn smaller than another money row, and a label that names an action or an amount is one of the store's variants. | Your words for headings and empty states: say what they are. |
 | One of the cart's lead parts (the lines, the summary, the details form) starts inside the first screen. | |
 | A buyer's request never compiles; a look an older checker wrote is not served. | Re-saving after a store update if you want your look before the next maintenance run. |
@@ -693,7 +743,7 @@ The gate checks the cart page with the fixture store's data, not every store's d
 
 ## Anatomy reference
 
-The contract a test pins: a renamed or removed part, hook or label fails the store's build. Each page's root carries `data-private`, each part's elements `data-part`, each host layout `data-layout` (with your hook on `data-hook`). Money rows carry `data-summary-row` (`subtotal`, `add-on`, `delivery`, `discount`, `tax`, `total`) on every surface, and `items` where the summary starts with that row. An app's block is drawn in a wrapper with `data-buyer-ui-app` inside its target's `data-buyer-ui-target`, and each of its nodes carries its kind on `data-ui` and its tone on `data-tone`. These hooks are for reading the page and for tests: you reach the store's parts and the apps' blocks only through tokens. A `style` line is a style target: the selector the store writes it at (`<root>` is the page's `data-private` root), the tokens it takes, `fields` where it holds fields, `targets` the apps' targets it draws inside itself, `outside-when` the variants that stand it on what its part stands on, and `outranks` the rows it is never drawn smaller than.
+The contract a test pins: a renamed or removed part, hook or label fails the store's build. Each page's root carries `data-private`, each part's elements `data-part`, each host layout `data-layout` (with your hook on `data-hook`). Money rows carry `data-summary-row` (`subtotal`, `add-on`, `delivery`, `discount`, `tax`, `total`) on every surface, and `items` where the summary starts with that row. An app's block is drawn in a wrapper with `data-buyer-ui-app` inside its target's `data-buyer-ui-target`, and each of its nodes carries its kind on `data-ui` and its tone on `data-tone`. These hooks are for reading the page and for tests: you reach the store's parts and the apps' blocks only through tokens. A `style` line is a style target: the selector the store writes it at (`<root>` is the page's `data-private` root), the tokens it takes, `fields` where it holds fields, `targets` the apps' targets it draws inside itself, `outside-when` the variants that stand it on what its part stands on, `bare` a box of words only (no control drawn anywhere is checked on it), and `outranks` the rows it is never drawn smaller than.
 
 ```text
 cart root data-private=cart frames=standard|narrow
@@ -714,8 +764,8 @@ cart layout fold hooks=fold-toggle,fold-body
 cart layout fold holds=lines,summary,discount,cart.page.summary
 cart style page body[data-private-body] tokens=background,gradient,text,muted,link,error
 cart style frame <root> <root> tokens=max-width
-cart style action :is([data-private="cart"],[data-private="dialog"]) .bg-primary:not([data-private="cart"] [data-part="details-submit"],[data-private="dialog"] [data-part="dialog-confirm"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
-cart style input :is([data-private="cart"],[data-private="dialog"]) :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
+cart style action :is([data-private="cart"],[data-private="dialog"]) .bg-primary:is(button,a,[role="button"]):not([data-private="cart"] [data-part="details-submit"],[data-private="dialog"] [data-part="dialog-confirm"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
+cart style input :is([data-private="cart"],[data-private="dialog"]) :is(input:not([type="checkbox"],[type="radio"],[type="hidden"],[type="file"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
 cart style field-label :is([data-private="cart"],[data-private="dialog"]) [data-part="field-label"] tokens=text,size,weight,case,tracking
 cart style notice <root> [data-part="notice"] tokens=background,text,muted,link,error,border,border-width,radius
 cart style lines <root> [data-part="lines"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
@@ -737,7 +787,7 @@ cart style summary-rows <root> [data-summary-row]:not([data-summary-row="total"]
 cart style summary-total <root> [data-summary-row="total"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size+weight+contrast,summary-add-on-detail:size,summary-total-label:size,line-price:size,ui/cart.page.summary:size
 cart style summary-total-label <root> [data-summary-row="total"] [data-part="summary-total-label"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size
 cart style summary-add-on <root> [data-part="add-on-details"] > summary tokens=text,ring,radius
-cart style summary-add-on-detail <root> [data-part="add-on-details"] [data-part="add-on-detail"] tokens=background,text,muted,border,border-width,radius,padding,font,size
+cart style summary-add-on-detail <root> [data-part="add-on-details"] [data-part="add-on-detail"] tokens=background,text,muted,border,border-width,radius,padding,font,size bare
 cart style details-form <root> [data-part="details-form"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding targets=checkout.contact.after,checkout.delivery.after
 cart style section-heading <root> :is([data-part="contact"],[data-part="delivery"]) h2 tokens=text,font,weight,size,leading,case,tracking
 cart style dock [data-private="cart"] [data-part="dock"] tokens=background,text,muted,link,error,border,border-width,shadow
@@ -745,7 +795,7 @@ cart style submit <root> [data-part="details-submit"] tokens=background,gradient
 cart style legal <root> [data-part="legal"] tokens=text,size,align
 cart style dialog [data-private="dialog"] tokens=background,text,muted,link,error,border,border-width,radius,shadow fields
 cart style dialog-title [data-private="dialog"] [data-part="dialog-title"] tokens=text,font,weight,size,leading,case,tracking
-cart style dialog-text [data-private="dialog"] [data-part="dialog-text"] tokens=background,text,muted,border,border-width,radius,padding
+cart style dialog-text [data-private="dialog"] [data-part="dialog-text"] tokens=background,text,muted,border,border-width,radius,padding bare
 cart style dialog-agree [data-private="dialog"] [data-part="dialog-agree"] tokens=background,text,border,border-width,radius,padding
 cart style dialog-back [data-private="dialog"] [data-part="dialog-back"] tokens=text,border,border-width,radius,ring,inset,weight boundary=edge
 cart style dialog-confirm [data-private="dialog"] [data-part="dialog-confirm"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill outranks=dialog-back:size+weight
@@ -828,8 +878,8 @@ checkout lead summary,payment
 checkout layouts stack,columns,grid,group
 checkout style page body[data-private-body] tokens=background,gradient,text,muted,link,error
 checkout style frame <root> <root> tokens=max-width
-checkout style action [data-private="checkout"] .bg-primary:not([data-private="checkout"] [data-part="pay"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
-checkout style input [data-private="checkout"] :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
+checkout style action [data-private="checkout"] .bg-primary:is(button,a,[role="button"]):not([data-private="checkout"] [data-part="pay"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
+checkout style input [data-private="checkout"] :is(input:not([type="checkbox"],[type="radio"],[type="hidden"],[type="file"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
 checkout style field-label [data-private="checkout"] [data-part="field-label"] tokens=text,size,weight,case,tracking
 checkout style notice <root> [data-part="notice"] tokens=background,text,muted,link,error,border,border-width,radius
 checkout style checkout-empty <root> [data-part="checkout-empty"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
@@ -840,7 +890,7 @@ checkout style summary-rows <root> [data-summary-row]:not(:is([data-summary-row=
 checkout style summary-total <root> :is([data-summary-row="total"],[data-summary-row="due"]) tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size+weight+contrast,summary-add-on-detail:size,summary-total-label:size,ui/checkout.summary.after:size
 checkout style summary-total-label <root> :is([data-summary-row="total"],[data-summary-row="due"]) [data-part="summary-total-label"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size
 checkout style summary-add-on <root> [data-part="add-on-details"] > summary tokens=text,ring,radius
-checkout style summary-add-on-detail <root> [data-part="add-on-details"] [data-part="add-on-detail"] tokens=background,text,muted,border,border-width,radius,padding,font,size
+checkout style summary-add-on-detail <root> [data-part="add-on-details"] [data-part="add-on-detail"] tokens=background,text,muted,border,border-width,radius,padding,font,size bare
 checkout style fold-toggle <root> [data-part="fold-toggle"] tokens=background,text,border,border-width,radius,shadow,ring boundary=edge
 checkout style gift-card <root> [data-part="gift-card"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
 checkout style payment-method <root> [data-part="payment-method"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
@@ -853,13 +903,13 @@ checkout style scheme [data-host="scheme"] button tokens=text,ring,radius
 checkout style localization [data-host="localization"] tokens=text,muted,link fields
 receipt root data-private=receipt frames=standard|wide
 receipt part progress hooks=progress
-receipt part status mandatory hooks=status,status-mark,status-title,status-message,status-steps,status-retry
+receipt part status mandatory hooks=status,status-mark,status-title,status-message,status-steps,status-retry,pay
 receipt part tracking mandatory hooks=tracking
 receipt part summary mandatory hooks=order,order-facts,order-number,status-badge,summary,summary-heading,summary-total-label,add-on-details,add-on-detail
 receipt part delivery mandatory hooks=delivery,section-heading,delivery-contact
-receipt part lines mandatory hooks=lines,lines-heading,line,line-image,line-title,line-details,line-price,line-extras
+receipt part lines mandatory hooks=lines,lines-heading,line,line-image,line-title,line-details,line-price,line-extras,rating
 receipt part actions mandatory hooks=actions
-receipt part conversation mandatory hooks=conversation
+receipt part conversation mandatory hooks=conversation,message,message-own
 receipt part recommendations hooks=recommendations
 receipt fields in actions,conversation
 receipt target order.confirmation
@@ -868,14 +918,16 @@ receipt lead status,summary
 receipt layouts stack,columns,grid,group
 receipt style page body[data-private-body] tokens=background,gradient,text,muted,link,error
 receipt style frame <root> <root> tokens=max-width
-receipt style action :is([data-private="receipt"],[data-private="dialog"]) .bg-primary:not([data-part="recommendations"] *):not([data-private="dialog"] [data-part="dialog-confirm"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
-receipt style input :is([data-private="receipt"],[data-private="dialog"]) :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
+receipt style action :is([data-private="receipt"],[data-private="dialog"]) .bg-primary:is(button,a,[role="button"]):not([data-part="recommendations"] *):not([data-private="receipt"] [data-part="pay"],[data-private="dialog"] [data-part="dialog-confirm"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
+receipt style input :is([data-private="receipt"],[data-private="dialog"]) :is(input:not([type="checkbox"],[type="radio"],[type="hidden"],[type="file"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
 receipt style field-label :is([data-private="receipt"],[data-private="dialog"]) [data-part="field-label"] tokens=text,size,weight,case,tracking
 receipt style status <root> [data-part="status"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
 receipt style status-mark <root> [data-part="status-mark"] tokens=background,text,border,border-width,radius
 receipt style status-title <root> [data-part="status-title"] tokens=text,font,weight,size,leading,case,tracking
 receipt style status-message <root> [data-part="status-message"] tokens=text,size,weight,leading
 receipt style status-steps <root> [data-part="status-steps"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
+receipt style status-retry <root> [data-part="status-retry"] tokens=background,text,muted,link,border,border-width,radius,ring boundary=edge
+receipt style submit <root> [data-part="pay"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill
 receipt style tracking <root> [data-part="tracking"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
 receipt style order <root> [data-part="order"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
 receipt style order-facts <root> [data-part="order-facts"] tokens=text,muted,size
@@ -886,7 +938,7 @@ receipt style summary-rows <root> [data-summary-row]:not([data-summary-row="tota
 receipt style summary-total <root> [data-summary-row="total"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size+weight+contrast,summary-add-on-detail:size,summary-total-label:size,line-price:size
 receipt style summary-total-label <root> [data-summary-row="total"] [data-part="summary-total-label"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size
 receipt style summary-add-on <root> [data-part="add-on-details"] > summary tokens=text,ring,radius
-receipt style summary-add-on-detail <root> [data-part="add-on-details"] [data-part="add-on-detail"] tokens=background,text,muted,border,border-width,radius,padding,font,size
+receipt style summary-add-on-detail <root> [data-part="add-on-details"] [data-part="add-on-detail"] tokens=background,text,muted,border,border-width,radius,padding,font,size bare
 receipt style delivery <root> [data-part="delivery"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
 receipt style section-heading <root> [data-part="section-heading"] tokens=text,font,weight,size,leading,case,tracking
 receipt style delivery-contact <root> [data-part="delivery-contact"] tokens=text,muted,size
@@ -897,34 +949,41 @@ receipt style line-image <root> [data-part="line-image"] tokens=width,height,wid
 receipt style line-title <root> [data-part="line-title"] tokens=text,font,weight,size,leading,case,tracking
 receipt style line-details <root> [data-part="line-details"] tokens=text,size
 receipt style line-price <root> [data-part="line-price"] tokens=text,muted,font,weight,size,align
+receipt style rating <root> [data-part="rating"] tokens=text,muted,size within=line graphic
 receipt style conversation <root> [data-part="conversation"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding fields
+receipt style message <root> [data-part="message"] tokens=background,text,muted,link,error,border,border-width,radius,padding bare
+receipt style message-own <root> [data-part="message-own"] tokens=background,text,muted,link,error,border,border-width,radius,padding bare
 receipt style dialog [data-private="dialog"] tokens=background,text,muted,link,error,border,border-width,radius,shadow fields
 receipt style dialog-title [data-private="dialog"] [data-part="dialog-title"] tokens=text,font,weight,size,leading,case,tracking
-receipt style dialog-text [data-private="dialog"] [data-part="dialog-text"] tokens=background,text,muted,border,border-width,radius,padding
+receipt style dialog-text [data-private="dialog"] [data-part="dialog-text"] tokens=background,text,muted,border,border-width,radius,padding bare
 receipt style dialog-agree [data-private="dialog"] [data-part="dialog-agree"] tokens=background,text,border,border-width,radius,padding
 receipt style dialog-back [data-private="dialog"] [data-part="dialog-back"] tokens=text,border,border-width,radius,ring,inset,weight boundary=edge
 receipt style dialog-confirm [data-private="dialog"] [data-part="dialog-confirm"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill outranks=dialog-back:size+weight
 account root data-private=account
 account part navigation mandatory variants=tabs|sidebar hooks=navigation,nav-item,nav-badge,sign-out
 account part heading mandatory hooks=heading,heading-title,heading-intro,heading-back
-account part content mandatory hooks=content,card,card-title,status-badge,summary,summary-total-label,add-on-details,add-on-detail,line,line-image,line-title,line-details,line-price,delivery-message,delivery-reveal
+account part content mandatory hooks=content,card,card-title,status-badge,summary,summary-total-label,add-on-details,add-on-detail,line,line-image,line-title,line-details,line-price,delivery-message,delivery-reveal,conversation,message,message-own,rating,payment-choices,pay
 account fields in content
 account lead heading,content
 account layouts stack,columns,grid,group
 account style page body[data-private-body] tokens=background,gradient,text,muted,link,error
 account style frame <root> <root> tokens=max-width
-account style action :is([data-private="account"],[data-private="dialog"]) .bg-primary:not([data-private="dialog"] [data-part="dialog-confirm"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
-account style input :is([data-private="account"],[data-private="dialog"]) :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
+account style action :is([data-private="account"],[data-private="dialog"]) .bg-primary:is(button,a,[role="button"]):not([data-private="account"] [data-part="pay"],[data-private="dialog"] [data-part="dialog-confirm"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
+account style input :is([data-private="account"],[data-private="dialog"]) :is(input:not([type="checkbox"],[type="radio"],[type="hidden"],[type="file"]):not([data-field] *),select:not([data-field] *),textarea:not([data-field] *),[data-field]) tokens=background,text,placeholder,border,ring,invalid,border-width,radius
 account style field-label :is([data-private="account"],[data-private="dialog"]) [data-part="field-label"] tokens=text,size,weight,case,tracking
+account style action-critical :is([data-private="account"],[data-private="dialog"]) .bg-destructive:is(button,a,[role="button"]) tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking
 account style navigation <root> [data-part="navigation"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
 account style nav-item <root> [data-part="nav-item"]:not([aria-current="page"]) tokens=text,size,weight,radius,ring
+account style nav-badge <root> [data-part="nav-badge"] tokens=background,text,radius
 account style nav-current <root> [data-part="nav-item"][aria-current="page"] tokens=text,link,size,weight,radius,ring
 account style sign-out <root> [data-part="sign-out"] tokens=background,text,border,border-width,radius,ring,inset,weight,size boundary=edge
 account style heading-title <root> [data-part="heading-title"] tokens=text,font,weight,size,leading,case,tracking
 account style heading-intro <root> [data-part="heading-intro"] tokens=text,size,weight,leading
 account style heading-back <root> [data-part="heading-back"] tokens=text,radius,ring
 account style content <root> [data-part="content"] tokens= targets=account.overview,account.order,account.profile
-account style card <root> [data-part="card"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap fields
+account style card <root> [data-part="card"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap fields opaque
+account style payment-choices <root> [data-part="payment-choices"] tokens=link,border chosen
+account style submit <root> [data-part="pay"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill
 account style card-title <root> [data-part="card-title"] tokens=text,font,weight,size,leading,case,tracking
 account style status-badge <root> [data-part="status-badge"] tokens=background,text,border,border-width,radius
 account style summary <root> [data-part="summary"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding,gap
@@ -933,17 +992,21 @@ account style summary-rows <root> [data-summary-row]:not(:is([data-summary-row="
 account style summary-total <root> :is([data-summary-row="total"],[data-summary-row="due"]) tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size+weight+contrast,summary-add-on-detail:size,summary-total-label:size,line-price:size
 account style summary-total-label <root> :is([data-summary-row="total"],[data-summary-row="due"]) [data-part="summary-total-label"] tokens=text,font,weight,size,leading,case,tracking outranks=summary-rows:size
 account style summary-add-on <root> [data-part="add-on-details"] > summary tokens=text,ring,radius
-account style summary-add-on-detail <root> [data-part="add-on-details"] [data-part="add-on-detail"] tokens=background,text,muted,border,border-width,radius,padding,font,size
+account style summary-add-on-detail <root> [data-part="add-on-details"] [data-part="add-on-detail"] tokens=background,text,muted,border,border-width,radius,padding,font,size bare
 account style line <root> [data-part="line"] tokens=background,border,border-width,border-style,radius,padding targets=order.line.after
 account style line-image <root> [data-part="line-image"] tokens=width,height,width-wide,height-wide,radius,background,border,border-width,border-style,fit
 account style line-title <root> [data-part="line-title"] tokens=text,font,weight,size,leading,case,tracking
 account style line-details <root> [data-part="line-details"] tokens=text,size
 account style line-price <root> [data-part="line-price"] tokens=text,muted,font,weight,size,align
+account style rating <root> [data-part="rating"] tokens=text,muted,size within=card|line graphic
 account style delivery-message <root> [data-part="delivery-message"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding
 account style delivery-reveal <root> [data-part="delivery-reveal"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=edge
+account style conversation <root> [data-part="conversation"] tokens=background,gradient,text,muted,link,error,border,border-width,border-style,radius,shadow,padding fields
+account style message <root> [data-part="message"] tokens=background,text,muted,link,error,border,border-width,radius,padding bare
+account style message-own <root> [data-part="message-own"] tokens=background,text,muted,link,error,border,border-width,radius,padding bare
 account style dialog [data-private="dialog"] tokens=background,text,muted,link,error,border,border-width,radius,shadow fields
 account style dialog-title [data-private="dialog"] [data-part="dialog-title"] tokens=text,font,weight,size,leading,case,tracking
-account style dialog-text [data-private="dialog"] [data-part="dialog-text"] tokens=background,text,muted,border,border-width,radius,padding
+account style dialog-text [data-private="dialog"] [data-part="dialog-text"] tokens=background,text,muted,border,border-width,radius,padding bare
 account style dialog-agree [data-private="dialog"] [data-part="dialog-agree"] tokens=background,text,border,border-width,radius,padding
 account style dialog-back [data-private="dialog"] [data-part="dialog-back"] tokens=text,border,border-width,radius,ring,inset,weight boundary=edge
 account style dialog-confirm [data-private="dialog"] [data-part="dialog-confirm"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill outranks=dialog-back:size+weight

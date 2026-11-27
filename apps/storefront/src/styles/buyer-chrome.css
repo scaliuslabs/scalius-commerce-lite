@@ -1,0 +1,20 @@
+/*
+ * The store's base under a theme's chrome on a buyer page
+ * (components/private/PrivateChrome.astro), imported into its shadow root's
+ * `scalius-base` layer (lib/private-pages/chrome-style.ts): the preflight a
+ * theme's header and footer sit on in a public page (Tailwind's, as the
+ * shared sheet has it), and the page's own font, line height and colour,
+ * which the shadow host inherits from the page as any element would. The
+ * store's tokens (`--background`, `--primary`, the theme's paint) are custom
+ * properties: they inherit into the shadow root by themselves. A few KB, its
+ * own immutable file, so the shared sheet is never loaded twice.
+ */
+@layer theme, base;
+@reference "tailwindcss/theme.css";
+@import "tailwindcss/preflight.css" layer(base);
+
+:host {
+  font: inherit;
+  line-height: inherit;
+  color: inherit;
+}

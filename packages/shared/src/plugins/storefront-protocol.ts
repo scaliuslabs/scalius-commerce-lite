@@ -381,11 +381,21 @@ export const STOREFRONT_PUBLIC_FILE_TYPES: Readonly<Record<string, string>> = {
 export const STOREFRONT_PACKAGE_DIR = "storefront";
 export const STOREFRONT_MODULE_FILE = "storefront.js";
 export const STOREFRONT_STYLESHEET_FILE = "styles.css";
+/**
+ * A theme whose header or footer draws on buyer pages (`buyerPages`) ships
+ * the store's own reading of its stylesheet beside it: `styles.css` parsed,
+ * checked and written again in ASCII (buyer-chrome-css.ts
+ * `checkedBuyerChromeSheet`), its URLs relative to the release's files. The
+ * pack writes it; the upload accepts it only when it is byte for byte what the
+ * store writes from `styles.css`. Buyer pages import it from the store's own
+ * path (`/_buyer-chrome/...`), never from the app's.
+ */
+export const STOREFRONT_BUYER_CHROME_FILE = "buyer-chrome.css";
 export const storefrontIslandFile = (name: string) => `islands/${name}.js`;
 export const storefrontPublicFile = (path: string) => `public/${path}`;
 
 /** A file path inside the storefront part of a package: lower case, no `..`. */
-export const STOREFRONT_FILE_PATH = /^(?:storefront\.js|styles\.css|pixel\.js|islands\/[a-z][a-z0-9_-]{0,47}\.js|public\/(?:[a-z0-9][a-z0-9_-]{0,63}\/){0,3}[a-z0-9][a-z0-9_.-]{0,99})$/;
+export const STOREFRONT_FILE_PATH = /^(?:storefront\.js|styles\.css|buyer-chrome\.css|pixel\.js|islands\/[a-z][a-z0-9_-]{0,47}\.js|public\/(?:[a-z0-9][a-z0-9_-]{0,63}\/){0,3}[a-z0-9][a-z0-9_.-]{0,99})$/;
 
 /** The content type a storefront file is served with; null for a path that is not one. */
 export function storefrontFileContentType(path: string): string | null {
@@ -1367,8 +1377,17 @@ export interface StorefrontRenderContext {
      */
     darkLogo?: StorefrontImage | null;
   };
-  /** The page's kind and path. The kinds may grow: treat an unknown value as `other`. */
-  page: { kind: "home" | "landing" | "product" | "listing" | "search" | "cart" | "page" | "other"; path: string };
+  /**
+   * The page's kind and path. The kinds may grow: treat an unknown value as
+   * `other`. `buyer`: one of the buyer's own pages (the account, the
+   * receipt, order tracking, warranty claims, the gift-card balance, the
+   * newsletter pages), where only a header or footer skin with `buyerPages:
+   * true` draws, rebuilt inert inside a shadow root (packages/plugin-sdk/docs/private-pages.md):
+   * hide what a buyer does not need there (search, category rows). Its `path`
+   * is then the page's first segment only (`/account`), never an order's or a
+   * claim's own path.
+   */
+  page: { kind: "home" | "landing" | "product" | "listing" | "search" | "cart" | "page" | "buyer" | "other"; path: string };
   /** The app's file base URL (`/_x/<plugin id>/<release>/`): its public files are under `public/`. */
   assets: string;
   /** The theme editor's preview: components may mark editable text (`editable()`). */

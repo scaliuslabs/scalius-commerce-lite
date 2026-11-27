@@ -71,7 +71,11 @@ import { readLayoutPixels } from "@/lib/buyer-events/pixel-frame";
 import { consentBootScript } from "../components/consent/consent-scripts";
 import { appComponentsRenderOn, appScriptsForPage, storefrontAppPage } from "@/lib/app-scripts";
 import { readStorefrontExtensions } from "@scalius/shared/plugins/storefront-components";
-import { setExtensionPage } from "@/lib/extensions";
+import { buyerPageChrome, setExtensionPage } from "@/lib/extensions";
+import { footerData, headerData, headerMarket } from "@/lib/extensions/data";
+import { buyerChromeRoot } from "@/lib/cache-policy";
+import { holdsBuyerPaymentStep } from "@/lib/private-pages/payment-step";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { themeAppStylesheets } from "@/lib/extensions/stylesheets";
 import {
   PARTYTOWN_BOOTSTRAP_SCRIPT,
@@ -374,6 +378,21 @@ const footerLocalization: FooterLocalizationModel | null = hasSeveralMarkets(mar
     returnTo: marketReturnTo,
   }
   : null;
+// The theme's own header and footer on the buyer's own pages (the account, the receipt, order tracking, ...), where
+// the skin the theme names asks (`buyerPages`) and a Super Admin approved it, and the page takes no payment: drawn
+// from the store's projections, rebuilt inert, inside a shadow root (components/private/PrivateChrome.astro).
+// Elsewhere, and whenever one cannot draw, the store's own.
+const buyerChromePage = !libraryPreview && buyerChromeRoot(Astro.url.pathname) !== null && !holdsBuyerPaymentStep(Astro.locals);
+const chromeTheme = buyerChromePage ? await currentRequestTheme(Astro.locals) : null;
+const { header: buyerHeader, footer: buyerFooter } = chromeTheme ? await buyerPageChrome(Astro.locals, Astro.url, {
+  header: hideHeader ? null : () => headerData({
+    theme: chromeTheme, storeName: storeDisplayName ?? null, navigation: navigationData, categoryTree,
+    market: headerMarket({ matrix: layoutData?.markets, presence: marketPresence, currency: currencyCode, shopCurrency: layoutData?.currency?.shopCode ?? currencyCode, language: pageLanguage, pathname: Astro.url.pathname }),
+  }),
+  footer: hideFooter ? null : () => footerData({
+    theme: chromeTheme, storeName: storeDisplayName, storePhone, menus: layoutData?.footerMenus ?? [], policies: layoutData?.policies ?? [], business: businessInfo, social: storeSocial,
+  }),
+}) : { header: null, footer: null };
 const currencyDecimalPlaces =
   layoutData?.currency?.decimalPlaces ?? DEFAULT_CURRENCY.decimalPlaces;
 // The store's price increment: client pricing rounds percentage prices to it as checkout does.
@@ -620,6 +639,7 @@ const pageStoreTimeZone = storeTimeZone();
             variant={themeLayout.header}
             navigationStyle={themeLayout.navigation}
             mobileNavigation={showMobileTabs ? "tabs" : "drawer"}
+            buyerChrome={buyerHeader}
           />
         )
       }
@@ -647,11 +667,14 @@ const pageStoreTimeZone = storeTimeZone();
             business={businessInfo}
             languageCode={layoutData?.storefrontCopy?.languageCode}
             localization={footerLocalization}
+            buyerChrome={buyerFooter}
           />
         </div>
       )
     }
     {privateHeader?.controls === "footer" && <PrivateControlsStrip localization={footerLocalization} />}
+    {/* What a theme's chrome replaced of the store's controls, outside its shadow root. */}
+    {(buyerHeader || buyerFooter) && <PrivateControlsStrip localization={buyerFooter ? footerLocalization : null} scheme={buyerHeader !== null} />}
 
     {/* Google accepts JSON-LD in body. Keep it in initial SSR HTML while
         placing machine-only bytes after buyer-visible content. */}

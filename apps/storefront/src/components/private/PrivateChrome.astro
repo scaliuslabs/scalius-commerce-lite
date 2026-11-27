@@ -1,0 +1,119 @@
+---
+// A theme's header or footer on one of the buyer's own pages (a skin with
+// `buyerPages: true`, lib/extensions `buyerPageChrome`): its markup rebuilt
+// inert, inside a declarative shadow root, inside a frame the store owns.
+// The frame (`BUYER_CHROME_FRAME_STYLE`, its own style attribute) is the
+// boundary: nothing the theme paints shows outside it, and nothing in the
+// shadow tree can select it. The shadow root's style is the store's own text
+// (lib/private-pages/chrome-style.ts): it imports the store's reading of the
+// theme's sheet from the store's own path under the store's guard. The host
+// carries only the page's colour scheme and sign-in hint (the inline script
+// after it copies them from `<html>`), and has no child of its own.
+//
+// Nothing the theme styles is ever in the top layer. Each popover of its
+// markup (a menu drawer, a dropdown) was lifted out as a panel (`InertPanel`)
+// and is drawn here inside the store's own top-layer element
+// (`[data-buyer-chrome-panel]`, its kind's geometry, backdrop, title bar and
+// close button the store's own CSS below), in a frame and shadow root of its
+// own. The theme's button for it opens the store's panel (`data-buyer-panel-open`,
+// scripts/buyer-chrome.ts); without the store's script it opens nothing. No
+// app runtime, island or file base: nothing of the app runs here.
+import type { BuyerChrome } from "@/lib/extensions";
+import { BUYER_CHROME_FRAME_STYLE, buyerChromeShadowStyle } from "@/lib/private-pages/chrome-style";
+import { BUYER_CHROME_STATE_SCRIPT } from "@/lib/inline-boot-scripts";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { storefrontCopy } from "@/lib/storefront-copy";
+import baseHref from "@/styles/buyer-chrome.css?url";
+
+interface Props {
+  target: "header" | "footer";
+  chrome: BuyerChrome;
+  /** The store's name, on the title bar of its panels. */
+  storeName?: string | null;
+}
+
+const { target, chrome, storeName } = Astro.props;
+const style = buyerChromeShadowStyle(baseHref, chrome.sheet);
+const copy = storefrontCopy((await currentRequestTheme(Astro.locals)).language).chrome;
+const title = [storeName?.trim(), copy.nav.menu].filter(Boolean).join(" · ");
+---
+
+<div data-buyer-chrome-frame={target} style={BUYER_CHROME_FRAME_STYLE[target]}><scalius-chrome data-chrome={target}><template shadowrootmode="open"><style is:inline set:html={style}></style><Fragment set:html={chrome.html} /></template></scalius-chrome><script is:inline set:html={BUYER_CHROME_STATE_SCRIPT}></script></div>
+{chrome.panels.map((panel, index) => (
+  <div
+    id={`buyer-panel-${target}-${index}`}
+    popover="auto"
+    data-buyer-chrome-panel={panel.kind}
+    data-menu-drawer={panel.kind === "drawer" ? "" : undefined}
+    aria-label={copy.nav.menu}
+  >
+    <div class="buyer-chrome-panel-bar">
+      <span>{title}</span>
+      <button type="button" popovertarget={`buyer-panel-${target}-${index}`} popovertargetaction="hide" aria-label={copy.header.closeMenu}>
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+      </button>
+    </div>
+    <div data-buyer-chrome-frame="panel" style={BUYER_CHROME_FRAME_STYLE.panel}><scalius-chrome data-chrome="panel"><template shadowrootmode="open"><style is:inline set:html={style}></style><Fragment set:html={panel.html} /></template></scalius-chrome><script is:inline set:html={BUYER_CHROME_STATE_SCRIPT}></script></div>
+  </div>
+))}
+
+<style is:global>
+  /* The store's panels for a theme's popovers on a buyer page: geometry, backdrop, title bar and close button the
+     store's alone (no theme sheet reaches the light DOM). A drawer always leaves a 4rem strip of the page, a menu
+     a 1rem margin on every side and at most 70% of the screen's height: a press on the page closes either. */
+  [data-buyer-chrome-panel] {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--border, currentColor);
+    background: var(--background, Canvas);
+    color: var(--foreground, CanvasText);
+    box-shadow: 0 12px 32px rgb(0 0 0 / 0.25);
+    overflow: hidden;
+    flex-direction: column;
+    position: fixed;
+  }
+  [data-buyer-chrome-panel]:popover-open {
+    display: flex;
+  }
+  [data-buyer-chrome-panel="drawer"] {
+    inset: 0 auto 0 0;
+    inline-size: min(22rem, calc(100vw - 4rem));
+    block-size: 100dvh;
+    max-block-size: 100dvh;
+  }
+  [data-buyer-chrome-panel="menu"] {
+    inset: var(--buyer-panel-top, 4rem) auto auto var(--buyer-panel-left, 1rem);
+    inline-size: min(28rem, calc(100vw - 2rem));
+    max-block-size: min(70dvh, calc(100dvh - var(--buyer-panel-top, 4rem) - 1rem));
+  }
+  [data-buyer-chrome-panel]::backdrop {
+    background: rgb(0 0 0 / 0.35);
+  }
+  .buyer-chrome-panel-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.25rem 0.25rem 0.25rem 1rem;
+    border-block-end: 1px solid var(--border, currentColor);
+    font-weight: 600;
+    font-size: 0.875rem;
+  }
+  .buyer-chrome-panel-bar button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 44px;
+    min-block-size: 44px;
+    border-radius: 9999px;
+    color: inherit;
+    background: transparent;
+  }
+</style>
+
+<script>
+  import { installBuyerChrome } from "@/scripts/buyer-chrome";
+
+  installBuyerChrome();
+</script>

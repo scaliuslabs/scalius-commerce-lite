@@ -825,6 +825,16 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
     },
   },
   {
+    // After a deploy, each installed theme's sheet for the buyer's own pages checked again by this
+    // version's checker, one release a run, until none is left (plugins/buyer-chrome-check.ts).
+    name: "buyer_chrome_recheck",
+    async run({ env, timed }) {
+      const { recheckBuyerChromeAfterDeploy } = await import("./plugins/buyer-chrome-check");
+      const result = await timed("buyer_chrome_recheck", () => recheckBuyerChromeAfterDeploy(env));
+      if (result && result.checked > 0) console.log(`[scheduled] Buyer-page sheets checked: ${result.checked}, refused=${result.refused}, remaining=${result.remaining}`);
+    },
+  },
+  {
     // Agent access: expired OAuth grants and tokens, sealed artifacts and
     // browser handoffs, pairings and OAuth approvals nobody finished, and requests and pairings
     // that ended without a connection. Cleanup, never on a buyer's path; each

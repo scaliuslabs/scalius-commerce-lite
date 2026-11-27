@@ -5,8 +5,10 @@
 //   parsed again each time it is loaded), so a stored manifest that stops
 //   parsing stops the app. It only ever changes additively.
 // - Policy (`pluginManifestPolicyIssues`, here): what a release must meet to
-//   be installed, updated or packed: supported object patterns, and buyer
-//   words that never pass for the store's (store-words.ts). It runs only when
+//   be installed, updated or packed: supported object patterns, buyer words
+//   that never pass for the store's (store-words.ts), and `buyerPages` only on
+//   a header or footer skin (the pack and the upload also check the sheet such
+//   a skin is drawn with, storefront-files.ts). It runs only when
 //   a release changes what the store runs (install, update, build, validate,
 //   the test harness), never when a stored manifest is read, so tightening a
 //   policy never stops an app already installed: its next release meets it.
@@ -80,6 +82,10 @@ function checkoutLabels(manifest: Pick<PluginManifest, "checkout" | "translation
 export function pluginManifestPolicyIssues(manifest: PluginManifest): PluginManifestPolicyIssue[] {
   return [
     ...pluginObjectPatternIssues(manifest),
+    // A skin of another target is never drawn there (the read ignores the flag); a release that asks for it is refused.
+    ...(manifest.storefront?.skins ?? []).flatMap((skin, index) => skin.buyerPages && skin.target !== "header" && skin.target !== "footer"
+      ? [{ path: `storefront.skins.${index}.buyerPages`, message: "Only a header or footer skin draws on the buyer's own pages." }]
+      : []),
     ...storeWordsIssues(checkoutLabels(manifest)).map((issue) => ({ path: issue.path.join("."), message: issue.message, reason: issue.reason })),
   ];
 }
