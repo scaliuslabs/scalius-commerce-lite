@@ -22,6 +22,7 @@ Contact data is protected in one place and projected everywhere:
 - An event's `facts` carry ids, states and quantities. Never contact data, credentials or money.
 - A webhook delivery adds `data`: the resource's sealed representation (`EVENT_REPRESENTATION_SCHEMAS` in `@scalius/plugin-sdk/manifest`) for one of 19 resource types: order, return, product, variant, customer, purchase order, inventory transfer, fulfillment, refund, shipment, payment, checkout, discount, review, gift card, gift card transaction, object, conversation and payout.
 - A representation has ids, states, ISO 8601 times, money as integer minor units beside its currency, lines by id and quantity (at most 500 listed) and discount codes as a count.
+- **Delivery places.** Every address (in a representation, a stable operation and the courier port) carries `placeIds: { city, zone, area }`: the store's own delivery-place hierarchy, up to three levels, each optional. A regional pack defines what each level means. A store with no delivery places sends `null` at every level, and an address you send may leave `placeIds` out. Use the region fields (`countryCode`, `adminArea`, `locality`, `postalCode`) for anything general, and read `placeIds` only when your app knows the pack that defines them. The courier port adds `placeNames` (the same places by name) and, for a courier that declares `locations`, `locationIds`.
 - Representations only grow within `EVENTS_API_VERSION` (`2026-10`): a field may be added, never removed, retyped, made nullable or stripped of its protection. Published schemas never close an object, so tolerate fields you do not know.
 - App event handlers get facts only. Read the resource with `ctx.api` (`orders.get` returns the same representation).
 
@@ -521,7 +522,7 @@ An app can stock and dress a store. It never publishes the shared theme.
 
 ## 8. The contract seal
 
-The plugin API is the one part of Scalius that keeps backward compatibility. These parts are sealed by snapshot tests:
+These parts of the contract are sealed by snapshot tests ([What we promise](promise.md) has the policy and what it does not cover):
 
 - the manifest JSON Schema;
 - the SDK's declarations;
@@ -536,9 +537,9 @@ The plugin API is the one part of Scalius that keeps backward compatibility. The
 
 **What may not change.** Removing, renaming or retyping a field; making an output field nullable; removing a field's contact-data protection; changing an error code's meaning or status; moving a stable port back to beta; changing a stable operation's name.
 
-**What is not sealed.** Beta operations and beta ports may change in any release. Internal operations are private.
+**What is not sealed.** Beta operations and beta ports may change in any release. Internal operations are private. Which code an operation answers in a given case is not sealed, only the codes themselves.
 
-A breaking change needs a new `apiVersion`. The platform then runs the old and the new side by side for at least 12 months.
+A breaking change needs a new contract version, with a host adapter for the old one, which keeps working for at least 24 months after its successor ships.
 
 What this means for you:
 

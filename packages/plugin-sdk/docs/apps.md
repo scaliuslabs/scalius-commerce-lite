@@ -511,8 +511,8 @@ A new field the platform adds then needs no change to your tests: a nullable fie
 
 ## Versioning
 
-- `apiVersion` names the plugin API version an app was built for. `SUPPORTED_PLUGIN_API_VERSIONS` lists the versions a store runs.
-- Within one version, changes are additive only: new optional manifest fields, new `ctx` methods, new events, new function points and provider operations. Existing fields, types, error codes and behaviour do not change.
-- A breaking change makes a new `apiVersion`. The platform then runs the old and the new side by side for at least 12 months, and the changelog marks each deprecation with the version that removes it.
+- `apiVersion` names the contract version an app was built for. `SUPPORTED_PLUGIN_API_VERSIONS` lists the versions a store runs.
+- Within one version, changes are additive only: new optional manifest fields, new `ctx` methods, new events, new function points, provider operations and stable operations.
+- A break needs a new contract version, at most once a year, with a host adapter for the old one; the old version keeps working for at least 24 months after its successor ships. [What we promise](promise.md) has the whole policy and what it does not cover.
 
 See [The contract seal](commerce-hooks.md#8-the-contract-seal) for exactly what is sealed.

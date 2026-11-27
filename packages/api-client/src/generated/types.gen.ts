@@ -4769,7 +4769,7 @@ export type ShippingZoneResource = {
         postalPrefix: string | null;
     }>;
     /**
-     * Bangladesh delivery places (city, thana, area) the zone serves. A place belongs to one zone.
+     * The store's own delivery places the zone serves, each at one of up to three levels (`city`, `zone`, `area`) whose meaning a regional pack defines; empty for a store with none. A place belongs to one zone.
      */
     places: Array<{
         id: string;
@@ -4841,7 +4841,7 @@ export type TaxRegionResource = {
     adminArea: string | null;
     postalPrefix: string | null;
     /**
-     * A Bangladesh delivery place (kind `place`).
+     * One of the store's own delivery places (kind `place`).
      */
     place: {
         id: string;
@@ -29977,7 +29977,7 @@ export type PostApiV1AdminResourcesOrdersData = {
             adminArea?: string | null;
             postalCode?: string | null;
             /**
-             * The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them.
+             * The store's own delivery places: up to three optional levels (`city`, `zone`, `area`) whose meaning a regional pack defines. Leave it out, or a level null, where the store has none.
              */
             placeIds?: {
                 city?: string | null;
@@ -30001,7 +30001,7 @@ export type PostApiV1AdminResourcesOrdersData = {
             adminArea?: string | null;
             postalCode?: string | null;
             /**
-             * The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them.
+             * The store's own delivery places: up to three optional levels (`city`, `zone`, `area`) whose meaning a regional pack defines. Leave it out, or a level null, where the store has none.
              */
             placeIds?: {
                 city?: string | null;
@@ -30242,7 +30242,7 @@ export type PostApiV1AdminResourcesOrdersQuoteData = {
             adminArea?: string | null;
             postalCode?: string | null;
             /**
-             * The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them.
+             * The store's own delivery places: up to three optional levels (`city`, `zone`, `area`) whose meaning a regional pack defines. Leave it out, or a level null, where the store has none.
              */
             placeIds?: {
                 city?: string | null;
@@ -30266,7 +30266,7 @@ export type PostApiV1AdminResourcesOrdersQuoteData = {
             adminArea?: string | null;
             postalCode?: string | null;
             /**
-             * The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them.
+             * The store's own delivery places: up to three optional levels (`city`, `zone`, `area`) whose meaning a regional pack defines. Leave it out, or a level null, where the store has none.
              */
             placeIds?: {
                 city?: string | null;
@@ -43810,7 +43810,7 @@ export type PostApiV1AdminCustomersData = {
             adminArea?: string | null;
             postalCode?: string | null;
             /**
-             * The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them.
+             * The store's own delivery places: up to three optional levels (`city`, `zone`, `area`) whose meaning a regional pack defines. Leave it out, or a level null, where the store has none.
              */
             placeIds?: {
                 city?: string | null;

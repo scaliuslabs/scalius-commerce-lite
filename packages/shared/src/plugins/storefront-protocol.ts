@@ -301,6 +301,21 @@ export function storefrontEmbedRule(unit: "section" | "component" | StorefrontSk
 export const STOREFRONT_ISLAND_HYDRATION = ["load", "idle", "visible", "interaction"] as const;
 export type StorefrontIslandHydration = (typeof STOREFRONT_ISLAND_HYDRATION)[number];
 
+/**
+ * The CSS functions a `style` attribute in app markup may call (lower case;
+ * CSS function names ignore case): computing, colour and transform ones,
+ * never one that loads or reads (`url()`, `image-set()`, `attr()`, `src()`).
+ * Inline style is a permanent part of the contract: this list only grows.
+ */
+export const STOREFRONT_STYLE_FUNCTIONS = [
+  "var", "calc", "min", "max", "clamp",
+  "rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color-mix",
+  "linear-gradient", "radial-gradient", "conic-gradient",
+  "repeating-linear-gradient", "repeating-radial-gradient", "repeating-conic-gradient",
+  "translate", "translatex", "translatey", "translate3d", "rotate", "scale", "scalex", "scaley",
+  "skew", "skewx", "skewy", "matrix", "cubic-bezier", "steps", "minmax", "repeat", "fit-content",
+] as const;
+
 /** Budgets the packer and the upload enforce, and the storefront holds a render to. */
 export const STOREFRONT_COMPONENT_LIMITS = {
   /** The compiled module (server side; loaded on an isolate's first render). */

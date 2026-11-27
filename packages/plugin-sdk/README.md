@@ -2,7 +2,7 @@
 
 The SDK for Scalius apps (plugins), for plugin authors. An app declares what it may do (the manifest) and writes the handlers the platform calls. Workspace imports use source; the package build emits portable JavaScript and declarations for publishing.
 
-This README is the quick start. The full reference ships with the package in [`docs/`](docs/README.md): the platform and app lifecycle ([apps.md](docs/apps.md)), the checkout functions, ports and stable app API ([commerce-hooks.md](docs/commerce-hooks.md)) and storefront components ([storefront.md](docs/storefront.md)). Building a theme? Start with [Build a theme](docs/themes.md): the rules that make it work on any store, not only yours. AI coding tools can read [docs/llms.txt](docs/llms.txt), and every scaffolded app carries an `AGENTS.md`.
+This README is the quick start. The full reference ships with the package in [`docs/`](docs/README.md): the platform and app lifecycle ([apps.md](docs/apps.md)), the checkout functions, ports and stable app API ([commerce-hooks.md](docs/commerce-hooks.md)) and storefront components ([storefront.md](docs/storefront.md)). Building a theme? Start with [Build a theme](docs/themes.md): the rules that make it work on any store, not only yours. AI coding tools can read [docs/llms.txt](docs/llms.txt), and every scaffolded app carries an `AGENTS.md`. Deciding whether to build on Scalius for years? Read [What we promise](docs/promise.md) first.
 
 ## Quick start
 
@@ -299,7 +299,7 @@ Definition keys match the manifest. The host rejects an undeclared handler, and 
 - An app gets only events after its first activation, including those its own writes cause. Write only when something changes, so the handler converges.
 - Events are not lost while the app is off. When it is turned off, stopped by its limits or an emergency stop, failed, or waiting for an update's approval, its events wait and are delivered, oldest first, when it runs again. It keeps at most the plan's bound: 7 days and 2,000 events on Free, 30 days and 50,000 on Paid; past it the oldest are dropped (the app's page shows them cancelled). Uninstalling drops them. To catch up after a longer gap, read with `updatedSince` (orders, products, customers).
 
-**Cron.** A schedule has five fields and runs in the store's time zone (`Asia/Dhaka`). The API checks schedules every 15 minutes on Workers Paid and every 23 minutes on Free. A slot runs once and never overlaps the job's previous run. After downtime only the latest missed slot runs (within 24 hours). Use `scheduledAt`, not the clock, for time windows.
+**Cron.** A schedule has five fields and runs in the store's own time zone (its setting, such as `Asia/Dhaka`). The API checks schedules every 15 minutes on Workers Paid and every 23 minutes on Free. A slot runs once and never overlaps the job's previous run. After downtime only the latest missed slot runs (within 24 hours). Use `scheduledAt`, not the clock, for time windows.
 
 ## `ctx`
 
@@ -545,7 +545,7 @@ Saved methods and authorizations (subscriptions, "authorize at order, capture at
 Declare `{ id, name, countries?, trackingUrl?, locations?, icon?, settings?, operations }` under `providers.courier`. The Bangladesh pack's Pathao and Steadfast ([`couriers.ts`](https://github.com/scaliuslabs/scalius-commerce-lite/blob/mono-repo/plugins/bangladesh/src/couriers.ts)) are complete examples.
 
 - `trackingUrl` is an https template that contains `{trackingId}`, such as `https://track.acme.example/{trackingId}`. The platform saves the page with each shipment.
-- `locations: { key, required, numeric }`: your courier books by its own location ids, kept on the store's places under `externalIds.<key>` (your app may load them with the place import). The platform refuses a booking whose city, zone or area lacks a `required` id before it writes anything, and passes the ids as `recipient.locationIds`.
+- `locations: { key, required, numeric }`: your courier books by its own location ids, kept on the store's delivery places ([Delivery places](docs/commerce-hooks.md#event-payloads)) under `externalIds.<key>` (your app may load them with the place import). The platform refuses a booking whose city, zone or area lacks a `required` id before it writes anything, and passes the ids as `recipient.locationIds`.
 - `icon` is your courier's own mark in the package (SVG or PNG, the app icon's checks). The dashboard shows it beside the courier; without it, the app's icon.
 
 1. **`createShipment(input, ctx)`.** The platform inserts its own shipment row first and passes its id as `input.idempotencyKey`. A retry after a lost answer reuses it, so book at most once per key.
@@ -619,16 +619,15 @@ The plan profile (`planLimits().plugins`) sets each app's ceilings. The manifest
 
 ## The stable plugin API
 
-This package, its manifest, the event catalogue and the bridge contract are the plugin API. It is the one part of Scalius that keeps backward compatibility.
+This package, its manifest, the event catalogue, the stable operations, the storefront protocol and the theme document are the contract themes and apps build on. [What we promise](docs/promise.md) says what it covers, what it does not, and how a break would be made.
 
-- `apiVersion` names the version an app was built for (`PLUGIN_API_VERSION`, date-versioned). `SUPPORTED_PLUGIN_API_VERSIONS` lists the versions this platform runs. Install, activation and update refuse a manifest built for a version that is not listed, or whose `minPlatformVersion` is newer than this release, with a plain reason.
-- Within one `apiVersion`, changes are additive only: new optional manifest fields, new `ctx` methods, new events, new function points and provider operations. Existing fields, types, error codes and behaviour do not change.
-- A breaking change makes a new `apiVersion`. The platform then supports the old and the new version side by side for at least 12 months. The changelog marks each deprecation with the version that removes it.
-- A deprecated field or method keeps working until the platform drops its `apiVersion`.
+- `apiVersion` names the contract version an app was built for (`PLUGIN_API_VERSION`, date-versioned). `SUPPORTED_PLUGIN_API_VERSIONS` lists the versions this platform runs. Install, activation and update refuse a manifest built for a version that is not listed, or whose `minPlatformVersion` is newer than this release, with a plain reason.
+- Within one version, changes are additive only: new optional manifest fields, new `ctx` methods, new events, new function points, provider operations and stable operations.
+- A break needs a new contract version, at most once a year, with a host adapter for the old one. The old version keeps working for at least 24 months after its successor ships.
 
 ## Contract checks
 
-The platform seals the manifest JSON Schema, the SDK's emitted declarations, protocol constants, events, function, provider and UI schemas, scopes and every stable operation's schemas: a release changes them only additively, and a breaking change needs a new `apiVersion`. Runtime validation still covers refinements JSON Schema cannot express.
+The platform seals the manifest JSON Schema, the SDK's emitted declarations, protocol constants, events, function, provider and UI schemas, scopes and every stable operation's schemas: a release changes them only additively, and a breaking change needs a new contract version. Runtime validation still covers refinements JSON Schema cannot express.
 
 ## License
 

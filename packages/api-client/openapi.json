@@ -23109,7 +23109,7 @@
                 "parentName"
               ]
             },
-            "description": "Bangladesh delivery places (city, thana, area) the zone serves. A place belongs to one zone."
+            "description": "The store's own delivery places the zone serves, each at one of up to three levels (`city`, `zone`, `area`) whose meaning a regional pack defines; empty for a store with none. A place belongs to one zone."
           },
           "rates": {
             "type": "array",
@@ -23301,7 +23301,7 @@
               "type",
               "name"
             ],
-            "description": "A Bangladesh delivery place (kind `place`)."
+            "description": "One of the store's own delivery places (kind `place`)."
           },
           "providerId": {
             "type": "string",
@@ -114325,7 +114325,7 @@
                           }
                         },
                         "additionalProperties": false,
-                        "description": "The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them."
+                        "description": "The store's own delivery places: up to three optional levels (`city`, `zone`, `area`) whose meaning a regional pack defines. Leave it out, or a level null, where the store has none."
                       }
                     },
                     "required": [
@@ -114403,7 +114403,7 @@
                           }
                         },
                         "additionalProperties": false,
-                        "description": "The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them."
+                        "description": "The store's own delivery places: up to three optional levels (`city`, `zone`, `area`) whose meaning a regional pack defines. Leave it out, or a level null, where the store has none."
                       },
                       "name": {
                         "type": "string",
@@ -115091,7 +115091,7 @@
                           }
                         },
                         "additionalProperties": false,
-                        "description": "The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them."
+                        "description": "The store's own delivery places: up to three optional levels (`city`, `zone`, `area`) whose meaning a regional pack defines. Leave it out, or a level null, where the store has none."
                       }
                     },
                     "required": [
@@ -115169,7 +115169,7 @@
                           }
                         },
                         "additionalProperties": false,
-                        "description": "The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them."
+                        "description": "The store's own delivery places: up to three optional levels (`city`, `zone`, `area`) whose meaning a regional pack defines. Leave it out, or a level null, where the store has none."
                       },
                       "name": {
                         "type": "string",
@@ -156529,7 +156529,7 @@
                           }
                         },
                         "additionalProperties": false,
-                        "description": "The store's delivery place ids (Bangladesh's City, Thana, Area), where its delivery zones use them."
+                        "description": "The store's own delivery places: up to three optional levels (`city`, `zone`, `area`) whose meaning a regional pack defines. Leave it out, or a level null, where the store has none."
                       },
                       "name": {
                         "type": "string",

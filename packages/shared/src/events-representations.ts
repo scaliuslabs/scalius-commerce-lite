@@ -72,7 +72,10 @@ const postalAddressSchema = z.object({
   postalCode: text.nullable(),
   /** ISO 3166-1 alpha-2. */
   countryCode: z.string().length(2).nullable(),
-  /** The store's delivery place ids (Bangladesh City, Thana, Area). */
+  /**
+   * The store's own delivery places: up to three levels whose meaning a
+   * regional pack defines, each null where the store has none.
+   */
   placeIds: z.object({ city: id.nullable(), zone: id.nullable(), area: id.nullable() }),
 });
 

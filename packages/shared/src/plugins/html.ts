@@ -45,7 +45,7 @@
 import { isTag, isText, type ChildNode, type Element } from "domhandler";
 import { parseDocument } from "htmlparser2";
 import { RAW_TEXT_ELEMENTS, UNTRUSTED_HTML_PARSING, VOID_ELEMENTS, escapeHtmlAttribute, escapeHtmlText, untrustedHtml, writeStartTag } from "../html-writer";
-import { STOREFRONT_COMPONENT_LIMITS, STOREFRONT_DEFERRED_HYDRATION, STOREFRONT_DEFERRED_TAG } from "./storefront-protocol";
+import { STOREFRONT_COMPONENT_LIMITS, STOREFRONT_DEFERRED_HYDRATION, STOREFRONT_DEFERRED_TAG, STOREFRONT_STYLE_FUNCTIONS } from "./storefront-protocol";
 import { APP_FORM_OWNER_ATTRIBUTE } from "./app-form";
 
 export interface PluginHtmlOptions {
@@ -169,16 +169,17 @@ const ID_REFERENCE = /^[A-Za-z][\w-]{0,99}$/;
 
 /**
  * Inline style that loads and hides nothing: `property: value` declarations
- * whose functions are computing or colour ones (no `url()`, `image-set()`,
- * `attr()`, `src()`, …), without escapes, comments, rules or markup.
+ * whose functions are in the sealed `STOREFRONT_STYLE_FUNCTIONS` (no `url()`,
+ * `image-set()`, `attr()`, `src()`, …), without escapes, comments, rules or
+ * markup.
  */
-const STYLE_FUNCTIONS = /^(?:var|calc|min|max|clamp|rgba?|hsla?|hwb|lab|lch|oklab|oklch|color-mix|(?:repeating-)?(?:linear|radial|conic)-gradient|translate(?:x|y|3d)?|rotate|scale(?:x|y)?|skew(?:x|y)?|matrix|cubic-bezier|steps|minmax|repeat|fit-content)$/;
+const STYLE_FUNCTIONS: ReadonlySet<string> = new Set(STOREFRONT_STYLE_FUNCTIONS);
 const STYLE_PROPERTY = /^(?:--[\w-]{1,60}|-?[a-z][a-z-]{1,40})$/;
 
 function safeStyle(value: string): string | null {
   if (/[\\<>{}@]|\/\*/.test(value)) return null;
   for (const call of value.matchAll(/([\w-]*)\s*\(/g)) {
-    if (call[1] && !STYLE_FUNCTIONS.test(call[1].toLowerCase())) return null;
+    if (call[1] && !STYLE_FUNCTIONS.has(call[1].toLowerCase())) return null;
   }
   const declarations: string[] = [];
   for (const declaration of value.split(";")) {
