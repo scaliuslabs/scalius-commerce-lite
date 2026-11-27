@@ -61,7 +61,7 @@ A check may be tightened only to close a security hole. Each one gets a dated no
 - **Event delivery.** An event is written in the same commit as the change. It is sent right after that write, and what does not fit is sent by a drain every minute, a few deliveries per drain on Workers Free and more on Paid. Under a burst, events can wait minutes, and no upper bound is promised. While your app is not running, its events wait up to the plan's bound ([Events](apps.md#events)).
 - **A webhook's `data`** is read when each attempt is sent, not when the event happened. It can be newer than the event's `facts`.
 - **States set outside the store.** A shipment's `status` is what its courier last reported (`rawStatus`, `lastCheckedAt`). A payment or refund stays `pending` until its provider settles.
-- **Storefront data a theme draws** is at most one second behind a committed write. Recommendations and "popular" lists are computed in the background: recommendations after a catalogue write and in a daily rotation, popular products nightly from the last 30 days of orders.
+- **Storefront data a theme draws** can be briefly behind a committed write: about a second by design, which is a target and not a promised bound. Recommendations and "popular" lists are computed in the background: recommendations after a catalogue write and in a daily rotation, popular products nightly from the last 30 days of orders.
 
 **Events are delivered at least once and may arrive out of order.** The events of one commit have no set order between them, and a retried delivery can arrive after a later event. So:
 
