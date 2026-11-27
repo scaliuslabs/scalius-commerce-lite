@@ -34,6 +34,7 @@
 import type { Database } from "@scalius/database/client";
 import { pluginInstallations, pluginRegistrations } from "@scalius/database/schema";
 import { and, asc, eq, or, gt, gte, isNotNull, sql } from "drizzle-orm";
+import { toPluginInstallation } from "./installations";
 
 export const FUNCTION_CIRCUIT = {
   /** Failed answers within the window that open the circuit. */
@@ -137,10 +138,17 @@ export async function recordFunctionFailure(
   };
 }
 
-/** A good answer closes the circuit (one write, only when something was counted). */
+/**
+ * A good answer closes the circuit (one write, only when something was
+ * counted). At any point but `cart.validate` (whose answers keep their own
+ * streak) it also ends the refusals a blocking failure counted.
+ */
 export async function recordFunctionSuccess(db: Database, input: { pluginId: string; point: string }): Promise<void> {
   await db.update(pluginRegistrations)
-    .set({ circuitFailures: 0, circuitWindowAt: null, circuitOpenUntil: null })
+    .set({
+      circuitFailures: 0, circuitWindowAt: null, circuitOpenUntil: null,
+      ...(input.point === "cart.validate" ? {} : { refusalCount: 0, refusingSince: null, lastRefusalAt: null, lastRefusal: null }),
+    })
     .where(and(
       registration(input.pluginId, input.point),
       or(gt(pluginRegistrations.circuitFailures, 0), isNotNull(pluginRegistrations.circuitOpenUntil)),
@@ -239,7 +247,38 @@ export async function clearFunctionRefusals(db: Database, input: { pluginId: str
     .where(and(registration(input.pluginId, input.point), gt(pluginRegistrations.refusalCount, 0)));
 }
 
-/** An app refusing every recent checkout: since when, how many counted, and its words for the latest. */
+/**
+ * Why a blocking function failed, in the host's words (never the app's: its
+ * error text can carry buyer data, and Home and checkout readiness are read
+ * by staff and agents without `apps.view`). The app's log keeps the full text.
+ */
+export const FUNCTION_FAILURES = ["threw", "timed_out", "invalid_answer", "call_refused", "could_not_run"] as const;
+export type FunctionFailure = (typeof FUNCTION_FAILURES)[number];
+
+/** How a failure is kept in `last_refusal`, apart from an app's words to buyers. */
+const FAILURE_PREFIX = "host:";
+export function functionFailureRecord(failure: FunctionFailure): string {
+  return `${FAILURE_PREFIX}${failure}`;
+}
+function storedFailure(value: string | null): FunctionFailure | null {
+  if (!value?.startsWith(FAILURE_PREFIX)) return null;
+  const failure = value.slice(FAILURE_PREFIX.length);
+  return (FUNCTION_FAILURES as readonly string[]).includes(failure) ? failure as FunctionFailure : null;
+}
+
+/**
+ * An app whose function keeps checkout from taking orders: since when, how
+ * many refusals were counted, and the latest words.
+ *
+ * - `failing`: a function the store approved as blocking keeps failing (its
+ *   circuit is open, or it failed `FUNCTION_CIRCUIT.failures` times counted
+ *   with no good answer between), so checkout refuses every order that needs
+ *   it. `failure` says how, in the host's words; `reason` is null.
+ * - `failedOnce` (only with `includeFailedOnce`, for the app's own page): it
+ *   failed, but not that often yet; `lastAt` is the latest.
+ * - otherwise a `cart.validate` that refused every recent checkout by its
+ *   answer; `reason` is its words to buyers.
+ */
 export interface FunctionRefusing {
   pluginId: string;
   /** The app's name, as its manifest gives it. */
@@ -249,19 +288,24 @@ export interface FunctionRefusing {
   since: number;
   lastAt: number;
   reason: string | null;
+  failing: boolean;
+  failedOnce: boolean;
+  failure: FunctionFailure | null;
 }
 
-function manifestName(manifestJson: string | null): string | null {
-  try {
-    const name = (JSON.parse(manifestJson ?? "null") as { name?: unknown } | null)?.name;
-    return typeof name === "string" && name.trim() ? name : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Active apps refusing every recent checkout (one app's when `pluginId` is given), for Home and the app's page. */
-export async function listRefusingFunctions(db: Database, pluginId?: string): Promise<FunctionRefusing[]> {
+/**
+ * Active apps keeping checkout from taking orders (one app's when `pluginId`
+ * is given), for Home, checkout readiness and the app's page. Each failure of
+ * a blocking function counts as a refusal (at most one in
+ * `FUNCTION_REFUSALS.countEverySeconds`, `runPluginFunctions`); a good answer
+ * clears it. A failing one comes first.
+ */
+export async function listRefusingFunctions(
+  db: Database,
+  pluginId?: string,
+  options: { includeFailedOnce?: boolean; nowSeconds?: number } = {},
+): Promise<FunctionRefusing[]> {
+  const nowSeconds = options.nowSeconds ?? Math.floor(Date.now() / 1000);
   const rows = await db.select({
     pluginId: pluginRegistrations.pluginId,
     point: pluginRegistrations.name,
@@ -269,25 +313,49 @@ export async function listRefusingFunctions(db: Database, pluginId?: string): Pr
     since: pluginRegistrations.refusingSince,
     lastAt: pluginRegistrations.lastRefusalAt,
     reason: pluginRegistrations.lastRefusal,
-    manifestJson: pluginInstallations.manifestJson,
+    failures: pluginRegistrations.circuitFailures,
+    openUntil: pluginRegistrations.circuitOpenUntil,
+    installation: pluginInstallations,
   }).from(pluginRegistrations)
     .innerJoin(pluginInstallations, eq(pluginInstallations.pluginId, pluginRegistrations.pluginId))
     .where(and(
       eq(pluginRegistrations.kind, "function"),
       pluginId ? eq(pluginRegistrations.pluginId, pluginId) : undefined,
-      gte(pluginRegistrations.refusalCount, FUNCTION_REFUSALS.warnAfter),
+      or(
+        gte(pluginRegistrations.refusalCount, FUNCTION_REFUSALS.warnAfter),
+        and(gt(pluginRegistrations.circuitFailures, 0), isNotNull(pluginRegistrations.refusingSince)),
+      ),
       eq(pluginInstallations.status, "active"),
     ))
     .orderBy(asc(pluginRegistrations.pluginId))
     .limit(20)
     .all();
-  return rows.flatMap((row) => row.since === null || row.lastAt === null ? [] : [{
-    pluginId: row.pluginId,
-    name: manifestName(row.manifestJson) ?? row.pluginId,
-    point: row.point,
-    refusals: Number(row.refusals),
-    since: Number(row.since),
-    lastAt: Number(row.lastAt),
-    reason: row.reason,
-  }]);
+  const entries = rows.flatMap((row): FunctionRefusing[] => {
+    if (row.since === null || row.lastAt === null) return [];
+    const installation = toPluginInstallation(row.installation);
+    // Blocking as it runs: declared `block` and approved so (`pluginManifestWithinGrant`).
+    const blockingFailed = Number(row.failures) > 0
+      && installation?.manifest.functions.some((fn) => fn.point === row.point && fn.onError === "block") === true;
+    const failing = blockingFailed
+      && ((row.openUntil !== null && Number(row.openUntil) > nowSeconds) || Number(row.refusals) >= FUNCTION_CIRCUIT.failures);
+    const failedOnce = blockingFailed && !failing;
+    if (failedOnce && !options.includeFailedOnce) return [];
+    if (!blockingFailed && Number(row.refusals) < FUNCTION_REFUSALS.warnAfter) return [];
+    const failure = storedFailure(row.reason);
+    return [{
+      pluginId: row.pluginId,
+      name: installation?.manifest.name ?? row.pluginId,
+      point: row.point,
+      refusals: Number(row.refusals),
+      since: Number(row.since),
+      lastAt: Number(row.lastAt),
+      // A failure is worded by the host; only a refusal by answer carries the app's words to buyers.
+      reason: blockingFailed || failure ? null : row.reason,
+      failing,
+      failedOnce,
+      failure,
+    }];
+  });
+  const rank = (entry: FunctionRefusing) => (entry.failing ? 0 : entry.failedOnce ? 2 : 1);
+  return entries.sort((left, right) => rank(left) - rank(right) || left.pluginId.localeCompare(right.pluginId));
 }

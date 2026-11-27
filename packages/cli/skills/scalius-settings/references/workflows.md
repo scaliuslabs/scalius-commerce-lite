@@ -68,7 +68,7 @@ ops: dashboard.webhooks.list -> dashboard.webhooks.get -> dashboard.webhooks.cre
 - Endpoints receive order, customer and product data: confirm the exact HTTPS URL and topics with the merchant before creating or widening one.
 
 ### Install, update or stop apps (`dashboard.apps-install`)
-ops: dashboard.apps.registry_list -> dashboard.apps.registry_settings_get -> dashboard.apps.registry_install -> dashboard.apps.update -> dashboard.apps.stop -> dashboard.apps.stop_third_party -> dashboard.apps.get
+ops: dashboard.apps.registry_list -> dashboard.apps.registry_settings_get -> dashboard.apps.registry_install -> dashboard.apps.update -> dashboard.apps.stop -> dashboard.apps.stop_third_party -> dashboard.apps.function_blocking_update -> dashboard.apps.get
 - Install and update only when installMode is dashboard (Workers Paid); otherwise give the merchant the installCommand.
 
 More: [workflows-2.md](workflows-2.md)

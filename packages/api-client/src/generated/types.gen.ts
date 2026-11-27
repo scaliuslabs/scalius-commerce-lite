@@ -7036,7 +7036,7 @@ export type AppSummary = {
     source: 'bundled' | 'registry' | 'upload';
     status: 'installed' | 'active' | 'disabled' | 'failed';
     /**
-     * An update asks for more access than was approved; the app waits until a Super Admin approves it.
+     * The app asks for access that is not approved (an update's new permissions, or a blocking the store turned off): it keeps running with what was approved, and the rest stays off until a Super Admin approves it (`added` lists it).
      */
     needsApproval: boolean;
     /**
@@ -7433,6 +7433,16 @@ export type AppDetail = AppSummary & {
     granted: AppGrant & unknown;
     added: AppGrant & unknown;
     /**
+     * Function points the app asks to block checkout at where the store lets checkout continue when they fail (dashboard.apps.function_blocking_update). Not part of `request` or `added`: only the store gives the blocking back.
+     */
+    checkoutContinues?: Array<{
+        point: 'cart.transform' | 'cart.line_prices' | 'cart.validate' | 'checkout.discounts' | 'checkout.shipping_rates' | 'checkout.payment_methods';
+        /**
+         * When the store turned its blocking off (ISO 8601).
+         */
+        at: string;
+    }>;
+    /**
      * The requested scopes, for the consent screen.
      */
     scopes: Array<{
@@ -7479,7 +7489,7 @@ export type AppDetail = AppSummary & {
         blocking: boolean;
     }>;
     /**
-     * The app's cart rule is refusing every recent checkout (as a delivery-slot app with no open slot does); null otherwise. An accepted checkout clears it.
+     * The app keeps checkout from taking orders: a function approved as blocking is failing, or its cart rule refuses every recent checkout (as a delivery-slot app with no open slot does); null otherwise. A good answer clears it.
      */
     refusing: {
         /**
@@ -7495,9 +7505,29 @@ export type AppDetail = AppSummary & {
          */
         lastAt: string;
         /**
-         * The app's words to the buyer for the latest refusal.
+         * The app's words to the buyer for the latest refusal; null for a failing blocking function (see failure and lastError).
          */
         reason: string | null;
+        /**
+         * True when a function the store approved as blocking keeps failing (its circuit is open, or it failed as many times as opens one with no good answer between), so checkout refuses every order that needs it (turn its blocking off with dashboard.apps.function_blocking_update, update the app, or stop it).
+         */
+        failing?: boolean;
+        /**
+         * True when such a function failed (that checkout was refused) but not often enough to be failing; lastAt is the latest.
+         */
+        failedOnce?: boolean;
+        /**
+         * The function point that refuses.
+         */
+        point?: string;
+        /**
+         * How a blocking function failed, in the platform's words: threw, timed_out, invalid_answer, call_refused (a read it declared was refused) or could_not_run.
+         */
+        failure?: 'threw' | 'timed_out' | 'invalid_answer' | 'call_refused' | 'could_not_run';
+        /**
+         * The app's latest error at that point, as its log has it (the app's own text).
+         */
+        lastError?: string | null;
     } | null;
     settings: {
         fields: Array<AppSettingField>;
@@ -57600,19 +57630,31 @@ export type GetApiV1AdminDashboardSetupGuideResponses = {
                 blockedProducts: number;
             };
             /**
-             * Active apps whose cart rule refuses every recent checkout (a delivery-slot app with no open slot), so the store sells nothing; empty otherwise.
+             * Active apps keeping checkout from taking orders: a function approved as blocking that is failing, or a cart rule refusing every recent checkout (a delivery-slot app with no open slot); empty otherwise. One per app, a failing function first.
              */
             refusingApps: Array<{
                 appId: string;
                 name: string;
                 /**
-                 * The app's words to the buyer for the latest refusal.
+                 * The app's words to the buyer for the latest refusal; null for a failing function (see failure).
                  */
                 reason: string | null;
                 /**
                  * When it began refusing every checkout (ISO 8601).
                  */
                 since: string;
+                /**
+                 * True when a function the store approved as blocking is failing (checkout refuses every order that needs it); absent or false: its cart rule refuses by its answer.
+                 */
+                failing?: boolean;
+                /**
+                 * The function point that refuses (`cart.validate`, `cart.line_prices`, …).
+                 */
+                point?: string;
+                /**
+                 * How a failing function failed, in the platform's words (never the app's text).
+                 */
+                failure?: 'threw' | 'timed_out' | 'invalid_answer' | 'call_refused' | 'could_not_run';
             }>;
             /**
              * The D1 database's size against the plan's cap; null on Turso and PostgreSQL, or when D1 reports no size.
@@ -88970,6 +89012,86 @@ export type PostApiV1AdminAppsByIdDeactivateResponses = {
 };
 
 export type PostApiV1AdminAppsByIdDeactivateResponse = PostApiV1AdminAppsByIdDeactivateResponses[keyof PostApiV1AdminAppsByIdDeactivateResponses];
+
+export type PostApiV1AdminAppsByIdFunctionsByPointBlockingData = {
+    body: {
+        blocking: boolean;
+        /**
+         * The app's current revision (every change advances it).
+         */
+        expectedRevision: number;
+    };
+    path: {
+        /**
+         * The app's id (vendor.name).
+         */
+        id: string;
+        /**
+         * The function point (`cart.validate`, `cart.line_prices`, …).
+         */
+        point: 'cart.transform' | 'cart.line_prices' | 'cart.validate' | 'checkout.discounts' | 'checkout.shipping_rates' | 'checkout.payment_methods';
+    };
+    query?: never;
+    url: '/api/v1/admin/apps/{id}/functions/{point}/blocking';
+};
+
+export type PostApiV1AdminAppsByIdFunctionsByPointBlockingErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)
+     */
+    413: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: ErrorResponse;
+};
+
+export type PostApiV1AdminAppsByIdFunctionsByPointBlockingError = PostApiV1AdminAppsByIdFunctionsByPointBlockingErrors[keyof PostApiV1AdminAppsByIdFunctionsByPointBlockingErrors];
+
+export type PostApiV1AdminAppsByIdFunctionsByPointBlockingResponses = {
+    /**
+     * Saved
+     */
+    200: {
+        success: true;
+        data: {
+            app: AppDetail;
+            /**
+             * False when it was already so.
+             */
+            changed: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminAppsByIdFunctionsByPointBlockingResponse = PostApiV1AdminAppsByIdFunctionsByPointBlockingResponses[keyof PostApiV1AdminAppsByIdFunctionsByPointBlockingResponses];
 
 export type GetApiV1AdminAppsByIdFeaturesData = {
     body?: never;

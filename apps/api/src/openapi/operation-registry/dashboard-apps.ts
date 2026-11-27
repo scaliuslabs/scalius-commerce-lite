@@ -54,6 +54,15 @@ export const DASHBOARD_APP_OPERATIONS = {
     revision: "required",
     limits: { request: 16_384, response: 65_536 },
   },
+  // A blocking function's failure policy: letting checkout continue when it
+  // fails only narrows the app's grant, so agents may (the route refuses
+  // blocking again to anyone but a Super Admin in the dashboard).
+  "dashboard.apps.function_blocking_update": {
+    risk: "security",
+    batch: "forbidden",
+    revision: "required",
+    limits: { request: 4_096, response: 65_536 },
+  },
   "dashboard.apps.settings_update": {
     risk: "security",
     batch: "forbidden",

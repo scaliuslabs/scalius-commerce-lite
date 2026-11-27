@@ -97,6 +97,19 @@ export async function writePluginLogs(
   options: { secrets?: readonly string[] } = {},
 ): Promise<number> {
   if (entries.length === 0) return 0;
+  const { statements, written } = pluginLogStatements(db, pluginId, entries, options);
+  await safeBatch(db, statements as never);
+  return written;
+}
+
+/** The statements of `writePluginLogs`, for a caller that writes them in its own batch (a change and its record). */
+export function pluginLogStatements(
+  db: Database,
+  pluginId: string,
+  entries: readonly PluginLogInput[],
+  options: { secrets?: readonly string[] } = {},
+): { statements: unknown[]; written: number } {
+  if (entries.length === 0) return { statements: [], written: 0 };
   const secrets = options.secrets ?? [];
   const kept = entries.slice(0, PLUGIN_LOG_LINES_PER_WRITE);
   if (entries.length > kept.length) {
@@ -114,14 +127,16 @@ export async function writePluginLogs(
     .orderBy(desc(pluginLogEntries.id))
     .limit(1)
     .offset(PLUGIN_LOG_RING_SIZE - 1);
-  await safeBatch(db, [
-    ...chunkRowsForD1(rows, 7).map((chunk) => db.insert(pluginLogEntries).values(chunk)),
-    db.delete(pluginLogEntries).where(and(
-      eq(pluginLogEntries.pluginId, pluginId),
-      lt(pluginLogEntries.id, ringFloor),
-    )),
-  ] as never);
-  return rows.length;
+  return {
+    statements: [
+      ...chunkRowsForD1(rows, 7).map((chunk) => db.insert(pluginLogEntries).values(chunk)),
+      db.delete(pluginLogEntries).where(and(
+        eq(pluginLogEntries.pluginId, pluginId),
+        lt(pluginLogEntries.id, ringFloor),
+      )),
+    ],
+    written: rows.length,
+  };
 }
 
 /** Newest first; `before` is the id of the last line already shown. */
@@ -207,4 +222,18 @@ export async function newestPluginLogLines(
     });
   }
   return found.sort((left, right) => (left.id < right.id ? 1 : -1));
+}
+
+/** The newest error line whose message starts with `prefix` (a function point's, `function:<point>:`), for the app's page. */
+export async function latestPluginErrorLine(db: Database, pluginId: string, prefix: string): Promise<{ message: string; at: number } | null> {
+  const row = await db.select({ message: pluginLogEntries.message, at: pluginLogEntries.createdAt }).from(pluginLogEntries)
+    .where(and(
+      eq(pluginLogEntries.pluginId, pluginId),
+      eq(pluginLogEntries.level, "error"),
+      sql`substr(${pluginLogEntries.message}, 1, ${prefix.length}) = ${prefix}`,
+    ))
+    .orderBy(desc(pluginLogEntries.id))
+    .limit(1)
+    .get();
+  return row ? { message: row.message, at: Number(row.at) } : null;
 }

@@ -3,7 +3,10 @@ import { useMessages } from "~/i18n";
 import { installedAppsMessages, type InstalledAppsMessageKey } from "~/i18n/apps";
 import type { AppDetail, AppLogLine, AppSummary } from "~/lib/api-query-options/apps";
 
-/** An update waiting for approval outranks the stored status: the app is paused until then. */
+/**
+ * Access waiting for approval outranks the stored status: the app runs with
+ * what was approved, and an update's new permissions wait for the store owner.
+ */
 export function appStatus(app: Pick<AppSummary, "status" | "needsApproval">): { key: InstalledAppsMessageKey; variant: BadgeVariant } {
   if (app.needsApproval) return { key: "status_needsApproval", variant: "warning" };
   switch (app.status) {
@@ -37,3 +40,15 @@ export const LOG_LEVEL_VARIANT: Record<AppLogLine["level"], BadgeVariant> = {
   warn: "warning",
   error: "destructive",
 };
+
+/**
+ * How many permissions the app asks for beyond its approved grant (`added`).
+ * A blocking the store turned off is not among them: it is the store's own
+ * list (`checkoutContinues`), never inferred from a narrower grant.
+ */
+export function pendingApprovalCount(app: Pick<AppDetail, "added" | "granted">): number {
+  if (!app.granted) return 0;
+  let count = 0;
+  for (const value of Object.values(app.added) as unknown[]) count += Array.isArray(value) ? value.length : value === true ? 1 : 0;
+  return count;
+}

@@ -31290,7 +31290,7 @@
           },
           "needsApproval": {
             "type": "boolean",
-            "description": "An update asks for more access than was approved; the app waits until a Super Admin approves it."
+            "description": "The app asks for access that is not approved (an update's new permissions, or a blocking the store turned off): it keeps running with what was approved, and the rest stays off until a Super Admin approves it (`added` lists it)."
           },
           "thirdParty": {
             "type": "boolean",
@@ -32521,6 +32521,34 @@
                   }
                 ]
               },
+              "checkoutContinues": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "point": {
+                      "type": "string",
+                      "enum": [
+                        "cart.transform",
+                        "cart.line_prices",
+                        "cart.validate",
+                        "checkout.discounts",
+                        "checkout.shipping_rates",
+                        "checkout.payment_methods"
+                      ]
+                    },
+                    "at": {
+                      "type": "string",
+                      "description": "When the store turned its blocking off (ISO 8601)."
+                    }
+                  },
+                  "required": [
+                    "point",
+                    "at"
+                  ]
+                },
+                "description": "Function points the app asks to block checkout at where the store lets checkout continue when they fail (dashboard.apps.function_blocking_update). Not part of `request` or `added`: only the store gives the blocking back."
+              },
               "scopes": {
                 "type": "array",
                 "items": {
@@ -32685,7 +32713,35 @@
                   "reason": {
                     "type": "string",
                     "nullable": true,
-                    "description": "The app's words to the buyer for the latest refusal."
+                    "description": "The app's words to the buyer for the latest refusal; null for a failing blocking function (see failure and lastError)."
+                  },
+                  "failing": {
+                    "type": "boolean",
+                    "description": "True when a function the store approved as blocking keeps failing (its circuit is open, or it failed as many times as opens one with no good answer between), so checkout refuses every order that needs it (turn its blocking off with dashboard.apps.function_blocking_update, update the app, or stop it)."
+                  },
+                  "failedOnce": {
+                    "type": "boolean",
+                    "description": "True when such a function failed (that checkout was refused) but not often enough to be failing; lastAt is the latest."
+                  },
+                  "point": {
+                    "type": "string",
+                    "description": "The function point that refuses."
+                  },
+                  "failure": {
+                    "type": "string",
+                    "enum": [
+                      "threw",
+                      "timed_out",
+                      "invalid_answer",
+                      "call_refused",
+                      "could_not_run"
+                    ],
+                    "description": "How a blocking function failed, in the platform's words: threw, timed_out, invalid_answer, call_refused (a read it declared was refused) or could_not_run."
+                  },
+                  "lastError": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "The app's latest error at that point, as its log has it (the app's own text)."
                   }
                 },
                 "required": [
@@ -32694,7 +32750,7 @@
                   "lastAt",
                   "reason"
                 ],
-                "description": "The app's cart rule is refusing every recent checkout (as a delivery-slot app with no open slot does); null otherwise. An accepted checkout clears it."
+                "description": "The app keeps checkout from taking orders: a function approved as blocking is failing, or its cart rule refuses every recent checkout (as a delivery-slot app with no open slot does); null otherwise. A good answer clears it."
               },
               "settings": {
                 "type": "object",
@@ -202115,11 +202171,30 @@
                               "reason": {
                                 "type": "string",
                                 "nullable": true,
-                                "description": "The app's words to the buyer for the latest refusal."
+                                "description": "The app's words to the buyer for the latest refusal; null for a failing function (see failure)."
                               },
                               "since": {
                                 "type": "string",
                                 "description": "When it began refusing every checkout (ISO 8601)."
+                              },
+                              "failing": {
+                                "type": "boolean",
+                                "description": "True when a function the store approved as blocking is failing (checkout refuses every order that needs it); absent or false: its cart rule refuses by its answer."
+                              },
+                              "point": {
+                                "type": "string",
+                                "description": "The function point that refuses (`cart.validate`, `cart.line_prices`, …)."
+                              },
+                              "failure": {
+                                "type": "string",
+                                "enum": [
+                                  "threw",
+                                  "timed_out",
+                                  "invalid_answer",
+                                  "call_refused",
+                                  "could_not_run"
+                                ],
+                                "description": "How a failing function failed, in the platform's words (never the app's text)."
                               }
                             },
                             "required": [
@@ -202129,7 +202204,7 @@
                               "since"
                             ]
                           },
-                          "description": "Active apps whose cart rule refuses every recent checkout (a delivery-slot app with no open slot), so the store sells nothing; empty otherwise."
+                          "description": "Active apps keeping checkout from taking orders: a function approved as blocking that is failing, or a cart rule refusing every recent checkout (a delivery-slot app with no open slot); empty otherwise. One per app, a failing function first."
                         },
                         "databaseStorage": {
                           "type": "object",
@@ -219179,7 +219254,7 @@
           "Admin - Settings"
         ],
         "summary": "Get checkout readiness",
-        "description": "Inspect delivery setup and customer sign-in diagnostics. Delivery diagnostics do not indicate global checkout availability; each cart validates its applicable delivery requirements.",
+        "description": "Inspect delivery setup and customer sign-in diagnostics, and any active app keeping checkout from taking orders (`app_function_failing`: a function approved as blocking is failing; `app_refusing_checkout`: a cart rule refused every recent checkout). Delivery diagnostics do not indicate global checkout availability; each cart validates its applicable delivery requirements.",
         "responses": {
           "200": {
             "description": "Checkout readiness",
@@ -307774,7 +307849,7 @@
           "Admin - Apps"
         ],
         "summary": "Update an app from its registry (Workers Paid)",
-        "description": "Verifies and stores the new release, then replaces the code. An update that asks for more access waits for a Super Admin's approval. An active app loads the new code and runs its data updates at once; when either fails, the previous version comes back (rolledBack) and the reason is reported.",
+        "description": "Verifies and stores the new release, then replaces the code. An update runs with the access already approved; new access it asks for stays off until a Super Admin approves it (needsApproval). An active app loads the new code and runs its data updates at once; when either fails, the previous version comes back (rolledBack) and the reason is reported.",
         "parameters": [
           {
             "schema": {
@@ -310133,6 +310208,244 @@
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
           "when": "Use when the merchant wants an installed app stopped while keeping its data and settings.",
+          "dryRun": "none",
+          "confirmation": "none",
+          "impact": "none"
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "apps.manage"
+        }
+      }
+    },
+    "/api/v1/admin/apps/{id}/functions/{point}/blocking": {
+      "post": {
+        "operationId": "dashboard.apps.function_blocking_update",
+        "tags": [
+          "Admin - Apps"
+        ],
+        "summary": "Let checkout continue when an app's function fails, or let it block checkout again",
+        "description": "For a function the app asks to run as blocking (`onError: \"block\"`). `blocking: false` lets checkout continue when it fails: the store's approval of that blocking is withdrawn (it never grants more), the function keeps running as an optional one, and an update keeps the choice. `blocking: true` approves it as blocking again, a Super Admin's consent like activation. Either change is written to the app's log with who made it.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$",
+              "description": "The app's id (vendor.name)."
+            },
+            "required": true,
+            "description": "The app's id (vendor.name).",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cart.transform",
+                "cart.line_prices",
+                "cart.validate",
+                "checkout.discounts",
+                "checkout.shipping_rates",
+                "checkout.payment_methods"
+              ],
+              "description": "The function point (`cart.validate`, `cart.line_prices`, …)."
+            },
+            "required": true,
+            "description": "The function point (`cart.validate`, `cart.line_prices`, …).",
+            "name": "point",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "blocking": {
+                    "type": "boolean"
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The app's current revision (every change advances it)."
+                  }
+                },
+                "required": [
+                  "blocking",
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "app": {
+                          "$ref": "#/components/schemas/AppDetail"
+                        },
+                        "changed": {
+                          "type": "boolean",
+                          "description": "False when it was already so."
+                        }
+                      },
+                      "required": [
+                        "app",
+                        "changed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request body is larger than this operation takes (`payload_too_large`, `details.maxBytes`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "error"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "stability": "internal",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 4096,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "when": "Use when an app's blocking checkout function is failing and the merchant wants checkout to take orders without it (blocking false); approving it as blocking again is the store owner's step in the dashboard.",
           "dryRun": "none",
           "confirmation": "none",
           "impact": "none"
@@ -336733,7 +337046,8 @@
         "summary": "Browse app registries, install or update an app from one, and stop one app or every third-party app at once.",
         "examples": [
           "Are there updates for my apps?",
-          "An app is misbehaving: stop it now."
+          "An app is misbehaving: stop it now.",
+          "Checkout refuses orders because an app keeps failing: let checkout continue without it."
         ],
         "tags": [
           "apps",
@@ -336748,6 +337062,7 @@
           "dashboard.apps.update",
           "dashboard.apps.stop",
           "dashboard.apps.stop_third_party",
+          "dashboard.apps.function_blocking_update",
           "dashboard.apps.get"
         ],
         "requiresFacts": true,
@@ -336755,7 +337070,8 @@
         "requiresVerification": true,
         "rules": [
           "Install and update only when installMode is dashboard (Workers Paid); otherwise give the merchant the installCommand.",
-          "A new install, or an update that asks for more access, waits for a Super Admin's approval in the dashboard.",
+          "A new install waits for a Super Admin's approval in the dashboard. An update runs at once with the access already approved; new access it asks for stays off until approved (needsApproval).",
+          "A failing blocking function (dashboard.apps.get refusing.failing) refuses every order: the merchant may let checkout continue past it (function_blocking_update, blocking false), update or stop the app.",
           "An update may roll back by itself: report rolledBack and its error in plain words.",
           "The emergency stop runs no app code and needs no revision; a Super Admin starts the app again."
         ]
@@ -341648,6 +341964,14 @@
           "mode": "curated",
           "workflowIds": [
             "dashboard.apps-manage"
+          ]
+        },
+        {
+          "operationId": "dashboard.apps.function_blocking_update",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.apps-install"
           ]
         },
         {
