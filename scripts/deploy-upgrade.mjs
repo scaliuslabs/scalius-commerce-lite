@@ -34,6 +34,8 @@ export const RECEIPT_DIRECTORY = "deploy-receipts";
 /** The first migration that records itself in `scalius_schema_migrations`. */
 const FIRST_RELEASE_LEDGER_VERSION = 50;
 const FREEZE_RESPONSE_CODE = "database_migration_in_progress";
+/** What `/api/v1/meta` named as the release before it reported the platform's (v2.0.0-beta.8 and older). */
+export const PRE_RELEASE_REPORTING_VERSION = "1.0.0";
 
 // Matched with identifier quotes removed: files write it with and without backticks.
 const LEDGER_INSERT = /INSERT\s+INTO\s+scalius_schema_migrations\s*\(\s*version\s*,\s*name\s*,\s*source_sha256\s*\)\s*VALUES\s*\(\s*(\d+)\s*,\s*'([^']+)'\s*,\s*'([a-f0-9]{64})'\s*\)/i;
@@ -202,7 +204,10 @@ export function decideUpgrade({ tree, remote = null, meta = null, frozen = null,
           + "the deployed code and this tree have different histories. Rebase this branch onto the deployed release so its migrations come after the deployed ones, then deploy.");
       }
     }
-    if (compareReleaseVersions(meta.platform?.version, treeRelease) === 1) {
+    // Builds before 2.0.0-rc.1 reported apps/api's package version ("1.0.0")
+    // as their release: that says nothing about which release runs, so it is
+    // not compared (the schema check above still is).
+    if (meta.platform?.version !== PRE_RELEASE_REPORTING_VERSION && compareReleaseVersions(meta.platform?.version, treeRelease) === 1) {
       return refuse("tree_older_than_deployed", `The API serving this store is release ${meta.platform.version}; this tree is ${treeRelease}. `
         + "Update this checkout to the deployed release or a later one, then deploy again.");
     }

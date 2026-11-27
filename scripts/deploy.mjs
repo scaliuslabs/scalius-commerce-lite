@@ -1617,7 +1617,8 @@ export async function main() {
       console.error(`✗ Could not read the D1 migration ledgers of "${d1Target}": ${errorMessage(error)}. Nothing was changed.`);
       process.exit(1);
     }
-    const treeRelease = JSON.parse(readFileSync(resolve(apiDir, "package.json"), "utf8")).version;
+    // The platform release: the root package version, equal to SCALIUS_PLATFORM_VERSION (manifest.test.ts).
+    const treeRelease = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")).version;
     const decision = decideUpgrade({
       tree, remote, meta, frozen, treeRelease,
       resumable: previousHolds || args.includes("--resume-frozen"),
