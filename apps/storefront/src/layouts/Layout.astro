@@ -410,6 +410,9 @@ const currencyPriceIncrement = resolvePriceIncrementMinor(currencyCode, layoutDa
 // the page colour, as the save checked it.
 const { pagePaint: _privatePaint, ...unpaintedTokens } = storefrontTheme.tokens;
 const paint = themePaint(privateStyle !== undefined && !privateTokens ? { ...storefrontTheme, tokens: unpaintedTokens } : storefrontTheme, resolvedTheme);
+// What <html data-color-scheme> is rendered with (`light`, `dark`, or `system` until the head script settles it), and
+// a buyer page's theme chrome hosts with it, so their `:host([data-color-scheme])` rules hold with scripts off.
+const htmlColorScheme = paint.colorScheme?.scheme;
 // The cart drawer's arrangement, words and icons where the theme set them (lib/cart/drawer-plan.ts):
 // the drawer mounts in the browser, so it reads them from the page. The default writes nothing.
 const drawerPlan = libraryPreview ? null : cartDrawerPlan(storefrontTheme, documentLanguage, privateAssetUrls(readStorefrontExtensions(layoutData?.appExtensions)));
@@ -505,7 +508,7 @@ const pageStoreTimeZone = storeTimeZone();
 <html
   data-library-preview={libraryPreview ? "" : undefined}
   data-private-tokens={privateStyle && privateTokens ? "" : undefined}
-  data-color-scheme={paint.colorScheme?.scheme}
+  data-color-scheme={htmlColorScheme}
   lang={pageLanguage}
   dir={textDirection(pageLanguage) === "rtl" ? "rtl" : undefined}
   data-market-presence={marketPresence ?? undefined}
@@ -640,6 +643,7 @@ const pageStoreTimeZone = storeTimeZone();
             navigationStyle={themeLayout.navigation}
             mobileNavigation={showMobileTabs ? "tabs" : "drawer"}
             buyerChrome={buyerHeader}
+            colorScheme={htmlColorScheme}
           />
         )
       }
@@ -668,6 +672,7 @@ const pageStoreTimeZone = storeTimeZone();
             languageCode={layoutData?.storefrontCopy?.languageCode}
             localization={footerLocalization}
             buyerChrome={buyerFooter}
+            colorScheme={htmlColorScheme}
           />
         </div>
       )

@@ -9,6 +9,7 @@
 // store's forms then sit after it, outside it (Layout's PrivateControlsStrip).
 import Skin from "@/components/apps/Skin.astro";
 import PrivateChrome from "@/components/private/PrivateChrome.astro";
+import type { StorefrontColorScheme } from "@scalius/shared/storefront-theme";
 import type { BuyerChrome } from "@/lib/extensions";
 import { footerData } from "@/lib/extensions/data";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
@@ -20,9 +21,11 @@ import FooterSlot from "./footer/FooterSlot.astro";
 type Props = import("astro/types").ComponentProps<typeof CoreFooter> & {
   /** A buyer page's theme footer (lib/extensions `buyerPageChrome`): drawn in place of the store's. */
   buyerChrome?: BuyerChrome | null;
+  /** The scheme `<html>` is rendered with, for the buyer page's shadow host. */
+  colorScheme?: StorefrontColorScheme | null;
 };
 
-const { buyerChrome, ...props } = Astro.props;
+const { buyerChrome, colorScheme, ...props } = Astro.props;
 const embeds: EmbedRenderers = {
   slot: ({ data: slot }) => ({ component: FooterSlot as never, props: { name: slot.name, localization: props.localization } }),
 };
@@ -39,7 +42,7 @@ const data = async () => footerData({
 
 {buyerChrome ? (
 <div class="contents" data-storefront-footer data-buyer-chrome>
-  <PrivateChrome target="footer" chrome={buyerChrome} storeName={props.storeName ?? null} />
+  <PrivateChrome target="footer" chrome={buyerChrome} storeName={props.storeName ?? null} colorScheme={colorScheme} />
 </div>
 ) : (
 <div class="contents" data-storefront-footer>
