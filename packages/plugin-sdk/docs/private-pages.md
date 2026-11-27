@@ -250,7 +250,7 @@ The store draws an app's block from typed nodes ([commerce hooks](commerce-hooks
 | `ui.mark` | A tone's glyph in a circle (the circle is twice its `size`) | each | `text`, `border`, `size` |
 | `ui.text` | Words | each | `text`, `font`, `size`, `weight`, `leading` |
 | `ui.heading` | A heading | | `text`, `size`, `weight`, `font`, `case` |
-| `ui.link` | A link, on a line of its own or inside a sentence (`ui.text` pieces); the store always underlines it | | `text`, `size`, `weight` |
+| `ui.link` | A link, on a line of its own or inside a sentence (`ui.text` pieces); the store always underlines it. `size` styles a link on its own line: one inside a sentence keeps the sentence's size | | `text`, `size`, `weight` |
 | `ui.keyvalue` | Label and value rows: the labels are its muted words, the values its text | | `text`, `muted`, `size`, `weight` |
 | `ui.disclosure` | A disclosure the buyer opens | | `background`, `text`, `border`, `radius` |
 | `ui.row` | A plain stack or columns (no colour, no row of the table) | | `gap` |

@@ -724,9 +724,9 @@ function CardNode({ node }: { node: Extract<PluginUiNode, { type: "card" }> }) {
 function TextNode({ node }: { node: Extract<PluginUiNode, { type: "text" }> }) {
   const tone = node.tone ? TEXT_TONE[node.tone] : "";
   const emphasis = node.emphasis === "strong" ? "font-medium" : node.emphasis === "mono" ? "font-mono" : "";
-  // A sentence's links are inside its running text, so they keep their underline (C8).
+  // A sentence's links are inside its running text, so they keep their underline (C8), their words isolated from its direction.
   const words = typeof node.text === "string" ? node.text : node.text.map((span, index) => (span.to
-    ? <PluginLink key={index} to={span.to} className="text-link underline underline-offset-2">{span.text}</PluginLink>
+    ? <PluginLink key={index} to={span.to} className="text-link underline underline-offset-2 [unicode-bidi:isolate]">{span.text}</PluginLink>
     : <Fragment key={index}>{span.text}</Fragment>));
   return <p className={`whitespace-pre-wrap break-words text-body ${tone} ${emphasis}`.trim()}>{words}</p>;
 }

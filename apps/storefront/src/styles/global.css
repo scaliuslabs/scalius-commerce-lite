@@ -346,6 +346,11 @@
    that draws them (cart, drawer, payment step, quick checkout, receipt, account order, the editor's preview). */
 :where([data-buyer-ui-app], [data-buyer-ui-app] *, [data-summary-row="add-on"] > span:first-child, [data-summary-row="add-on"] > summary > span:first-child, [data-part="add-on-detail"]) { overflow-wrap: anywhere; min-inline-size: 0; }
 
+/* A link inside an app's sentence takes the sentence's size: a theme's `ui.link` size is a link on a line of its own
+   (its colour and weight still reach both). Unlayered and more specific than a token rule
+   (`:root[data-private-tokens] :where(…)`), so no theme undoes it. */
+[data-buyer-ui-app] [data-ui="text"] > a[data-ui="link"] { font-size: inherit; }
+
 /* The store's controls on a private page drawn from parts, where the theme places them (privatePages.controls): the
    light or dark switch and the market and language forms. Zero specificity, so the `scheme` and `localization`
    tokens, written after, set their look. */

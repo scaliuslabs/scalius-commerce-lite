@@ -43,12 +43,29 @@ export const STORE_ACTION_AND_AMOUNT_WORDS: Readonly<Record<string, Readonly<{ e
 /** The machine-readable reason an app's words that read as the store's are refused with. */
 export const STORE_WORDS_REASON = "store_words";
 
-/** Zero-width, soft-hyphen and bidi control characters: invisible, so "Pl\u200Bace order" reads as "Place order". */
-const INVISIBLE = /[\u00AD\u061C\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFEFF]/gu;
+/**
+ * Fillers that draw as blank space but are no space to `\s` (the Hangul
+ * fillers, the blank Braille pattern): read as a space, so "Place\u3164order"
+ * is "Place order".
+ */
+const BLANK = /[\u115F\u1160\u2800\u3164\uFFA0]/gu;
+/**
+ * Every default-ignorable code point (zero-width characters, soft hyphen, bidi
+ * controls, variation selectors, tag characters): drawn as nothing, so
+ * "Pl\u200Bace order" and "Place\uFE0F order" read as "Place order".
+ */
+const INVISIBLE = /\p{Default_Ignorable_Code_Point}/gu;
 
-/** Words as compared: invisible characters dropped, NFKC, lower case, one space between words, no punctuation or symbols at either end. */
+const visible = (value: string) => value.replace(BLANK, " ").replace(INVISIBLE, "");
+
+/** True when `text` draws as nothing but space: spaces, blank fillers and invisible characters only. */
+export function isBlankWords(text: string): boolean {
+  return visible(text).trim() === "";
+}
+
+/** Words as compared: blank fillers to spaces, invisible characters dropped, NFKC, lower case, one space between words, no punctuation or symbols at either end. */
 export function foldStoreWords(text: string): string {
-  return text.replace(INVISIBLE, "").normalize("NFKC").replace(INVISIBLE, "").toLowerCase().replace(/\s+/gu, " ")
+  return visible(visible(text).normalize("NFKC")).toLowerCase().replace(/\s+/gu, " ")
     .replace(/^[\s\p{P}\p{S}]+|[\s\p{P}\p{S}]+$/gu, "");
 }
 
@@ -82,4 +99,26 @@ const PATTERN = new RegExp(`^(?:${Object.values(STORE_ACTION_AND_AMOUNT_WORDS)
 /** True when `text` reads as one of the store's action or amount words: the whole label once folded, any amount or provider where the copy names one. */
 export function isStoreActionOrAmountWord(text: string): boolean {
   return PATTERN.test(foldStoreWords(text));
+}
+
+/** Where an app's label sits in what it answered, and its words. */
+export interface StoreWordsLabel {
+  readonly text: string | undefined;
+  readonly at: ReadonlyArray<string | number>;
+}
+
+/**
+ * Refuses, with reason `store_words`, each label that reads as one of the
+ * store's words: one issue per label at its path. `say` ends the message
+ * ("name what the add-on is").
+ */
+export function refuseStoreWords(
+  labels: Iterable<StoreWordsLabel>,
+  context: { addIssue(issue: { code: "custom"; path: Array<string | number>; message: string; params: { reason: string } }): void },
+  say = "say what yours is",
+): void {
+  for (const label of labels) {
+    if (label.text === undefined || !isStoreActionOrAmountWord(label.text)) continue;
+    context.addIssue({ code: "custom", path: [...label.at], message: `"${label.text}" is the store's own word for an action or an amount: ${say}.`, params: { reason: STORE_WORDS_REASON } });
+  }
 }

@@ -11,6 +11,7 @@ import { appTextSchema } from "./app-text";
 import { APP_LINE_INPUT_TEXT_LIMITS, CUSTOMIZATION_LIMITS, LINE_INPUT_CONFIRM_LIMITS, LINE_INPUT_FIELD_TYPES, LINE_INPUT_SURFACES } from "../line-properties";
 import { BUYER_UPLOAD_DECLARATION_LIMITS, BUYER_UPLOAD_TYPES } from "../buyer-uploads";
 import { MAX_ORDER_LINES } from "../order-limits";
+import { refuseStoreWords } from "../store-words";
 
 /** A checkout attribute key: snake_case (it is stored on the order). */
 const key = pluginKeySchema();
@@ -49,6 +50,11 @@ export const checkoutAttributeSchema = z.object({
   ...fileDeclaration,
 }).strict().superRefine((field, ctx) => {
   refineFileDeclaration(field, ctx);
+  // What the buyer reads at checkout is never the store's own words (store-words.ts).
+  refuseStoreWords([
+    { text: field.label, at: ["label"] }, { text: field.help, at: ["help"] },
+    ...(field.choices ?? []).map((choice, index) => ({ text: choice.label, at: ["choices", index, "label"] })),
+  ], ctx);
   if (field.type === "choice" && !field.choices?.length) ctx.addIssue({ code: "custom", message: "A choice needs options." });
   if (field.choices && new Set(field.choices.map((choice) => choice.value)).size !== field.choices.length) ctx.addIssue({ code: "custom", message: "Choice values must be unique." });
   if (field.min !== undefined && field.max !== undefined && field.min > field.max) ctx.addIssue({ code: "custom", message: "Minimum exceeds maximum." });
@@ -67,7 +73,7 @@ export const purchaseOptionDeclarationSchema = z.object({
   /** What the buyer sees on the line, the cart and the order ("Subscribe and save"). */
   title: appTextSchema(80),
   description: appTextSchema(300).optional(),
-}).strict();
+}).strict().superRefine((option, ctx) => refuseStoreWords([{ text: option.title, at: ["title"] }], ctx));
 export type PurchaseOptionDeclaration = z.infer<typeof purchaseOptionDeclarationSchema>;
 
 /** The most line inputs one app declares. */
@@ -180,6 +186,16 @@ export const lineInputDeclarationSchema = z.object({
   surfaces: z.array(z.enum(LINE_INPUT_SURFACES)).max(LINE_INPUT_SURFACES.length).optional(),
 }).strict().superRefine((field, ctx) => {
   refineFileDeclaration(field, ctx);
+  // What the buyer reads on the line, the cart and its dialogs is never the store's own words (store-words.ts).
+  refuseStoreWords([
+    { text: field.label, at: ["label"] }, { text: field.help, at: ["help"] },
+    ...(field.options ?? []).flatMap((option, index) => [
+      { text: option.label, at: ["options", index, "label"] },
+      { text: option.confirm?.title, at: ["options", index, "confirm", "title"] },
+      { text: option.confirm?.agree, at: ["options", index, "confirm", "agree"] },
+    ]),
+    { text: field.bulk?.apply?.label, at: ["bulk", "apply", "label"] }, { text: field.bulk?.clear?.label, at: ["bulk", "clear", "label"] },
+  ], ctx);
   if (field.surfaces && new Set(field.surfaces).size !== field.surfaces.length) ctx.addIssue({ code: "custom", path: ["surfaces"], message: "Name each surface once." });
   // A file is uploaded on the product page: the cart cannot ask for it.
   if (field.type === "file" && field.surfaces && !field.surfaces.includes("product")) ctx.addIssue({ code: "custom", path: ["surfaces"], message: "A file input is answered on the product page: keep \"product\" in surfaces." });

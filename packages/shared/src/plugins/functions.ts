@@ -34,7 +34,7 @@ import { ORDER_CHANNELS } from "../order-channel";
 import { LINE_ADD_ONS_MAX } from "../line-identity";
 import { ADD_ON_DETAILS_MAX } from "../add-on-totals";
 import { appTextSchema } from "./app-text";
-import { isStoreActionOrAmountWord, STORE_WORDS_REASON } from "../store-words";
+import { isStoreActionOrAmountWord, refuseStoreWords, STORE_WORDS_REASON } from "../store-words";
 import { ONLINE_STORE_CHANNEL_ID, SALES_CHANNEL_ID_MAX_LENGTH, SALES_CHANNEL_ID_PATTERN } from "../sales-channels";
 
 const id = z.string().min(1).max(128);
@@ -64,6 +64,8 @@ const addOnLabel = label.superRefine((text, context) => {
   }
 });
 const addOnDetails = z.array(addOnLabel).max(ADD_ON_DETAILS_MAX).optional();
+/** An app's name for what a buyer sees (a discount, a rate, a payment method, a bundle): never the store's words either. */
+const buyerLabel = label.superRefine((text, context) => refuseStoreWords([{ text, at: [] }], context, "name what yours is"));
 
 /** Add-ons one line carries: the one bound the cart, the page and checkout share (`LINE_ADD_ONS_MAX`). */
 const LINE_ADJUSTMENTS_ON_LINE_MAX = LINE_ADD_ONS_MAX;
@@ -343,7 +345,7 @@ export function functionDiscountClass(targetKind: "lines" | "order" | "shipping"
 
 export const checkoutDiscountsOutputSchema = z.object({
   discounts: z.array(z.object({
-    title: label,
+    title: buyerLabel,
     /** A code this discount answers to, when it is code-driven. */
     code: z.string().max(64).optional(),
     target: z.discriminatedUnion("kind", [
@@ -394,7 +396,7 @@ export const functionShippingRateSchema = z.object({
 export const checkoutShippingRatesOutputSchema = z.object({
   operations: z.array(z.discriminatedUnion("op", [
     z.object({ op: z.literal("hide"), rateId: id }).strict(),
-    z.object({ op: z.literal("rename"), rateId: id, name: label }).strict(),
+    z.object({ op: z.literal("rename"), rateId: id, name: buyerLabel }).strict(),
     /**
      * Sets a rate's fee before the store's free-over waivers. With
      * `profileId`, only that shipping profile's share of the rate (its
@@ -419,7 +421,7 @@ export const checkoutPaymentMethodsOutputSchema = z.object({
      * allow. Any other method is skipped; a hide wins over an allow.
      */
     z.object({ op: z.literal("allow"), methodId: id }).strict(),
-    z.object({ op: z.literal("rename"), methodId: id, name: label }).strict(),
+    z.object({ op: z.literal("rename"), methodId: id, name: buyerLabel }).strict(),
     z.object({ op: z.literal("reorder"), methodIds: z.array(id).min(1).max(20) }).strict(),
   ])).max(40),
 }).strict();
@@ -447,7 +449,7 @@ export const cartTransformOutputSchema = z.object({
       op: z.literal("expand"),
       lineId: id,
       /** The bundle's name on the order (default: the line's title). */
-      title: label.optional(),
+      title: buyerLabel.optional(),
       components: z.array(z.object({
         variantId: id,
         quantity: z.number().int().min(1).max(100),
@@ -456,7 +458,7 @@ export const cartTransformOutputSchema = z.object({
     z.object({
       op: z.literal("merge"),
       lineIds: z.array(id).min(2).max(50),
-      title: label,
+      title: buyerLabel,
     }).strict(),
   ])).max(50),
 }).strict();

@@ -25,7 +25,8 @@ import { PLUGIN_KEY_PATTERN, PLUGIN_KEY_RULE, PLUGIN_URL_NAME_PATTERN, PLUGIN_UR
 import { PURCHASE_OPTION_ID_MAX_LENGTH, PURCHASE_OPTION_ID_PATTERN } from "./ids";
 import { ADMIN_UPLOAD_TYPES, BUYER_UPLOAD_DECLARATION_LIMITS } from "../buyer-uploads";
 import { LINE_INPUT_CHANGE_KEY_PATTERN, LINE_INPUT_CHANGE_LIMITS } from "./line-input-change";
-import { isStoreActionOrAmountWord, STORE_WORDS_REASON } from "../store-words";
+import { isBlankWords, isStoreActionOrAmountWord, STORE_WORDS_REASON } from "../store-words";
+import { cleanAppLine, cleanAppText, stripBidiMarks } from "./app-text";
 
 export const PLUGIN_UI_VERSION = 1 as const;
 
@@ -109,9 +110,16 @@ export type PluginUiSurface = keyof typeof PLUGIN_UI_SURFACES;
 
 // ── Shared pieces ─────────────────────────────────────────────────────────
 
-const text = z.string().max(PLUGIN_UI_LIMITS.text);
-const label = z.string().trim().min(1).max(PLUGIN_UI_LIMITS.label);
-const optionalLabel = z.string().trim().max(PLUGIN_UI_LIMITS.label);
+// Every word an app's tree draws is cleaned as it is read, never refused for a
+// mark (app-text.ts): the bidi embedding, override and isolate marks are
+// removed, so an app can never draw "redro ecalP" reversed into "Place order".
+// Body words keep their spaces and line breaks; a label is one line, trimmed.
+/** Words drawn as written (a text's body, a banner's text, help): bidi marks removed. */
+const text = z.string().overwrite(stripBidiMarks).max(PLUGIN_UI_LIMITS.text);
+/** One line of words up to `max` (a cell, a value, an image's description): cleaned (`cleanAppText`). */
+const line = (max: number) => z.string().overwrite(cleanAppText).max(max);
+const label = line(PLUGIN_UI_LIMITS.label).min(1);
+const optionalLabel = line(PLUGIN_UI_LIMITS.label);
 const tone = z.enum(PLUGIN_UI_TONES);
 const recordId = z.string().trim().min(1).max(128);
 const routeName = z.string().regex(PLUGIN_URL_NAME_PATTERN, PLUGIN_URL_NAME_RULE);
@@ -380,12 +388,12 @@ const buttonSchema = z.object({
 
 const buttons = z.array(buttonSchema).max(5);
 const cellSchema = z.union([
-  z.string().max(PLUGIN_UI_LIMITS.text),
+  text,
   z.number().finite(),
   z.boolean(),
   z.null(),
   z.object({ badge: optionalLabel, tone: tone.optional() }).strict(),
-  z.object({ text: z.string().max(PLUGIN_UI_LIMITS.label * 2), to: pluginUiTargetSchema }).strict(),
+  z.object({ text: line(PLUGIN_UI_LIMITS.label * 2), to: pluginUiTargetSchema }).strict(),
   z.object({ amountMinor: z.number().int().safe(), currency: z.string().regex(/^[A-Z]{3}$/) }).strict(),
   z.object({ date: z.string().max(40).refine((value) => !Number.isNaN(Date.parse(value)), "Use an ISO date.") }).strict(),
 ]);
@@ -469,19 +477,37 @@ const fileFieldSchema = z.object({
   maxBytes: z.number().int().min(1).max(BUYER_UPLOAD_DECLARATION_LIMITS.maxBytes).optional(),
 }).strict();
 
-/** A span's words: plain ones as written (1 to 2000 characters), a link's by a link's label rules. */
-const spanSchema = z.object({ text: z.string().min(1).max(PLUGIN_UI_LIMITS.text), to: pluginUiTargetSchema.optional() }).strict()
-  .overwrite((span) => (span.to ? { ...span, text: span.text.trim() } : span))
+/**
+ * A span's words, cleaned and never trimmed: plain ones as written (spaces
+ * and line breaks kept, bidi marks removed), a link's one line of 1 to 120
+ * characters with no space at either end (the app puts the spaces between
+ * pieces in its plain words, so nothing is glued or moved).
+ */
+const spanSchema = z.object({
+  text: z.string().min(1, "A piece has words.").max(PLUGIN_UI_LIMITS.text, `A piece holds at most ${PLUGIN_UI_LIMITS.text} characters.`),
+  to: pluginUiTargetSchema.optional(),
+}).strict()
+  .overwrite((span) => ({ ...span, text: span.to ? cleanAppLine(span.text) : stripBidiMarks(span.text) }))
   .superRefine((span, context) => {
-    if (span.to && (span.text.length < 1 || span.text.length > PLUGIN_UI_LIMITS.label)) {
+    if (!span.to) return;
+    if (span.text.length < 1 || span.text.length > PLUGIN_UI_LIMITS.label) {
       context.addIssue({ code: "custom", path: ["text"], message: `A link's words are 1 to ${PLUGIN_UI_LIMITS.label} characters.` });
+    } else if (/^\s|\s$/u.test(span.text)) {
+      context.addIssue({ code: "custom", path: ["text"], message: "A link's words have no space at either end: put it in the plain piece beside the link." });
     }
   });
-/** A text node's sentence: 1 to 20 pieces of at most 2000 characters in all (as one text). */
-const spans = z.array(spanSchema).min(1).max(PLUGIN_UI_LIMITS.maxSpans).refine(
-  (pieces) => pieces.reduce((total, piece) => total + piece.text.length, 0) <= PLUGIN_UI_LIMITS.text,
-  `A text's pieces hold at most ${PLUGIN_UI_LIMITS.text} characters in all.`,
-);
+/**
+ * A text node's sentence: 1 to 20 pieces of at most 2000 characters in all
+ * (as one text). A plain piece that cleans to nothing is dropped.
+ */
+const spans = z.array(spanSchema)
+  .overwrite((pieces) => pieces.filter((piece) => piece.to || piece.text !== ""))
+  .min(1, `A text's pieces are 1 to ${PLUGIN_UI_LIMITS.maxSpans}: give it words.`)
+  .max(PLUGIN_UI_LIMITS.maxSpans, `A text holds at most ${PLUGIN_UI_LIMITS.maxSpans} pieces.`)
+  .refine(
+    (pieces) => pieces.reduce((total, piece) => total + piece.text.length, 0) <= PLUGIN_UI_LIMITS.text,
+    `A text's pieces hold at most ${PLUGIN_UI_LIMITS.text} characters in all.`,
+  );
 
 const children = z.array(z.lazy(() => pluginUiNodeSchema)).max(PLUGIN_UI_LIMITS.maxChildren);
 /** An app's public file (`public/…`, served under its release). */
@@ -513,17 +539,17 @@ const nodeUnion = z.discriminatedUnion("type", [
     type: z.literal("key-value"),
     items: z.array(z.object({
       label,
-      value: z.union([z.string().max(PLUGIN_UI_LIMITS.text), z.number().finite(), z.boolean(), z.null()]),
+      value: z.union([text, z.number().finite(), z.boolean(), z.null()]),
       tone: tone.optional(),
     }).strict()).max(PLUGIN_UI_LIMITS.maxKeyValueItems),
   }).strict(),
-  z.object({ type: z.literal("stat"), label, value: z.union([z.string().max(PLUGIN_UI_LIMITS.label), z.number().finite()]), help: optionalLabel.optional() }).strict(),
+  z.object({ type: z.literal("stat"), label, value: z.union([line(PLUGIN_UI_LIMITS.label), z.number().finite()]), help: optionalLabel.optional() }).strict(),
   tableSchema,
   z.object({ type: z.literal("empty-state"), title: label, text: text.optional(), action: buttonSchema.optional() }).strict(),
   z.object({
     type: z.literal("image"),
     src: z.union([httpsUrl, z.object({ media: z.string().min(1).max(128) }).strict(), z.object({ app: appFile }).strict()]),
-    alt: z.string().max(PLUGIN_UI_LIMITS.label * 2),
+    alt: line(PLUGIN_UI_LIMITS.label * 2),
     width: z.number().int().min(1).max(4000).optional(),
     height: z.number().int().min(1).max(4000).optional(),
   }).strict(),
@@ -548,7 +574,7 @@ const nodeUnion = z.discriminatedUnion("type", [
      * `date` (valid days, written in the reader's language) or a `choice`
      * (some of its declared values; the order keeps the declared label).
      */
-    choices: z.array(z.object({ value: z.string().min(1).max(500), label: z.string().trim().min(1).max(120) }).strict()).min(1).max(50).optional(),
+    choices: z.array(z.object({ value: z.string().min(1).max(500), label }).strict()).min(1).max(50).optional(),
   }).strict(),
   z.object({
     type: z.literal("progress"),
@@ -658,24 +684,47 @@ type BuyerLabel = { text: string; at: (string | number)[] };
 type BuyerNodeType = (typeof PLUGIN_UI_SURFACES.buyer.nodes)[number];
 const none = (): BuyerLabel[] => [];
 /**
+ * A sentence's labels: its whole words as one (a text that is only "Total",
+ * beside a price, reads as the store's row), and each run of its links joined
+ * across the plain pieces between them that hold only spaces ("Place" " "
+ * "order" drawn as one underlined "Place order").
+ */
+function sentenceLabels(pieces: string | readonly PluginUiSpan[], at: (string | number)[]): BuyerLabel[] {
+  if (typeof pieces === "string") return [{ text: pieces, at }];
+  const labels: BuyerLabel[] = [{ text: pieces.map((piece) => piece.text).join(""), at }];
+  let run: { text: string; index: number; links: number } | null = null;
+  const close = () => { if (run && run.links > 0) labels.push({ text: run.text, at: [...at, run.index, "text"] }); run = null; };
+  pieces.forEach((piece, index) => {
+    if (piece.to) {
+      run = run ? { ...run, text: run.text + piece.text, links: run.links + 1 } : { text: piece.text, index, links: 1 };
+    } else if (run && isBlankWords(piece.text)) {
+      run = { ...run, text: run.text + piece.text };
+    } else {
+      close();
+    }
+  });
+  close();
+  return labels;
+}
+
+/**
  * The words each buyer node draws as a label, a link or a button: what may
- * never be the store's (`isStoreActionOrAmountWord`). Body words (a text's
- * plain words, a banner's text) are not labels. Keyed by the buyer surface's
- * nodes, so a node the surface gains names its labels here.
+ * never be the store's (`isStoreActionOrAmountWord`). Body words are not
+ * labels, except a text's or a banner's words taken whole (`sentenceLabels`).
+ * Key-value values are values ("Paid" beside "Status"). Keyed by the buyer
+ * surface's nodes, so a node the surface gains names its labels here.
  */
 const BUYER_LABELS: { [T in BuyerNodeType]: (node: Extract<PluginUiNode, { type: T }>) => BuyerLabel[] } = {
-  stack: none, columns: none, image: none, divider: none, mark: none,
+  stack: none, columns: none, divider: none, mark: none,
+  image: (node) => [{ text: node.alt, at: ["alt"] }],
   heading: (node) => [{ text: node.text, at: ["text"] }],
   badge: (node) => [{ text: node.text, at: ["text"] }],
   link: (node) => [{ text: node.text, at: ["text"] }],
-  text: (node) => (typeof node.text === "string" ? [] : node.text.flatMap((span, index) => (span.to ? [{ text: span.text, at: ["text", index, "text"] }] : []))),
-  banner: (node) => (node.title ? [{ text: node.title, at: ["title"] }] : []),
+  text: (node) => sentenceLabels(node.text, ["text"]),
+  banner: (node) => [...(node.title ? [{ text: node.title, at: ["title"] }] : []), ...(node.text ? sentenceLabels(node.text, ["text"]) : [])],
   "key-value": (node) => node.items.map((item, index) => ({ text: item.label, at: ["items", index, "label"] })),
-  button: (node) => [
-    { text: node.label, at: ["label"] },
-    ...(node.confirm ? [{ text: node.confirm.title, at: ["confirm", "title"] }] : []),
-    ...(node.confirm?.confirmLabel ? [{ text: node.confirm.confirmLabel, at: ["confirm", "confirmLabel"] }] : []),
-  ],
+  // A buyer button asks nothing first (`confirm` is refused on the buyer surface).
+  button: (node) => [{ text: node.label, at: ["label"] }],
   field: (node) => (node.choices ?? []).map((choice, index) => ({ text: choice.label, at: ["choices", index, "label"] })),
   disclosure: (node) => [{ text: node.summary, at: ["summary"] }],
 };
@@ -709,6 +758,8 @@ function checkTree(root: PluginUiNode, surface: PluginUiSurface, context: z.Refi
     if (action && !actionKinds.has(action.kind)) return report([...path, "action"], `A ${action.kind} action is not available on the ${surface} surface.`), false;
     const target = nodeTargets(node).find((entry) => !targetKinds.has(entry.kind));
     if (target) return report(path, `A ${target.kind} link is not available on the ${surface} surface.`), false;
+    // The store draws no dialog before a buyer button runs: a confirm it would never ask is refused, not ignored.
+    if (node.type === "button" && node.confirm && surface === "buyer") return report([...path, "confirm"], "A buyer button runs when pressed: confirm is drawn on the dashboard only."), false;
     if (node.type === "image" && (typeof node.src === "string") !== (rules.images === "url")) {
       return report([...path, "src"], surface === "admin" ? "Use an https:// image address." : "Use { media } or { app } for an image."), false;
     }

@@ -22,6 +22,7 @@ import { PLUGIN_SETTING_KEY, PLUGIN_STOREFRONT_SETTING_TYPES, pluginAppSettingsS
 import { pluginProvidersSchema } from "./providers/descriptors";
 import { MESSAGING_CHANNEL_ID_MAX } from "./providers/channels";
 import { APP_LINE_INPUT_TEXT_LIMITS, CUSTOMIZATION_LIMITS, LINE_INPUT_CONFIRM_LIMITS } from "../line-properties";
+import { refuseStoreWords, type StoreWordsLabel } from "../store-words";
 import { checkoutAttributeSchema, LINE_INPUTS_MAX, lineInputDeclarationSchema, PURCHASE_OPTIONS_MAX, purchaseOptionDeclarationSchema } from "./buyer-ui";
 import { STOREFRONT_COMPONENT_LIMITS, STOREFRONT_SECTION_SKIN_PREFIX, STOREFRONT_UI_SLOTS, type StorefrontUiSlot } from "./storefront-protocol";
 import { objectTypeDeclarationSchema, OBJECT_TYPE_PATTERN, type ObjectTypeDeclaration } from "./objects";
@@ -566,7 +567,24 @@ const pluginTranslationSchema = z.object({
       }).strict().optional(),
     }).strict()).optional(),
     purchaseOptions: z.record(key, z.object({ title: title.optional(), description: z.string().trim().min(1).max(300).optional() }).strict()).optional(),
-  }).strict().optional(),
+  }).strict().superRefine((checkout, ctx) => {
+    // A translation of what the buyer reads is held to the same words as the manifest's own (store-words.ts).
+    const labels: StoreWordsLabel[] = [];
+    for (const [name, attribute] of Object.entries(checkout.attributes ?? {})) {
+      labels.push({ text: attribute.label, at: ["attributes", name, "label"] }, { text: attribute.help, at: ["attributes", name, "help"] });
+      for (const [value, choice] of Object.entries(attribute.choices ?? {})) labels.push({ text: choice, at: ["attributes", name, "choices", value] });
+    }
+    for (const [name, input] of Object.entries(checkout.lineInputs ?? {})) {
+      labels.push({ text: input.label, at: ["lineInputs", name, "label"] }, { text: input.help, at: ["lineInputs", name, "help"] });
+      for (const [value, option] of Object.entries(input.options ?? {})) labels.push({ text: option, at: ["lineInputs", name, "options", value] });
+      for (const [value, confirm] of Object.entries(input.confirm ?? {})) {
+        labels.push({ text: confirm.title, at: ["lineInputs", name, "confirm", value, "title"] }, { text: confirm.agree, at: ["lineInputs", name, "confirm", value, "agree"] });
+      }
+      labels.push({ text: input.bulk?.apply, at: ["lineInputs", name, "bulk", "apply"] }, { text: input.bulk?.clear, at: ["lineInputs", name, "bulk", "clear"] });
+    }
+    for (const [name, option] of Object.entries(checkout.purchaseOptions ?? {})) labels.push({ text: option.title, at: ["purchaseOptions", name, "title"] });
+    refuseStoreWords(labels, ctx);
+  }).optional(),
   /** Object types by type: their name and description, and their fields' by field key. */
   objects: z.record(z.string().max(64), nameTranslation.extend({ fields: z.record(z.string().max(64), nameTranslation).optional() }).strict()).optional(),
   /** Custom field names and descriptions: owner type → field key → text. */
