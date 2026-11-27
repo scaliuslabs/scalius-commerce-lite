@@ -301,6 +301,21 @@ export function storefrontEmbedRule(unit: "section" | "component" | StorefrontSk
 export const STOREFRONT_ISLAND_HYDRATION = ["load", "idle", "visible", "interaction"] as const;
 export type StorefrontIslandHydration = (typeof STOREFRONT_ISLAND_HYDRATION)[number];
 
+/**
+ * The CSS functions a `style` attribute in app markup may call (lower case;
+ * CSS function names ignore case): computing, colour and transform ones,
+ * never one that loads or reads (`url()`, `image-set()`, `attr()`, `src()`).
+ * Inline style is a permanent part of the contract: this list only grows.
+ */
+export const STOREFRONT_STYLE_FUNCTIONS = [
+  "var", "calc", "min", "max", "clamp",
+  "rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color-mix",
+  "linear-gradient", "radial-gradient", "conic-gradient",
+  "repeating-linear-gradient", "repeating-radial-gradient", "repeating-conic-gradient",
+  "translate", "translatex", "translatey", "translate3d", "rotate", "scale", "scalex", "scaley",
+  "skew", "skewx", "skewy", "matrix", "cubic-bezier", "steps", "minmax", "repeat", "fit-content",
+] as const;
+
 /** Budgets the packer and the upload enforce, and the storefront holds a render to. */
 export const STOREFRONT_COMPONENT_LIMITS = {
   /** The compiled module (server side; loaded on an isolate's first render). */
@@ -1474,8 +1489,17 @@ export interface StorefrontCartLine {
    * older stores.
    */
   undecided?: string[];
-  /** This app's add-ons on each unit, as the cart's last check priced them ("Protection ৳350"). */
-  addOns: Array<{ title: string; amount: StorefrontMoney }>;
+  /**
+   * This app's add-ons on the line, as the cart's last check priced them
+   * ("Protection ৳350"), in the one add-on shape (`LineAddOn`, money as
+   * `StorefrontMoney`): `total`, what it adds to the line in all, exactly;
+   * `amount`, what each unit (`per: "unit"`) or each bundle unit
+   * (`per: "bundle"`: a kit or an app's bundle sold as one line, whose
+   * quantity is its bundle units) pays, or null when no one amount is exact;
+   * `units`, how many of those the line holds (`total = amount × units`). A
+   * free extra is 0.
+   */
+  addOns: Array<{ title: string; total: StorefrontMoney; amount: StorefrontMoney | null; per: "unit" | "bundle"; units: number | null }>;
 }
 
 /**
@@ -1503,6 +1527,12 @@ export type StorefrontLineInputResult =
 export type StorefrontDecideResult =
   | { ok: true; changed: number }
   | { ok: false; reason: "cancelled" | "undecided" | "failed" };
+
+/** What `onCart` tells a listener (see there). */
+export interface StorefrontCartSummary {
+  count: number;
+  subtotal: StorefrontMoney;
+}
 
 export interface StorefrontIslandContext {
   pluginId: string;
@@ -1533,8 +1563,15 @@ export interface StorefrontIslandContext {
    * older stores.
    */
   addLine?(line: { variantId: string; quantity?: number; purchaseOption?: string; inputs?: Record<string, string> }): Promise<boolean>;
-  /** Calls the cart's listener now and on every change; returns the unsubscribe. */
-  onCart(listener: (cart: { count: number; total: StorefrontMoney }) => void): () => void;
+  /**
+   * Calls the cart's listener now and on every change; returns the
+   * unsubscribe. `count` is the units in the cart; `subtotal` is its lines
+   * at the unit prices the store last priced them at (each line's add-ons
+   * included, as the cart shows them) times their quantities, summed in
+   * integer minor units: before discounts, delivery and tax, so it is the
+   * cart's figure before checkout, never the amount to pay.
+   */
+  onCart(listener: (cart: StorefrontCartSummary) => void): () => void;
   /**
    * The cart's lines and this app's line inputs on them, read and changed
    * through the store (never its markup). `lines()` checks the cart with the

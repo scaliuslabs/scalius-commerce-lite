@@ -566,7 +566,7 @@
         },
         "x-scalius-app-owned": "items"
        },
-       "adjustments": {
+       "addOns": {
         "maxItems": 10,
         "type": "array",
         "items": {
@@ -580,18 +580,40 @@
           },
           "title": {
            "type": "string",
-           "maxLength": 4000
+           "maxLength": 80
+          },
+          "totalMinor": {
+           "type": "integer",
+           "minimum": 0,
+           "maximum": 9007199254740991
           },
           "amountMinor": {
+           "nullable": true,
            "type": "integer",
-           "minimum": -9007199254740991,
+           "minimum": 0,
+           "maximum": 9007199254740991
+          },
+          "per": {
+           "type": "string",
+           "enum": [
+            "unit",
+            "bundle"
+           ]
+          },
+          "units": {
+           "nullable": true,
+           "type": "integer",
+           "minimum": 1,
            "maximum": 9007199254740991
           }
          },
          "required": [
           "appId",
           "title",
-          "amountMinor"
+          "totalMinor",
+          "amountMinor",
+          "per",
+          "units"
          ]
         }
        },
@@ -680,7 +702,7 @@
        "taxMinor",
        "purchaseOptions",
        "properties",
-       "adjustments"
+       "addOns"
       ]
      }
     },
@@ -3887,11 +3909,6 @@
       "minLength": 1,
       "maxLength": 128
      },
-     "operationId": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 128
-     },
      "method": {
       "type": "string",
       "enum": [
@@ -3906,7 +3923,6 @@
     },
     "required": [
      "appOperation",
-     "operationId",
      "method",
      "path"
     ]

@@ -57,8 +57,9 @@ const places = (max: number) => z.object({ city: text(max).nullable(), zone: tex
 
 /**
  * Where the parcel goes: the order's shipping address with the fields and
- * names of a webhook representation's postal address, plus the store's
- * delivery places (Bangladesh City, Thana and Area) by id and by name.
+ * names of a webhook representation's postal address, plus the store's own
+ * delivery places by id and by name: up to three levels whose meaning a
+ * regional pack defines, each null where the store has none.
  */
 export const courierRecipientSchema = z.object({
   name: text(200),

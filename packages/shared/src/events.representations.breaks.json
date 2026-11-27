@@ -64,5 +64,23 @@
   "from": "415e0350d80e85ed",
   "change": "behaviour: an order paid as it was placed (a point-of-sale sale, or marked paid by staff) carries paymentMethod manual and paymentTerms null in every order representation, not net_terms with terms.",
   "reason": "Pre-release (Nov 9 e2e finding M1): an order paid as it was placed was recorded as an invoice: payment method `net_terms` with 30-day terms and a due date, then paid in full right after. Buyers read \"Pay later by invoice\", analytics filed it under net_terms and an app saw `paymentTerms` on a paid order. It is now placed with payment method `manual` (RECORDED_PAYMENT_METHOD, the method its recorded payments already carried), `paymentTerms: null`, and its money is the recorded payments of their `via` (cash, card_terminal, mobile_wallet, bank_transfer, ...). An app that read `paymentMethod === \"net_terms\"` to find point-of-sale or marked-paid orders reads `manual` (or `channel: \"pos\"`). The field stays free text, so no schema diff produces this entry: it records the break for review. Such an order runs no `checkout.payment_methods` function (the money is already in). Migration 0207 rewrites the orders placed before the change (proven by their pos_sale fact, or by a full staff payment and its timeline line in the same request) to `manual` without enqueueing order.updated: apps learn of it through `updatedAt`."
+ },
+ {
+  "snapshot": "events.representations.snapshot.json",
+  "from": "910b78ed85d3fabd",
+  "change": "order lines[].adjustments: the field was removed.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app reads one. An order line's `adjustments` (`{ appId, title, amountMinor }`, per unit, and per anchor unit on a bundle) becomes `addOns`, the same `LineAddOn` the checkout functions and buyer UI carry: `{ appId, title, totalMinor, amountMinor, per }`, one per app and title, `totalMinor` the exact amount on the line, `amountMinor` per unit (`per: \"unit\"`) or per bundle unit (`per: \"bundle\"`, an expanded bundle's or a kit's add-on on its anchor) only when exact for every one, else null (a bundle line whose quantity staff changed). An app that read `lines[].adjustments[].amountMinor` reads `lines[].addOns[]`: `totalMinor` for money, `amountMinor` with `per` for a unit price. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "events.representations.snapshot.json",
+  "from": "910b78ed85d3fabd",
+  "change": "behaviour: order lines[].addOns[].amountMinor on an expanded bundle's or a kit's anchor line is per bundle unit with per: \"bundle\", not per anchor unit as adjustments[].amountMinor was; totalMinor = amountMinor × units, never × quantity.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): a meaning change no schema diff shows. On an app bundle's anchor line `amountMinor` is now what one BUNDLE unit pays (`per: \"bundle\"`), where the old per-unit field was what one ANCHOR unit paid, while the line's `quantity` still counts anchor units: `amountMinor × quantity` now overstates the add-on by the anchor's units per bundle unit (doubles it for a pair). The one rule, stated in commerce-hooks.md: `totalMinor = amountMinor × units` whenever `amountMinor` is a number, `units` being the line's quantity for `per: \"unit\"` and its bundle units for `per: \"bundle\"`; every shape carrying `per` carries `units`. Read `totalMinor` for money."
+ },
+ {
+  "snapshot": "events.representations.snapshot.json",
+  "from": "910b78ed85d3fabd",
+  "change": "truncation fetch.operationId: the field was removed.",
+  "reason": "Pre-lock contract fix (rc.1 response seal, Nov 27): the operationId is the agent and REST name of an operation, not part of the app contract, and sealing it here would have frozen every stable operation id through the webhook body. A receiver reads the resource with `appOperation` (what an app passes to ctx.api.call) or with `method` and `path` (what an HTTP caller sends); both stay."
  }
 ]

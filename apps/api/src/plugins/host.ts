@@ -14,6 +14,7 @@ import type { Database } from "@scalius/database/client";
 import { getDb } from "@scalius/database/client";
 import {
   effectivePluginPermissions,
+  hasRecentPluginLogLine,
   markPluginFailed,
   maskPluginLogText,
   pendingPluginMigrations,
@@ -218,11 +219,13 @@ export class PluginHost {
     const settingsLanguage = buyerLanguage ? { locale: buyerLanguage, defaultLocale: options.defaultLocale || buyerLanguage } : null;
     const outcome = await this.run(installation, { kind: "function", point, input }, source, wallMs, {}, settingsLanguage, options.deadline);
     if (!outcome.ok) return failed(outcome);
-    const checked = checkPluginFunctionOutput(point, outcome.value);
+    const checked = checkPluginFunctionOutput(point, outcome.value, { language: buyerLanguage });
     if (!checked.ok) {
       await this.incident(installation, source, checked.message);
       return { ok: false, value: null, error: checked.message, failure: "invalid" };
     }
+    // A label the store drew in its own neutral word instead: the answer stands, the app is told after the request.
+    if (checked.notices) this.notice(installation, source, checked.notices);
     return { ok: true, value: checked.value, error: null };
   }
 
@@ -625,6 +628,29 @@ export class PluginHost {
     await this.writeLogs(installation, [{ level: "error", source: "host", message: `${source}: ${message}` }], secrets);
   }
 
+  /**
+   * What the store changed in an answer it kept (a label drawn in its own
+   * word), logged for the app as a warning after the request (`waitUntil`):
+   * a checkout never waits on it. A notice repeats on every run while the
+   * app's words stay, so each line (app, function point and words) is written
+   * at most once per `PLUGIN_NOTICE_REPEAT_MS`: once per isolate by memory,
+   * across isolates by the app's log itself (`hasRecentPluginLogLine`, as the
+   * storefront's incidents are), keeping its real incidents in its log.
+   */
+  notice(installation: PluginInstallation, source: string, messages: readonly string[], now = Date.now()): void {
+    writePluginNotices({
+      db: this.db,
+      pluginId: installation.pluginId,
+      lines: messages.map((message) => ({ level: "warn" as const, source: "host", message: `${source}: ${message}` })),
+      waitUntil: (work) => this.ctx.waitUntil(work),
+      write: async (fresh) => {
+        const { secrets } = await this.seed(installation, false);
+        await this.writeLogs(installation, fresh, secrets);
+      },
+      now,
+    });
+  }
+
   private async writeLogs(installation: PluginInstallation, lines: PluginLogInput[], secrets: string[]): Promise<void> {
     if (lines.length === 0) return;
     try {
@@ -633,6 +659,47 @@ export class PluginHost {
       console.warn(`[plugins] ${installation.pluginId} log write failed`);
     }
   }
+}
+
+/** The same notice line is written again only after this long (per app, function point and words). */
+export const PLUGIN_NOTICE_REPEAT_MS = 60 * 60 * 1000;
+/** How many notice lines an isolate remembers before it starts over (its log check still holds across). */
+const PLUGIN_NOTICES_REMEMBERED = 1_000;
+const recentNotices = new Map<string, number>();
+
+/**
+ * The one way the host tells an app's log something a run did not fail on
+ * (a label drawn in the store's word, an add-on charged other than answered):
+ * each line (app, its source, its words) at most once per
+ * `PLUGIN_NOTICE_REPEAT_MS`, once per isolate by memory and across isolates
+ * by the app's log itself (`hasRecentPluginLogLine`), written after the
+ * request (`waitUntil`), never awaited by a checkout. A notice repeats on
+ * every run while its cause stays; without this limit it would write a row
+ * on every cart check and push the app's real incidents out of its log.
+ */
+export function writePluginNotices(input: {
+  db: Database;
+  pluginId: string;
+  lines: readonly PluginLogInput[];
+  waitUntil: (work: Promise<unknown>) => void;
+  write: (lines: PluginLogInput[]) => Promise<void>;
+  now?: number;
+}): void {
+  const now = input.now ?? Date.now();
+  const lines = input.lines.map((line) => ({ ...line, message: line.message.slice(0, 500) })).filter((line) => {
+    const key = `${input.pluginId}\n${line.source}\n${line.message}`;
+    const last = recentNotices.get(key);
+    if (last !== undefined && now - last < PLUGIN_NOTICE_REPEAT_MS) return false;
+    if (recentNotices.size >= PLUGIN_NOTICES_REMEMBERED) recentNotices.clear();
+    recentNotices.set(key, now);
+    return true;
+  });
+  if (lines.length === 0) return;
+  input.waitUntil((async () => {
+    const fresh: PluginLogInput[] = [];
+    for (const line of lines) if (!(await hasRecentPluginLogLine(input.db, input.pluginId, line, now - PLUGIN_NOTICE_REPEAT_MS))) fresh.push(line);
+    if (fresh.length > 0) await input.write(fresh);
+  })().catch(() => console.warn(`[plugins] ${input.pluginId} notice write failed`)));
 }
 
 /** Additional authority for provider operations and staff-invoked routes. */

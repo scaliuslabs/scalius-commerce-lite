@@ -104,7 +104,12 @@ export function addressProblemMessage(problem: AddressProblem): string {
 export class AddressValidationError extends ValidationError {
     readonly issues: AddressProblem[];
     constructor(issues: AddressProblem[]) {
-        super(addressProblemMessage(issues[0]!), { reason: ADDRESS_INVALID_REASON, issues });
+        // Each issue names its field twice: `field` and `code` for the forms, and the
+        // sealed `path` (the field within the address) and `message` for apps.
+        super(addressProblemMessage(issues[0]!), {
+            reason: ADDRESS_INVALID_REASON,
+            issues: issues.map((issue) => ({ ...issue, path: [issue.field], message: addressProblemMessage(issue) })),
+        });
         this.issues = issues;
     }
 }

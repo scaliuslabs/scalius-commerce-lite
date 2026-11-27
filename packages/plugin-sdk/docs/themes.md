@@ -45,7 +45,7 @@ Your module is compiled once, when you pack, and the same code runs in every sto
 | A category or collection a template names | A handle: `/categories/@<handle>`, `{ "kind": "category", "handle": "<handle>" }` | `/categories/<slug>`, `/collections/<id>` |
 | Fields on a card | `product.fields` (the fields the merchant chose), your own `<app id>.<key>` fields | `custom.*` |
 | Pictures | Image settings the merchant fills, your own neutral placeholders | Third-party art |
-| Words | `t(context, { en, bn })` and the SDK formatters | English-only strings |
+| Words | `t(context, { en, … })` in every language you ship, and the SDK formatters | Words in one language only |
 
 ## The portability rules
 
@@ -196,9 +196,9 @@ Right:
 <a {...quickAdd(product)}>Add to cart</a>       // on a card
 ```
 
-### 7. Both languages, and logical CSS
+### 7. Every language, and logical CSS
 
-- Every word your theme writes goes through `t(context, { en: "Sold out", bn: "বিক্রি শেষ" })`. Scalius stores ship in English and Bangla; a language you leave out falls back to English.
+- Every word your theme writes goes through `t(context, { en: "Sold out", bn: "বিক্রি শেষ" })`. English is required; add each language you translate (`bn`, `pt-BR`, …). A store runs in up to 20 languages, and a language you leave out falls back to English.
 - Format with the SDK: `formatNumber`, `plural`, `formatMoney`, `formatDate`. Money arrives as `StorefrontMoney` (`{ amountMinor, currency, formatted }`); show `formatted` or `<Price />`, never arithmetic on floats.
 - Write sides as logical properties so a right-to-left page mirrors without a second stylesheet: `margin-inline-start` (not `margin-left`), `padding-inline`, `inset-inline-start`, `border-inline-end`, `text-align: start`.
 - Style on the store's tokens so the merchant's colours and type still apply: `var(--primary)`, `--primary-foreground`, `--foreground`, `--background`, `--border`, `--muted-foreground`, `--radius`, `--theme-font-body`, `--theme-font-heading`.
@@ -299,7 +299,7 @@ What `pnpm plugin validate` checks for portability:
 - [ ] No literal `/products/…`, `/categories/<slug>` or `/collections/<id>` anywhere, and no page path that is not a core route. Header link lists ship empty.
 - [ ] No `custom.*` in the template, the settings or the code. Your own fields are declared in `customFields`, and your code writes them.
 - [ ] Every image is yours or licensed for redistribution to every store, and each is under 200 KiB.
-- [ ] Every word has English and Bangla; the stylesheet has no `left` or `right`.
+- [ ] Every word has English and each language you ship; the stylesheet has no `left` or `right`.
 - [ ] Every control works with JavaScript turned off; the product page buys through `<BuyForm />`.
 - [ ] In a fresh local store: install, apply the template, publish, then browse the home page, a category, a product, search and the cart on a phone and a computer. Repeat in a store with a full catalogue.
 - [ ] Your listing says which pages or categories a merchant can create for the full look.

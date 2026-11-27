@@ -231,7 +231,17 @@ function drawNode(node: PluginUiNode, block: BuyerUiBlock, options: BuyerUiOptio
       return container;
     }
     case "heading": return element("h3", "text-base font-semibold text-foreground", node.text);
-    case "text": return element("p", `whitespace-pre-wrap ${node.size === "md" ? "text-base" : "text-sm"}${node.emphasis === "strong" ? " font-semibold" : node.emphasis === "mono" ? " font-mono" : ""}${node.tone === "critical" ? " text-destructive" : ""}`, node.text);
+    case "text": {
+      const paragraph = element("p", `whitespace-pre-wrap ${node.size === "md" ? "text-base" : "text-sm"}${node.emphasis === "strong" ? " font-semibold" : node.emphasis === "mono" ? " font-mono" : ""}${node.tone === "critical" ? " text-destructive" : ""}`);
+      // A sentence's links are drawn inside it at its size, always underlined; a link with no store page is its words.
+      for (const span of typeof node.text === "string" ? [{ text: node.text }] : node.text) {
+        const href = span.to ? storeHref(span.to) : null;
+        if (!href) { paragraph.append(document.createTextNode(span.text)); continue; }
+        const link = element("a", LINK_LINE, span.text);
+        link.href = href; link.dataset.ui = "link"; paragraph.append(link);
+      }
+      return paragraph;
+    }
     case "mark": {
       const [glyph, ring] = marks[node.tone];
       // Twice its words' size, so a theme's `size` scales the circle with the glyph.
@@ -266,7 +276,7 @@ function drawNode(node: PluginUiNode, block: BuyerUiBlock, options: BuyerUiOptio
     case "link": {
       const href = storeHref(node.to);
       if (!href) return null;
-      const link = element("a", "text-sm underline underline-offset-2", node.text);
+      const link = element("a", `text-sm ${LINK_LINE}`, node.text);
       link.href = href; return link;
     }
     case "field": {
@@ -294,6 +304,11 @@ function drawNode(node: PluginUiNode, block: BuyerUiBlock, options: BuyerUiOptio
 }
 
 const SCOPE = "[data-buyer-ui-scope]";
+/**
+ * Every app link's underline (the host draws it, so no theme token takes it
+ * away), its words isolated from the sentence's direction around them.
+ */
+const LINK_LINE = "underline underline-offset-2 [unicode-bidi:isolate]";
 /** A column of words in a row: it grows into the room left and wraps below the pieces before it under 16rem (less a mark's room on a phone). */
 const ROW_FILL = "min-w-0 grow basis-[min(16rem,100%_-_3rem)]";
 /** A toned row's last piece (its action) keeps to the row's end when it wraps to a line of its own. */
@@ -352,7 +367,8 @@ function restoreFocus(root: ParentNode): void {
   if (!wanted) return;
   const mounts = ownedMounts(root).filter((mount) => mount.dataset.buyerUiTarget === wanted.target && mount.closest(SCOPE) === wanted.scope);
   const controls = [...(mounts[wanted.position]?.querySelectorAll<HTMLElement>(`[data-buyer-ui-app="${CSS.escape(wanted.appId)}"] :is(button,a,summary)`) ?? [])];
-  const control = controls.find((each) => each.textContent === wanted.label) ?? controls[0];
+  // The clicked button by its words, else the row's first button: never a link inside a sentence.
+  const control = controls.find((each) => each.textContent === wanted.label) ?? controls.find((each) => each.matches('button,a[data-ui="button"]')) ?? controls[0];
   if (control) {
     control.focus();
     pendingFocus = null;

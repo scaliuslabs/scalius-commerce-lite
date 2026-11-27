@@ -168,10 +168,10 @@ export function registerAppLifecycleRoutes(app: OpenAPIHono<{ Bindings: Env }>, 
       if (!index) continue;
       // The newest listed version of each app.
       const newest = new Map<string, (typeof index.apps)[number]>();
-      const { isNewerPluginVersion } = await import("@scalius/shared/plugins/registry");
+      const { comparePluginVersions } = await import("@scalius/shared/plugins/registry");
       for (const entry of index.apps) {
         const best = newest.get(entry.id);
-        if (!best || isNewerPluginVersion(entry.version, best.version)) newest.set(entry.id, entry);
+        if (!best || comparePluginVersions(entry.version, best.version) > 0) newest.set(entry.id, entry);
       }
       for (const entry of newest.values()) {
         const manifest = entry.manifest as { name?: unknown; tagline?: unknown; description?: unknown; author?: { name?: unknown } };

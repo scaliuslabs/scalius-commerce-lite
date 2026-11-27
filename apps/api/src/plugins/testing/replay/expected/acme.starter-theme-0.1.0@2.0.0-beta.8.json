@@ -1,0 +1,18 @@
+{
+  "bundle": "2.0.0-beta.8/acme.starter-theme-0.1.0.zip",
+  "builtAgainst": "2.0.0-beta.8",
+  "install": "accepted (signed)",
+  "templates": {
+    "starter_theme": "applied and saved"
+  },
+  "render": {
+    "skin header (header)": "drew",
+    "skin footer (footer)": "drew",
+    "skin card (product_card)": "drew",
+    "section product_row #starter_theme-new": "drew",
+    "skin header (header, sample content)": "drew",
+    "skin footer (footer, sample content)": "drew",
+    "skin card (product_card, sample content)": "drew",
+    "section product_row (sample content)": "drew"
+  }
+}

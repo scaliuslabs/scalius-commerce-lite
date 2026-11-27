@@ -135,7 +135,11 @@ async function treeItems(db: Database, items: readonly ItemInput[]): Promise<Nav
     let resourceId = target.resourceId;
     if (target.handle) {
       resourceId = lookup?.({ kind: target.resourceType as "category" | "collection", handle: target.handle }) ?? undefined;
-      if (!resourceId) throw new AppError(422, "handle_unresolved", `items.${index}: no ${target.resourceType} has the handle ${target.handle}.`);
+      if (!resourceId) {
+        throw new AppError(422, "handle_unresolved", `items.${index}: no ${target.resourceType} has the handle ${target.handle}.`, {
+          unresolved: [{ kind: target.resourceType, handle: target.handle }],
+        });
+      }
     }
     return {
       key: item.key,

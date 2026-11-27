@@ -1,11 +1,13 @@
 // `ctx.api.call(operation, input)`: a plugin's `/api/v1` operation call,
 // dispatched in-process exactly as an agent's (agent-access/dispatch.ts) but
 // as the plugin principal. The result is the route's own response, unwrapped
-// from the `{ success, data }` envelope; refusals are results, not throws.
+// from the `{ success, data }` envelope; refusals are results, not throws, and
+// carry `details` only for a code that declares them (APP_ERROR_CODES).
 // An app names an operation by its app name (`orders.get`, app-operations.ts),
 // never by the dashboard's operation id (`dashboard.resources.orders.get`).
 // A third-party app reaches the stable app API only (`x-scalius-agent.stability`);
-// anything else refuses with `api_operation_not_stable`. Buyer contact fields
+// anything else refuses with `api_operation_not_stable`. The answer carries
+// only what the operation's output schema declares, and buyer contact fields
 // the grant does not reveal read null (protected-response.ts, H5). The input's
 // `idempotencyKey` is sent as the Idempotency-Key header: the one retry key
 // every stable mutation takes.
@@ -24,9 +26,11 @@ import { writeAgentAuditEvent } from "../agent-access/audit";
 import type { PluginPrincipal } from "../agent-access/types";
 import { authorizePluginOperation, pluginTierAllows, pluginWithinRateLimit, resolvePluginPrincipal } from "./authority";
 import { projectOperationResponse } from "./protected-response";
+import { MAX_PROJECTION_DEPTH, SchemaProjectionDepthError } from "@scalius/shared/schema-projection";
 import { IDEMPOTENCY_KEY_PATTERN } from "../routes/admin/idempotency";
 import { appOperationName, resolveAppOperation } from "./app-operations";
 import { APP_ERROR_CODES, isAppErrorCode, type AppErrorCode } from "@scalius/shared/plugins/app-errors";
+import { appErrorDetails } from "@scalius/shared/plugins/app-error-details";
 
 /**
  * A dispatch refusal as the app sees it: one of the sealed app error codes
@@ -121,21 +125,25 @@ export function createPluginDispatchAuthority(db: Database): OperationDispatchAu
 }
 
 /** The route's JSON envelope as the plugin sees it. */
-function unwrap(status: number, ok: boolean, body: unknown): PluginApiResult {
+export function unwrap(status: number, ok: boolean, body: unknown): PluginApiResult {
   if (isRecord(body) && typeof body.success === "boolean") {
     if (body.success) return { ok, status, data: body.data ?? null, error: null };
     const error = isRecord(body.error) ? body.error : {};
+    // A route's schema refusal carries no code, only the ZodError name;
+    // name it as the MCP and the SDK's createContractApi do.
+    const code = typeof error.code === "string"
+      ? error.code
+      : error.name === "ZodError" ? "validation_error" : "internal_error";
+    // Only the details the code declares (APP_ERROR_CODES), projected to its keys.
+    const details = appErrorDetails(code, error.details);
     return {
       ok: false,
       status,
       data: null,
       error: {
-        // A route's schema refusal carries no code, only the ZodError name;
-        // name it as the MCP and the SDK's createContractApi do.
-        code: typeof error.code === "string"
-          ? error.code
-          : error.name === "ZodError" ? "validation_error" : "internal_error",
+        code,
         message: typeof error.message === "string" ? error.message : "The operation failed.",
+        ...(details ? { details } : {}),
       },
     };
   }
@@ -195,6 +203,8 @@ export async function callPluginOperation(options: {
   db: Database;
   env: Env;
   ctx: ExecutionContext;
+  /** Receives the path of each key the route answered without declaring it (left out of the answer). */
+  undeclared?: string[];
 }): Promise<PluginApiResult> {
   const name = options.operationId;
   if (typeof name !== "string" || name.length > 128) {
@@ -220,9 +230,9 @@ export async function callPluginOperation(options: {
       ctx: options.ctx,
     });
     if (result.ok) await recordAppCreatedResources(options.db, options.pluginId, name, result.data);
-    // Buyer contact fields the grant does not reveal read as null (H5), and
-    // another app's buyer answers never reach this one (H13).
-    const body = result.ok ? projectOperationResponse(operation, result.data, principal.protectedData, options.pluginId) : result.data;
+    // Only the declared keys; buyer contact fields the grant does not reveal
+    // read as null (H5), and another app's buyer answers never reach this one (H13).
+    const body = result.ok ? projectOperationResponse(operation, result.data, principal.protectedData, options.pluginId, options.undeclared) : result.data;
     return unwrap(result.status, result.ok, body);
   } catch (error) {
     if (error instanceof AgentDispatchError) {
@@ -231,6 +241,9 @@ export async function callPluginOperation(options: {
       }
       const code = dispatchRefusalCode(error.code);
       return refusal(APP_ERROR_CODES[code].status, code, error.message);
+    }
+    if (error instanceof SchemaProjectionDepthError) {
+      return refusal(500, "internal_error", `The answer nests deeper than ${MAX_PROJECTION_DEPTH} levels, so it cannot be delivered; read it in smaller parts.`);
     }
     return refusal(500, "internal_error", "The operation could not be completed.");
   }

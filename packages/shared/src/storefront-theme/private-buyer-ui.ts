@@ -61,6 +61,7 @@ export const PRIVATE_BUYER_UI_STYLES: Readonly<Record<string, PrivateBuyerUiStyl
   mark: { kind: '[data-ui="mark"]', tones: PRIVATE_UI_TONES, tokens: ["text", "border", "size"], style: "text", ink: "foreground", toneInk: CRITICAL_INK },
   text: { kind: '[data-ui="text"]', tones: PRIVATE_UI_TONES, tokens: ["text", "font", "size", "weight", "leading"], style: "text", ink: "foreground", toneInk: CRITICAL_INK },
   heading: { kind: '[data-ui="heading"]', tokens: ["text", "size", "weight", "font", "case"], style: "text", ink: "foreground" },
+  // A link on a line of its own or inside a sentence; `size` reaches only the first (a sentence's link keeps its size: global.css).
   link: { kind: 'a[data-ui="link"]', tokens: ["text", "size", "weight"], style: "text", ink: "foreground" },
   // Labels are its muted words, values its text.
   keyvalue: { kind: '[data-ui="key-value"]', tokens: ["text", "muted", "size", "weight"], style: "text", ink: "foreground" },
