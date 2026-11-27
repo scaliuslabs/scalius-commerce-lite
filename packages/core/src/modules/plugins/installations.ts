@@ -85,8 +85,59 @@ import {
   sealPluginSecret,
 } from "./settings-crypto";
 import { pluginGrantApproving, pluginGrantWithin, pluginManifestWithinGrant } from "@scalius/shared/plugins/grant-within";
+import { pluginLogStatements } from "./logs";
 import { syncAppObjectTypes } from "../objects";
 import { captureEventStartExclusions } from "../events";
+
+/** One function point the store let checkout continue past, who did it and when (unix seconds). */
+export interface StoreCheckoutContinue {
+  point: PluginFunctionPoint;
+  by: string | null;
+  at: number;
+}
+
+const STORE_CHECKOUT_CONTINUES = "storeCheckoutContinues";
+
+/** The store's list from a stored grant's JSON (absent or malformed: none). */
+function parseCheckoutContinues(value: string | null): StoreCheckoutContinue[] {
+  const raw = parseJsonObject(value)?.[STORE_CHECKOUT_CONTINUES];
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((entry) => {
+    if (!isObject(entry) || typeof entry.point !== "string" || !(PLUGIN_FUNCTION_POINTS as readonly string[]).includes(entry.point)) return [];
+    return [{ point: entry.point as PluginFunctionPoint, by: typeof entry.by === "string" ? entry.by : null, at: typeof entry.at === "number" ? entry.at : 0 }];
+  });
+}
+
+/** The grant columns: the grant, with the store's list beside it (the key is the grant's alone). */
+function grantColumns(grant: PluginGrantRequest | null, continues: readonly StoreCheckoutContinue[] = []) {
+  if (!grant) return { grantJson: null, grantKey: null };
+  // The store's list never approves anything: its points are never blocking in the stored grant.
+  const points = new Set<string>(continues.map((entry) => entry.point));
+  const stored = { ...grant, blockingFunctions: grant.blockingFunctions.filter((point) => !points.has(point)) };
+  return {
+    grantJson: JSON.stringify(continues.length > 0 ? { ...stored, [STORE_CHECKOUT_CONTINUES]: continues } : stored),
+    grantKey: pluginGrantKey(stored),
+  };
+}
+
+/** The store's list kept for what `manifest` still asks to block at. */
+function continuesStillAsked(continues: readonly StoreCheckoutContinue[], request: PluginGrantRequest): StoreCheckoutContinue[] {
+  return continues.filter((entry) => request.blockingFunctions.includes(entry.point));
+}
+
+/**
+ * What approving the app approves: its request with these features, minus
+ * the blockings the store turned off (only the store gives those back,
+ * `setPluginFunctionBlocking`). The consent screen shows this and its key.
+ */
+export function pluginApprovableRequest(
+  installation: Pick<PluginInstallation, "declaredManifest" | "checkoutContinues">,
+  features: readonly string[],
+): PluginGrantRequest {
+  const request = pluginGrantRequest(installation.declaredManifest, features);
+  const points = new Set<string>(installation.checkoutContinues.map((entry) => entry.point));
+  return points.size === 0 ? request : { ...request, blockingFunctions: request.blockingFunctions.filter((point) => !points.has(point)) };
+}
 
 export interface PluginInstallation {
   pluginId: string;
@@ -105,6 +156,13 @@ export interface PluginInstallation {
   /** The approved grant; null until a Super Admin approves one. */
   grant: PluginGrantRequest | null;
   grantKey: string | null;
+  /**
+   * Function points the store let checkout continue past when they fail
+   * (`setPluginFunctionBlocking`): the app asks to block there, was approved
+   * to, and the store withdrew it. Stored beside the grant (`grant_json`), so
+   * it travels with every grant write; only the store gives the blocking back.
+   */
+  checkoutContinues: StoreCheckoutContinue[];
   status: PluginInstallationStatus;
   failureReason: string | null;
   /** Stored setting values: secret fields hold `ps1:` ciphertext. */
@@ -372,6 +430,7 @@ export function toPluginInstallation(row: PluginInstallationRow): PluginInstalla
     features,
     grant,
     grantKey: row.grantKey,
+    checkoutContinues: parseCheckoutContinues(row.grantJson),
     status: row.status,
     failureReason: row.failureReason,
     storedSettings: parseJsonObject(row.settingsJson) ?? {},
@@ -481,6 +540,7 @@ interface InstallationBeforeUpdate {
   manifest: PluginManifest | null;
   /** The developer key the app was installed with (`requirePinnedSigner`). */
   signerKeyId: string | null;
+  checkoutContinues: StoreCheckoutContinue[];
 }
 
 async function installationBeforeUpdate(db: Database, pluginId: string): Promise<InstallationBeforeUpdate> {
@@ -497,6 +557,7 @@ async function installationBeforeUpdate(db: Database, pluginId: string): Promise
     storedSettings: parseJsonObject(row.settingsJson) ?? {},
     manifest: null,
     signerKeyId: row.signerKeyId ?? null,
+    checkoutContinues: parseCheckoutContinues(row.grantJson),
   };
 }
 
@@ -778,7 +839,8 @@ export async function activatePlugin(
   if (missing.length > 0) {
     throw new PluginError("installation_settings_incomplete", `Fill in the required settings first: ${missing.join(", ")}.`, { missing });
   }
-  const grant = pluginGrantRequest(installation.declaredManifest, features);
+  const continues = continuesStillAsked(current.checkoutContinues, pluginGrantRequest(installation.declaredManifest, features));
+  const grant = pluginApprovableRequest({ declaredManifest: installation.declaredManifest, checkoutContinues: continues }, features);
   if (options.expectedGrantKey !== undefined && options.expectedGrantKey !== pluginGrantKey(grant)) {
     throw new PluginError("installation_grant_changed", `${installation.manifest.name} now asks for different access; review it again.`, {
       currentRevision: installation.revision,
@@ -789,8 +851,7 @@ export async function activatePlugin(
       revisionGuard(db, pluginId, options.expectedRevision),
       db.update(pluginInstallations).set({
         status: "active",
-        grantJson: JSON.stringify(grant),
-        grantKey: pluginGrantKey(grant),
+        ...grantColumns(grant, continues),
         failureReason: null,
         activatedBy: options.actorUserId,
         // First approval: the app receives events from now. Approving it
@@ -879,8 +940,7 @@ export async function setPluginFeature(
     await safeBatch(db, [
       revisionGuard(db, pluginId, options.expectedRevision),
       db.update(pluginInstallations).set({
-        grantJson: JSON.stringify(grant),
-        grantKey: pluginGrantKey(grant),
+        ...grantColumns(grant, continuesStillAsked(installation.checkoutContinues, request)),
         ...(options.enabled && options.actorUserId ? { activatedBy: options.actorUserId } : {}),
         revision: sql`${pluginInstallations.revision} + 1`,
         updatedAt: sql`unixepoch()`,
@@ -1097,8 +1157,7 @@ export async function updatePluginInstallation(
         manifestJson: JSON.stringify(manifest),
         status,
         failureReason: null,
-        grantJson: grant ? JSON.stringify(grant) : null,
-        grantKey: grant ? pluginGrantKey(grant) : null,
+        ...grantColumns(grant, continuesStillAsked(current.checkoutContinues, request)),
         settingsJson: JSON.stringify(settings),
         signerKeyId: input.signerKeyId ?? null,
         revision: sql`${pluginInstallations.revision} + 1`,
@@ -1167,15 +1226,15 @@ export async function restorePluginRelease(
           manifestJson: JSON.stringify(declared),
           status,
           failureReason,
-          grantJson: previous.grant ? JSON.stringify(previous.grant) : null,
-          grantKey: previous.grant ? pluginGrantKey(previous.grant) : null,
+          // The store's choices made since (a blocking turned off during the load check) survive the rollback.
+          ...grantColumns(previous.grant, continuesStillAsked(current.checkoutContinues, pluginGrantRequest(declared, features))),
           settingsJson: JSON.stringify(previous.storedSettings),
           signerKeyId: previous.signerKeyId,
           revision: sql`${pluginInstallations.revision} + 1`,
           updatedAt: sql`unixepoch()`,
         }).where(eq(pluginInstallations.pluginId, pluginId)),
         db.delete(pluginRegistrations).where(eq(pluginRegistrations.pluginId, pluginId)),
-        ...registrationInserts(db, pluginId, declared, features, previous.grant),
+        ...registrationInserts(db, pluginId, declared, features, previous.grant && withoutContinued(previous.grant, current.checkoutContinues)),
         ...salesChannelStatements(db, pluginId, declared.salesChannels, status === "active", current.manifest.salesChannels.length > 0),
         ...(status === "active" ? [releaseHeldPluginDeliveriesStatement(db, pluginId)] : []),
       ] as never);
@@ -1264,53 +1323,65 @@ export async function uninstallPlugin(
  */
 export function pluginNeedsApproval(installation: PluginInstallation): boolean {
   return installation.grant !== null
-    && pluginGrantExpands(installation.grant, pluginGrantRequest(installation.declaredManifest, installation.features));
+    && pluginGrantExpands(installation.grant, pluginApprovableRequest(installation, installation.features));
+}
+
+function withoutContinued(grant: PluginGrantRequest, continues: readonly StoreCheckoutContinue[]): PluginGrantRequest {
+  const points = new Set<string>(continues.map((entry) => entry.point));
+  return { ...grant, blockingFunctions: grant.blockingFunctions.filter((point) => !points.has(point)) };
 }
 
 /**
  * The store's own choice for one function the app asks to run as blocking
- * (`onError: "block"`): `blocking: false` lets checkout continue when it
- * fails (the grant no longer approves the point as blocking; it narrows, so
- * anyone who may manage apps can do it, and the function keeps running as an
- * optional one); `blocking: true` approves it as blocking again (a Super
- * Admin's consent, checked by the caller). Only that one point changes. An
- * update keeps the choice (`pluginGrantWithin`); approving the whole request
- * (`activatePlugin`) gives the blocking back.
+ * (`onError: "block"`) and was approved to. `blocking: false` lets checkout
+ * continue when it fails: the point joins the store's list
+ * (`checkoutContinues`, with who and when) and leaves the grant's blocking,
+ * so the function keeps running as an optional one; it only narrows, so
+ * anyone who may manage apps can do it. `blocking: true` gives back only a
+ * blocking on that list (a Super Admin's consent, checked by the caller):
+ * it never approves a blocking the store never approved. The change and its
+ * line in the app's log (`audit`) are one batch. Updates, feature changes,
+ * approvals and rollbacks keep the list while the app still asks to block there.
  */
 export async function setPluginFunctionBlocking(
   db: Database,
   pluginId: string,
-  options: { point: PluginFunctionPoint; blocking: boolean; expectedRevision: number },
+  options: { point: PluginFunctionPoint; blocking: boolean; expectedRevision: number; actorUserId?: string | null; audit?: string },
 ): Promise<{ installation: PluginInstallation; changed: boolean }> {
   const installation = await requirePluginInstallation(db, pluginId);
   const declared = installation.declaredManifest;
-  const asks = pluginGrantRequest(declared, installation.features);
-  if (!asks.blockingFunctions.includes(options.point)) {
-    throw new PluginError("feature_not_found", `${declared.name} does not ask to block checkout at ${options.point}.`);
-  }
   if (installation.revision !== options.expectedRevision) await requireRevision(db, pluginId, options.expectedRevision, []);
   const granted = installation.grant;
-  if (!granted || !granted.functions.includes(options.point)) {
-    throw new PluginError("installation_inactive", `${declared.name} is not approved to run at ${options.point}.`);
+  const listed = installation.checkoutContinues.some((entry) => entry.point === options.point);
+  if (options.blocking ? listed === false && granted?.blockingFunctions.includes(options.point) === true : listed) {
+    return { installation, changed: false };
   }
-  if (granted.blockingFunctions.includes(options.point) === options.blocking) return { installation, changed: false };
-  const grant: PluginGrantRequest = {
-    ...granted,
-    blockingFunctions: options.blocking
-      ? [...granted.blockingFunctions, options.point].sort()
-      : granted.blockingFunctions.filter((point) => point !== options.point),
-  };
+  const asks = pluginGrantRequest(declared, installation.features).blockingFunctions.includes(options.point);
+  if (!granted || !asks || (options.blocking ? !listed : !granted.blockingFunctions.includes(options.point))) {
+    throw new PluginError(
+      "installation_function_not_blocking",
+      options.blocking
+        ? `${declared.name}'s ${options.point} was not turned off by the store; approving it as blocking is part of approving the app.`
+        : `${declared.name} is not approved to block checkout at ${options.point}.`,
+    );
+  }
+  const continues = options.blocking
+    ? installation.checkoutContinues.filter((entry) => entry.point !== options.point)
+    : [...installation.checkoutContinues, { point: options.point, by: options.actorUserId ?? null, at: Math.floor(Date.now() / 1000) }];
+  const grant: PluginGrantRequest = options.blocking
+    ? { ...granted, blockingFunctions: [...new Set([...granted.blockingFunctions, options.point])].sort() }
+    : granted;
   try {
     await safeBatch(db, [
       revisionGuard(db, pluginId, options.expectedRevision),
       db.update(pluginInstallations).set({
-        grantJson: JSON.stringify(grant),
-        grantKey: pluginGrantKey(grant),
+        ...grantColumns(grant, continues),
         revision: sql`${pluginInstallations.revision} + 1`,
         updatedAt: sql`unixepoch()`,
       }).where(eq(pluginInstallations.pluginId, pluginId)),
       db.delete(pluginRegistrations).where(eq(pluginRegistrations.pluginId, pluginId)),
-      ...registrationInserts(db, pluginId, declared, installation.features, grant),
+      ...registrationInserts(db, pluginId, declared, installation.features, withoutContinued(grant, continues)),
+      ...(options.audit ? pluginLogStatements(db, pluginId, [{ level: "warn", source: "host", message: options.audit }]).statements : []),
     ] as never);
   } catch (error) {
     if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, options.expectedRevision, []);

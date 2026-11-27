@@ -19,7 +19,7 @@ import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { getCheckoutConfig } from "@scalius/core/modules/checkout";
 import { getSetupGuideFacts, getStoreSetupStatus } from "@scalius/core/modules/onboarding";
 import { getPaymentGatewaySettingsSnapshot } from "@scalius/core/modules/payments";
-import { getPluginInstallation, listRefusingFunctions, pluginNeedsApproval } from "@scalius/core/modules/plugins";
+import { FUNCTION_FAILURES, getPluginInstallation, listRefusingFunctions, pluginNeedsApproval, type FunctionFailure } from "@scalius/core/modules/plugins";
 import { getPlatformSettings, readD1DatabaseStorage } from "@scalius/core/modules/platform";
 import { getDatabaseProviderForClient } from "@scalius/database/client";
 import { dismissSetupGuide, getCurrencySettings, readSetupGuideDismissed, showSetupGuide } from "@scalius/core/modules/settings";
@@ -247,10 +247,11 @@ const setupGuideSchema = z.object({
     refusingApps: z.array(z.object({
         appId: z.string(),
         name: z.string(),
-        reason: z.string().nullable().openapi({ description: "The app's words to the buyer for the latest refusal; for a failing function, its latest failure." }),
+        reason: z.string().nullable().openapi({ description: "The app's words to the buyer for the latest refusal; null for a failing function (see failure)." }),
         since: z.string().openapi({ description: "When it began refusing every checkout (ISO 8601)." }),
         failing: z.boolean().optional().openapi({ description: "True when a function the store approved as blocking is failing (checkout refuses every order that needs it); absent or false: its cart rule refuses by its answer." }),
         point: z.string().optional().openapi({ description: "The function point that refuses (`cart.validate`, `cart.line_prices`, …)." }),
+        failure: z.enum(FUNCTION_FAILURES).optional().openapi({ description: "How a failing function failed, in the platform's words (never the app's text)." }),
     })).openapi({ description: "Active apps keeping checkout from taking orders: a function approved as blocking that is failing, or a cart rule refusing every recent checkout (a delivery-slot app with no open slot); empty otherwise. One per app, a failing function first." }),
     databaseStorage: z.object({
         usedBytes: z.number().int().min(0),
@@ -341,7 +342,8 @@ app.openapi(setupGuideRoute, async (c) => {
         since: new Date(entry.since * 1000).toISOString(),
         failing: entry.failing,
         point: entry.point,
-    }), new Map<string, { appId: string; name: string; reason: string | null; since: string; failing: boolean; point: string }>()).values()];
+        ...(entry.failure ? { failure: entry.failure } : {}),
+    }), new Map<string, { appId: string; name: string; reason: string | null; since: string; failing: boolean; point: string; failure?: FunctionFailure }>()).values()];
     return ok(c, { dismissed, ...facts, refusingApps, databaseStorage });
 });
 

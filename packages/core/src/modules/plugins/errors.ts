@@ -20,6 +20,11 @@ export type PluginErrorCode =
   | "installation_grant_changed"
   /** An update waits for a Super Admin: nothing may change its grant until then. */
   | "installation_needs_approval"
+  /**
+   * The store can only let checkout continue past a function approved as
+   * blocking, and give back only a blocking it turned off itself.
+   */
+  | "installation_function_not_blocking"
   /** The app declares no feature with that id (`manifest.features`). */
   | "feature_not_found"
   | "delivery_not_found"
@@ -54,6 +59,7 @@ const STATUS: Partial<Record<PluginErrorCode, number>> = {
   "installation_inactive": 409,
   "installation_grant_changed": 409,
   "installation_needs_approval": 409,
+  "installation_function_not_blocking": 409,
   "feature_not_found": 404,
   "delivery_not_found": 404,
   "delivery_not_retryable": 409,

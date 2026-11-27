@@ -75,6 +75,8 @@ import {
   recordFunctionFailure,
   recordFunctionSuccess,
   recordFunctionRefusal,
+  functionFailureRecord,
+  type FunctionFailure,
   clearFunctionRefusals,
   functionRefusalDue,
   functionRefusalDirty,
@@ -420,20 +422,21 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
       };
       // One more failed answer toward the circuit (never for a run outside the order's path).
       // A blocking one refused this checkout: it counts as a refusal with the failure's words,
-      // so Home, checkout readiness and the app's page say since when and why (function-circuit.ts).
-      const count = (reason: string | null) => {
+      // in the host's words (the app's own text stays in its log), so Home, checkout readiness and
+      // the app's page say since when and how (function-circuit.ts).
+      const count = (failure: FunctionFailure) => {
         if (options.uncounted) return;
         settle(recordFunctionFailure(db, { pluginId: installation.pluginId, point }).then((state) => (
           state.opened ? noticeOpenCircuit(db, env, host, installation, point, state, blocking) : undefined
         )));
         if (blocking && functionRefusalDue(registration.refusals, nowSeconds)) {
-          settle(recordFunctionRefusal(db, { pluginId: installation.pluginId, point, reason: reason ?? `${point} failed.` }));
+          settle(recordFunctionRefusal(db, { pluginId: installation.pluginId, point, reason: functionFailureRecord(failure) }));
         }
       };
       // A failed answer: the failure policy now, and a count toward the circuit.
-      const failed = (reason: string | null = null) => {
+      const failed = (failure: FunctionFailure) => {
         fail();
-        count(reason);
+        count(failure);
       };
       // An app sees only its own buyer answers: `cart.attributes` keeps the
       // `<app id>.<key>` entries of this app, never another app's.
@@ -513,7 +516,7 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
         : NO_APP_FUNCTION_READS;
       if (!read.ok) {
         await host.incident(installation, pluginRunSource(point, scopedInput), `${read.reason} The function did not run.`);
-        failed(`${read.reason} The function did not run.`);
+        failed("call_refused");
         continue;
       }
       const reads = readNames ? Object.fromEntries(Object.entries(read.reads).filter(([as]) => readNames.has(as))) : read.reads;
@@ -547,7 +550,7 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
         // the request's app budget ran out) is no failure of the app's; the host logged it.
         const ownFault = !(outcome.failure === "outdated" || outcome.failure === "inactive" || outcome.failure === "budget")
           || (outcome.failure === "budget" && hadAtStart >= (options.budgetShare ?? Number.POSITIVE_INFINITY));
-        if (ownFault) failed(outcome.error);
+        if (ownFault) failed(outcome.failure === "timeout" || outcome.failure === "budget" ? "timed_out" : outcome.failure === "invalid" ? "invalid_answer" : outcome.failure === "error" ? "threw" : "could_not_run");
         else fail();
         continue;
       }
@@ -568,7 +571,7 @@ export async function runPluginFunctions<P extends PluginRunPoint>(
       if (commit?.length) {
         const prepared = await prepareCommits(host, installation, point, read, commit);
         if (!prepared) {
-          failed("Its answer's commits were refused; see the app's log.");
+          failed("invalid_answer");
           continue;
         }
         result.commits = prepared;

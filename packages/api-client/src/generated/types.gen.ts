@@ -7433,6 +7433,16 @@ export type AppDetail = AppSummary & {
     granted: AppGrant & unknown;
     added: AppGrant & unknown;
     /**
+     * Function points the app asks to block checkout at where the store lets checkout continue when they fail (dashboard.apps.function_blocking_update). Not part of `request` or `added`: only the store gives the blocking back.
+     */
+    checkoutContinues?: Array<{
+        point: 'cart.transform' | 'cart.line_prices' | 'cart.validate' | 'checkout.discounts' | 'checkout.shipping_rates' | 'checkout.payment_methods';
+        /**
+         * When the store turned its blocking off (ISO 8601).
+         */
+        at: string;
+    }>;
+    /**
      * The requested scopes, for the consent screen.
      */
     scopes: Array<{
@@ -7495,17 +7505,29 @@ export type AppDetail = AppSummary & {
          */
         lastAt: string;
         /**
-         * The app's words to the buyer for the latest refusal; for a failing function, its latest failure (as its log has it).
+         * The app's words to the buyer for the latest refusal; null for a failing blocking function (see failure and lastError).
          */
         reason: string | null;
         /**
-         * True when a function the store approved as blocking is failing, so checkout refuses every order that needs it (turn its blocking off with dashboard.apps.function_blocking_update, update the app, or stop it); absent or false: its cart rule refuses by its answer.
+         * True when a function the store approved as blocking keeps failing (its circuit is open, or it failed as many times as opens one with no good answer between), so checkout refuses every order that needs it (turn its blocking off with dashboard.apps.function_blocking_update, update the app, or stop it).
          */
         failing?: boolean;
+        /**
+         * True when such a function failed (that checkout was refused) but not often enough to be failing; lastAt is the latest.
+         */
+        failedOnce?: boolean;
         /**
          * The function point that refuses.
          */
         point?: string;
+        /**
+         * How a blocking function failed, in the platform's words: threw, timed_out, invalid_answer, call_refused (a read it declared was refused) or could_not_run.
+         */
+        failure?: 'threw' | 'timed_out' | 'invalid_answer' | 'call_refused' | 'could_not_run';
+        /**
+         * The app's latest error at that point, as its log has it (the app's own text).
+         */
+        lastError?: string | null;
     } | null;
     settings: {
         fields: Array<AppSettingField>;
@@ -57588,7 +57610,7 @@ export type GetApiV1AdminDashboardSetupGuideResponses = {
                 appId: string;
                 name: string;
                 /**
-                 * The app's words to the buyer for the latest refusal; for a failing function, its latest failure.
+                 * The app's words to the buyer for the latest refusal; null for a failing function (see failure).
                  */
                 reason: string | null;
                 /**
@@ -57603,6 +57625,10 @@ export type GetApiV1AdminDashboardSetupGuideResponses = {
                  * The function point that refuses (`cart.validate`, `cart.line_prices`, …).
                  */
                 point?: string;
+                /**
+                 * How a failing function failed, in the platform's words (never the app's text).
+                 */
+                failure?: 'threw' | 'timed_out' | 'invalid_answer' | 'call_refused' | 'could_not_run';
             }>;
             /**
              * The D1 database's size against the plan's cap; null on Turso and PostgreSQL, or when D1 reports no size.

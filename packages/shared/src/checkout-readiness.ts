@@ -59,11 +59,20 @@ export function checkoutReadinessAppIssue(app: {
     since: string;
     reason: string | null;
     failing: boolean;
+    /** How it fails, in the platform's words (`FUNCTION_FAILURES`): the app's own error text never reaches readiness. */
+    failure?: string | null;
 }): ReadinessIssue {
+    const how: Record<string, string> = {
+        threw: "it throws an error",
+        timed_out: "it does not answer in time",
+        invalid_answer: "its answer is not valid",
+        call_refused: "the store refuses a read it needs",
+        could_not_run: "it cannot run",
+    };
     return app.failing
         ? readinessIssue(
             CHECKOUT_READINESS_CODES.appFunctionFailing,
-            `Checkout is refusing orders because the app ${app.name}'s ${app.point} is failing, since ${app.since}.${app.reason ? ` Last error: ${app.reason}` : ""}`,
+            `Checkout is refusing orders because the app ${app.name}'s ${app.point} is failing${app.failure && how[app.failure] ? ` (${how[app.failure]})` : ""}, since ${app.since}.`,
             `Update ${app.name}, or on its page in Apps let checkout continue when it fails, or pause the app.`,
         )
         : readinessIssue(

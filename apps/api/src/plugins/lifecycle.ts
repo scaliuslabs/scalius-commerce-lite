@@ -24,7 +24,6 @@ import {
   assertAppDataDeletable,
   deactivatePlugin,
   markPluginFailed,
-  pluginNeedsApproval,
   requirePluginInstallation,
   restorePluginRelease,
   setPluginFeature,
@@ -61,22 +60,25 @@ export async function activatePluginWithHooks(
     if (!(error instanceof PluginError) || error.pluginCode !== "installation_objects_invalid") throw error;
     const failed = await requirePluginInstallation(context.db, pluginId);
     const restored = startsWaitingRelease(before)
-      ? await rollBackApprovedUpdate(context, failed, error.message) : null;
+      ? await rollBackWaitingRelease(context, failed, error.message) : null;
     return { installation: restored ?? failed, hookError: restored ? `The update was undone. ${error.message}` : error.message };
   }
   const turnedOn = installation.features.filter((feature) => !before.features.includes(feature));
   const host = hostFor(context);
-  // Starting a stopped app whose update waited for more access: the new code
-  // loads and its data updates run now, and a failure puts back the release
-  // it replaced. A running app already started its release at the update.
+  // Starting an app that was not running: its code loads and its data
+  // updates run now. A release it was updated to while it was off (and never
+  // ran) is put back on failure; any other failure marks it failed. A running
+  // app already started its release at the update.
   if (startsWaitingRelease(before)) {
     const failure = await startNewRelease(host, installation);
     if (failure) {
-      const restored = await rollBackApprovedUpdate(context, installation, failure);
+      const restored = await rollBackWaitingRelease(context, installation, failure);
       if (restored) return { installation: restored, hookError: `The update was undone. ${failure}` };
       await markPluginFailed(context.db, pluginId, failure);
       return { installation: await requirePluginInstallation(context.db, pluginId), hookError: failure };
     }
+    // It started: the release it replaced can no longer come back.
+    await forgetRollbackPoint(context.env, pluginId);
   }
   let hookError: string | null = null;
   if (before.activatedAt === null) {
@@ -96,9 +98,9 @@ export async function activatePluginWithHooks(
   return { installation: running, hookError };
 }
 
-/** An approval that starts a release no one has run yet: the app was not running when its wider update arrived. */
+/** An activation that starts stored code the app was not running (bundled code starts with the deployment). */
 function startsWaitingRelease(before: PluginInstallation): boolean {
-  return before.status !== "active" && pluginNeedsApproval(before) && before.source !== "bundled";
+  return before.status !== "active" && before.source !== "bundled";
 }
 
 export async function setPluginFeatureWithHooks(
@@ -183,10 +185,12 @@ export async function updatePluginToRelease(
     return { installation: restored, rolledBack: true, error: error.message };
   }
   if (updated.status !== "active") {
-    // A stopped app starts the release later: keep the one it replaced so starting it can still roll back.
-    if (pluginNeedsApproval(updated)) await saveRollbackPoint(context.env, current);
+    // An app that is not running starts the release later: keep the one it last ran, guarding exactly this release.
+    await saveRollbackPoint(context.env, current, updated.bundleSha256);
     return { installation: updated, rolledBack: false, error: null };
   }
+  // It runs now: no saved release can come back over it.
+  await forgetRollbackPoint(context.env, current.pluginId);
   const host = hostFor(context);
   const failure = await startNewRelease(host, updated);
   if (!failure) {
@@ -212,25 +216,59 @@ export function pluginRollbackKey(pluginId: string): string {
   return `private/plugins/${pluginId}/rollback.json`;
 }
 
-async function saveRollbackPoint(env: Env, previous: PluginInstallation): Promise<void> {
+/**
+ * The release an app last ran (`previous`) and the release that replaced it
+ * while the app was off (`replacedBy`, its bundle hash): it comes back only
+ * while that exact release is installed and has not started.
+ */
+interface RollbackPoint {
+  previous: PluginInstallation;
+  replacedBy: string;
+}
+
+async function readRollbackPoint(env: Env, pluginId: string): Promise<RollbackPoint | null> {
+  const object = await env.BUCKET.get(pluginRollbackKey(pluginId));
+  if (!object || !("arrayBuffer" in object)) return null;
+  const point = JSON.parse(new TextDecoder().decode(await object.arrayBuffer())) as Partial<RollbackPoint>;
+  return point.previous && typeof point.replacedBy === "string" && point.previous.pluginId === pluginId ? point as RollbackPoint : null;
+}
+
+async function saveRollbackPoint(env: Env, current: PluginInstallation, replacedBy: string): Promise<void> {
   try {
-    await env.BUCKET.put(pluginRollbackKey(previous.pluginId), JSON.stringify(previous), { httpMetadata: { contentType: "application/json" } });
+    // Updated again before it ever started: the release it last ran is still the one to put back.
+    const kept = await readRollbackPoint(env, current.pluginId).catch(() => null);
+    const previous = kept && kept.replacedBy === current.bundleSha256 ? kept.previous : current;
+    const point: RollbackPoint = { previous, replacedBy };
+    await env.BUCKET.put(pluginRollbackKey(current.pluginId), JSON.stringify(point), { httpMetadata: { contentType: "application/json" } });
   } catch {
-    console.warn(`[plugins] ${previous.pluginId} rollback point not saved`);
+    console.warn(`[plugins] ${current.pluginId} rollback point not saved`);
   }
 }
 
-/** Puts back the release saved when the update started waiting; null when none matches. */
-async function rollBackApprovedUpdate(context: LifecycleContext, installation: PluginInstallation, failure: string): Promise<PluginInstallation | null> {
+async function forgetRollbackPoint(env: Env, pluginId: string): Promise<void> {
   try {
-    const object = await context.env.BUCKET.get(pluginRollbackKey(installation.pluginId));
-    if (!object || !("arrayBuffer" in object)) return null;
-    const previous = JSON.parse(new TextDecoder().decode(await object.arrayBuffer())) as PluginInstallation;
-    if (previous.pluginId !== installation.pluginId || previous.version === installation.version) return null;
-    return await restorePluginRelease(context.db, previous, {
+    await env.BUCKET.delete(pluginRollbackKey(pluginId));
+  } catch {
+    console.warn(`[plugins] ${pluginId} rollback point not removed`);
+  }
+}
+
+/** Puts back the release saved when this exact release replaced it while the app was off; null when none matches. */
+async function rollBackWaitingRelease(context: LifecycleContext, installation: PluginInstallation, failure: string): Promise<PluginInstallation | null> {
+  try {
+    const point = await readRollbackPoint(context.env, installation.pluginId);
+    if (!point) return null;
+    // A point that guards another release can never apply again.
+    if (point.replacedBy !== installation.bundleSha256) {
+      await forgetRollbackPoint(context.env, installation.pluginId);
+      return null;
+    }
+    const restored = await restorePluginRelease(context.db, point.previous, {
       undoing: installation.bundleSha256,
       reason: `Update to ${installation.version} was rolled back. ${failure}`,
     });
+    await forgetRollbackPoint(context.env, installation.pluginId);
+    return restored;
   } catch {
     return null;
   }

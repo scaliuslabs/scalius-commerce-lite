@@ -32521,6 +32521,34 @@
                   }
                 ]
               },
+              "checkoutContinues": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "point": {
+                      "type": "string",
+                      "enum": [
+                        "cart.transform",
+                        "cart.line_prices",
+                        "cart.validate",
+                        "checkout.discounts",
+                        "checkout.shipping_rates",
+                        "checkout.payment_methods"
+                      ]
+                    },
+                    "at": {
+                      "type": "string",
+                      "description": "When the store turned its blocking off (ISO 8601)."
+                    }
+                  },
+                  "required": [
+                    "point",
+                    "at"
+                  ]
+                },
+                "description": "Function points the app asks to block checkout at where the store lets checkout continue when they fail (dashboard.apps.function_blocking_update). Not part of `request` or `added`: only the store gives the blocking back."
+              },
               "scopes": {
                 "type": "array",
                 "items": {
@@ -32685,15 +32713,35 @@
                   "reason": {
                     "type": "string",
                     "nullable": true,
-                    "description": "The app's words to the buyer for the latest refusal; for a failing function, its latest failure (as its log has it)."
+                    "description": "The app's words to the buyer for the latest refusal; null for a failing blocking function (see failure and lastError)."
                   },
                   "failing": {
                     "type": "boolean",
-                    "description": "True when a function the store approved as blocking is failing, so checkout refuses every order that needs it (turn its blocking off with dashboard.apps.function_blocking_update, update the app, or stop it); absent or false: its cart rule refuses by its answer."
+                    "description": "True when a function the store approved as blocking keeps failing (its circuit is open, or it failed as many times as opens one with no good answer between), so checkout refuses every order that needs it (turn its blocking off with dashboard.apps.function_blocking_update, update the app, or stop it)."
+                  },
+                  "failedOnce": {
+                    "type": "boolean",
+                    "description": "True when such a function failed (that checkout was refused) but not often enough to be failing; lastAt is the latest."
                   },
                   "point": {
                     "type": "string",
                     "description": "The function point that refuses."
+                  },
+                  "failure": {
+                    "type": "string",
+                    "enum": [
+                      "threw",
+                      "timed_out",
+                      "invalid_answer",
+                      "call_refused",
+                      "could_not_run"
+                    ],
+                    "description": "How a blocking function failed, in the platform's words: threw, timed_out, invalid_answer, call_refused (a read it declared was refused) or could_not_run."
+                  },
+                  "lastError": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "The app's latest error at that point, as its log has it (the app's own text)."
                   }
                 },
                 "required": [
@@ -202065,7 +202113,7 @@
                               "reason": {
                                 "type": "string",
                                 "nullable": true,
-                                "description": "The app's words to the buyer for the latest refusal; for a failing function, its latest failure."
+                                "description": "The app's words to the buyer for the latest refusal; null for a failing function (see failure)."
                               },
                               "since": {
                                 "type": "string",
@@ -202078,6 +202126,17 @@
                               "point": {
                                 "type": "string",
                                 "description": "The function point that refuses (`cart.validate`, `cart.line_prices`, …)."
+                              },
+                              "failure": {
+                                "type": "string",
+                                "enum": [
+                                  "threw",
+                                  "timed_out",
+                                  "invalid_answer",
+                                  "call_refused",
+                                  "could_not_run"
+                                ],
+                                "description": "How a failing function failed, in the platform's words (never the app's text)."
                               }
                             },
                             "required": [

@@ -315,6 +315,7 @@ app.openapi(getCheckoutReadinessRoute, async (c) => {
         since: new Date(entry.since * 1000).toISOString(),
         reason: entry.reason,
         failing: entry.failing,
+        failure: entry.failure,
     })));
     return ok(c, { ...setup, ...mergeReadiness(setup, apps) });
 });

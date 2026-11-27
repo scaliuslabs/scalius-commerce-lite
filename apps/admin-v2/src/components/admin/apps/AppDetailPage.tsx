@@ -46,7 +46,7 @@ import { ActivateAppDialog, DeactivateAppDialog, UninstallAppDialog } from "./Ap
 import { useAppSettingsDraft } from "./AppSettingsForm";
 import { AppSettingsSections } from "./AppSettingsSections";
 import { AppWhereItAppears } from "./AppWhereItAppears";
-import { AppStatusBadge, pendingApproval } from "./app-status";
+import { AppStatusBadge, pendingApprovalCount } from "./app-status";
 import { StorefrontProblemNotice } from "./StorefrontProblemNotice";
 import { appJobScheduleText } from "./app-job-schedule";
 
@@ -389,7 +389,7 @@ function AppPage({ app, section }: { app: AppDetail; section: AppSection }) {
   const missing = !active ? app.settings.fields.filter((field) => app.settings.missing.includes(field.key)) : [];
   // An app waiting for approval keeps running, so the owner reviews it while it is active too.
   const canActivate = isSuperAdmin && (!active || app.needsApproval);
-  const pending = pendingApproval(app);
+  const pending = pendingApprovalCount(app);
   const lifecycle = useMessages(appsLifecycleMessages);
   const [uploading, setUploading] = useState(false);
 
@@ -430,21 +430,16 @@ function AppPage({ app, section }: { app: AppDetail; section: AppSection }) {
             <AlertDescription>{app.failureReason ?? t("failedBody")}</AlertDescription>
           </Alert>
         ) : null}
-        <AppFunctionCircuits app={app} canManage={canManage} onPause={() => setDialog("deactivate")} />
+        <AppFunctionCircuits app={app} canManage={canManage} isSuperAdmin={isSuperAdmin} onPause={() => setDialog("deactivate")} />
         {(app.status === "disabled" && app.failureReason) || (canManage && app.source !== "bundled") ? (
           <Suspense fallback={null}>
             <AppLifecycleNotices app={app} canManage={canManage} />
           </Suspense>
         ) : null}
-        {app.needsApproval && pending.blockingOff ? (
-          <Alert variant="info">
-            <AlertTitle>{t("blockingOffTitle")}</AlertTitle>
-            <AlertDescription>{t("blockingOffBody", { points: pending.blockingOff.join(", ") })}</AlertDescription>
-          </Alert>
-        ) : app.needsApproval ? (
+        {app.needsApproval ? (
           <Alert variant="warning">
             <TriangleAlert aria-hidden="true" />
-            <AlertTitle>{t("needsApprovalTitle", { count: pending.count })}</AlertTitle>
+            <AlertTitle>{t("needsApprovalTitle", { count: pending })}</AlertTitle>
             <AlertDescription>{t("needsApprovalBody")}</AlertDescription>
           </Alert>
         ) : null}
