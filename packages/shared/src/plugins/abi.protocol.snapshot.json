@@ -22860,6 +22860,40 @@
       "--sticky-column-shift"
      ]
     },
+    "scripts": {
+     "data-color-scheme": [
+      "light",
+      "dark"
+     ],
+     "data-scalius-when": [
+      "signed-in",
+      "signed-out"
+     ],
+     "data-sticky-header": [],
+     "data-menu-drawer": [],
+     "data-search-open": [],
+     "data-account-link": [],
+     "data-color-scheme-toggle": [],
+     "data-cart-open": [],
+     "data-scalius-cart-count": [],
+     "data-card-quick-add": [],
+     "data-choose-variant": [],
+     "data-buy-variant": [],
+     "data-buy-offer": [],
+     "data-buy-intent": [
+      "add",
+      "buy"
+     ],
+     "data-header-search": [],
+     "data-island": [],
+     "data-hydrate": [
+      "load",
+      "idle",
+      "visible",
+      "interaction"
+     ],
+     "data-props": []
+    },
     "phoneBar": {
      "data-part": [
       "tab-bar",
@@ -23524,8 +23558,88 @@
      "value": 16777216,
      "loosens": "up"
     },
+    "package.files": {
+     "value": 64,
+     "loosens": "up"
+    },
     "webhooks.topics": {
      "value": 100,
+     "loosens": "up"
+    },
+    "theme.privateTokens.keys": {
+     "value": 160,
+     "loosens": "up"
+    },
+    "theme.privateTokens.apps": {
+     "value": 4,
+     "loosens": "up"
+    },
+    "theme.privateTokens.rows": {
+     "value": 6000,
+     "loosens": "up"
+    },
+    "theme.privateWords.languages": {
+     "value": 8,
+     "loosens": "up"
+    },
+    "theme.privateWords.text": {
+     "value": 500,
+     "loosens": "up"
+    },
+    "theme.privateCompiledCssBytes": {
+     "value": 65536,
+     "loosens": "up"
+    },
+    "theme.privateLayoutDepth": {
+     "value": 12,
+     "loosens": "up"
+    },
+    "theme.contrastFloor": {
+     "value": 4.5,
+     "loosens": "down"
+    },
+    "theme.markContrastFloor": {
+     "value": 3,
+     "loosens": "down"
+    },
+    "theme.edgeMinWidth": {
+     "value": 2,
+     "loosens": "down"
+    },
+    "theme.mobileTabs.max": {
+     "value": 5,
+     "loosens": "up"
+    },
+    "theme.mobileTabs.min": {
+     "value": 3,
+     "loosens": "down"
+    },
+    "theme.mobileTabs.label": {
+     "value": 24,
+     "loosens": "up"
+    },
+    "theme.sections": {
+     "value": 24,
+     "loosens": "up"
+    },
+    "theme.landingPages": {
+     "value": 20,
+     "loosens": "up"
+    },
+    "theme.slideProducts": {
+     "value": 10,
+     "loosens": "up"
+    },
+    "theme.translations.rows": {
+     "value": 40,
+     "loosens": "up"
+    },
+    "theme.translations.fields": {
+     "value": 2000,
+     "loosens": "up"
+    },
+    "theme.translations.text": {
+     "value": 8000,
      "loosens": "up"
     }
    }

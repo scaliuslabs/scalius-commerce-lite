@@ -15,13 +15,10 @@ import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { crc32, deflateRawSync, inflateRawSync } from "node:zlib";
 import { loadPluginContract, packPlugin, pluginPackageDir, readLockfile } from "./plugin-build.mjs";
 import { CLI, loadRegistryContract } from "./plugin-host.mjs";
-import { PLUGIN_PACKAGE_FILE_MAX_BYTES, PLUGIN_PACKAGE_MAX_BYTES } from "../packages/shared/src/plugins/package-limits.ts";
+// A package's sizes and file count are the store's own (readPluginPackageZip): a package that packs is one a store accepts.
+import { PLUGIN_PACKAGE_FILE_MAX_BYTES, PLUGIN_PACKAGE_MAX_BYTES, PLUGIN_PACKAGE_MAX_ENTRIES } from "../packages/shared/src/plugins/package-limits.ts";
 
 export { loadRegistryContract };
-
-/** The most files a package may hold (the API reader's limit). Its sizes are the store's own (plugins/package-limits.ts). */
-export const PACKAGE_MAX_ENTRIES = 64;
-
 
 // ── Arguments ────────────────────────────────────────────────────────────
 
@@ -134,7 +131,7 @@ const ZIP_DATE = (1 << 5) | 1; // 1980-01-01, so the same files always make the 
  * reads.
  */
 export function writeZip(files) {
-  if (files.length > PACKAGE_MAX_ENTRIES) throw new Error(`A package holds at most ${PACKAGE_MAX_ENTRIES} files; this one has ${files.length}.`);
+  if (files.length > PLUGIN_PACKAGE_MAX_ENTRIES) throw new Error(`A package holds at most ${PLUGIN_PACKAGE_MAX_ENTRIES} files; this one has ${files.length}.`);
   const locals = [];
   const central = [];
   let offset = 0;
@@ -499,7 +496,7 @@ export function readZip(bytes) {
   }
   if (end < 0) throw new Error("The file is not a ZIP package.");
   const count = bytes.readUInt16LE(end + 10);
-  if (count > PACKAGE_MAX_ENTRIES) throw new Error(`A package holds at most ${PACKAGE_MAX_ENTRIES} files.`);
+  if (count > PLUGIN_PACKAGE_MAX_ENTRIES) throw new Error(`A package holds at most ${PLUGIN_PACKAGE_MAX_ENTRIES} files.`);
   const files = new Map();
   let at = bytes.readUInt32LE(end + 16);
   for (let index = 0; index < count; index += 1) {

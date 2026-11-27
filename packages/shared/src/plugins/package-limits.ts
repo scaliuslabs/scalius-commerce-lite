@@ -8,3 +8,5 @@
 export const PLUGIN_PACKAGE_MAX_BYTES = 20 * 1024 * 1024;
 /** One file in it, `plugin.js` included. */
 export const PLUGIN_PACKAGE_FILE_MAX_BYTES = 16 * 1024 * 1024;
+/** Files in it. */
+export const PLUGIN_PACKAGE_MAX_ENTRIES = 64;

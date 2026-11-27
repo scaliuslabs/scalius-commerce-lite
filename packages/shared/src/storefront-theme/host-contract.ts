@@ -88,6 +88,31 @@ export const STOREFRONT_HOST_HOOKS = {
     "custom-properties": ["--sticky-column-shift"],
   },
   /**
+   * The page's colour scheme on the root (`:root[data-color-scheme="dark"]`),
+   * and the attributes the SDK's helpers write (`openCart()`, `stickyHeader()`,
+   * `colorSchemeToggle()`, `<Island>` …) that the store's scripts act on.
+   */
+  scripts: {
+    "data-color-scheme": ["light", "dark"],
+    "data-scalius-when": ["signed-in", "signed-out"],
+    "data-sticky-header": [],
+    "data-menu-drawer": [],
+    "data-search-open": [],
+    "data-account-link": [],
+    "data-color-scheme-toggle": [],
+    "data-cart-open": [],
+    "data-scalius-cart-count": [],
+    "data-card-quick-add": [],
+    "data-choose-variant": [],
+    "data-buy-variant": [],
+    "data-buy-offer": [],
+    "data-buy-intent": ["add", "buy"],
+    "data-header-search": [],
+    "data-island": [],
+    "data-hydrate": ["load", "idle", "visible", "interaction"],
+    "data-props": [],
+  },
+  /**
    * The store's phone bar under any header: the bar, each tab, a tab's label,
    * its icon (the store's `svg` or the theme's image) and the cart tab's
    * count, the current tab (`aria-current`), and the bar's height. Its old

@@ -258,12 +258,13 @@ function compatibleTypeLists(
 }
 
 /**
- * A union keeps every member (each may grow, in any order) and gains none,
- * because a host that returns the type would hand apps a member they never
- * handled. One exception: a member discriminated by a string literal union
- * (`{ kind: "a" | "b" } & rest`) may be split into members that partition
- * those literals exactly, each keeping `rest` (and so able to grow it): every
- * old value still belongs to exactly one new member.
+ * A union keeps every member (each may grow, in any order) and may gain
+ * members: the lists an app reads are open (a value it does not know is
+ * handled as the reference says, never by an exhaustive switch), and a value
+ * an app writes that was valid stays valid. A member discriminated by a
+ * string literal union (`{ kind: "a" | "b" } & rest`) may also be split into
+ * members that partition those literals exactly, each keeping `rest` (and so
+ * able to grow it): every old value still belongs to exactly one new member.
  */
 function compatibleUnion(
   before: readonly ts.TypeNode[], after: readonly ts.TypeNode[], oldSource: ts.SourceFile, newSource: ts.SourceFile,
@@ -284,8 +285,12 @@ function compatibleUnion(
     if (covered.length !== was.values.length || new Set(covered).size !== was.values.length) return false;
     for (const part of parts) claimed.add(part);
   }
-  return unmatchedAfter.every((next) => claimed.has(next));
+  // A gained member is growth, except one that makes every reader handle nothing (`null`, `undefined`) or anything (`any`, `unknown`).
+  return unmatchedAfter.every((next) => claimed.has(next) || !EMPTY_OR_ANY.has(unparenthesized(next).kind)
+    && !(ts.isLiteralTypeNode(unparenthesized(next)) && (unparenthesized(next) as ts.LiteralTypeNode).literal.kind === ts.SyntaxKind.NullKeyword));
 }
+
+const EMPTY_OR_ANY = new Set<ts.SyntaxKind>([ts.SyntaxKind.UndefinedKeyword, ts.SyntaxKind.NullKeyword, ts.SyntaxKind.AnyKeyword, ts.SyntaxKind.UnknownKeyword, ts.SyntaxKind.VoidKeyword]);
 
 /**
  * A list type's element, in either spelling: `T[]` or `Array<T>`, and
@@ -325,6 +330,8 @@ function compatibleType(
   const nowList = listOf(now);
   if (wasList && nowList && wasList.readonly === nowList.readonly) return compatibleType(wasList.element, nowList.element, oldSource, newSource);
   if (ts.isUnionTypeNode(was) && ts.isUnionTypeNode(now)) return compatibleUnion(was.types, now.types, oldSource, newSource);
+  // A type that becomes a union holding it gained members, nothing else.
+  if (!ts.isUnionTypeNode(was) && ts.isUnionTypeNode(now)) return compatibleUnion([was], now.types, oldSource, newSource);
   if (ts.isIntersectionTypeNode(was) && ts.isIntersectionTypeNode(now)) {
     return compatibleTypeLists(was.types, now.types, oldSource, newSource)
       && !gainedKeyCollides(was.types, now.types, newSource);

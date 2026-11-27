@@ -25,6 +25,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { CONTRACT_TESTS } from "../packages/shared/src/contract/seals.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -49,6 +50,8 @@ export function ciSteps({ base, scripts }) {
       cmd: `node rules/cli.mjs check --base ${base} && node rules/cli.mjs coverage --enforce --base ${base}`,
     },
     { id: "impact", name: "Rule impact", cmd: `node rules/cli.mjs impact --base ${base} --enforce` },
+    // The theme and app contract: every seal test, then the judge from the latest locked release tag. In --quick.
+    { id: "contract", name: "Contract seals and lock", cmd: `pnpm exec vitest run ${CONTRACT_TESTS.join(" ")} --maxWorkers=2 && node scripts/contract-lock.mjs verify` },
     { id: "suite", name: "Full test suite", cmd: "pnpm test:ci", broad: true, postgres: true },
     {
       id: "rulebook",

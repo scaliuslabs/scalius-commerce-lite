@@ -549,7 +549,9 @@ A field's pieces are `[data-buy-field-part="…"]` with the names above. The SDK
 
 Under any header that leaves the phone navigation to the store, the store draws its bottom bar (the tabs the theme document chose). Style it through these hooks only: the bar `[data-part="tab-bar"]`, each tab `[data-part="tab"]`, a tab's label `[data-part="tab-label"]` and icon `[data-part="tab-icon"]` (the store's `svg`, or the image your link tab names), the cart tab's count `[data-part="tab-badge"]` (empty when the cart is), the current tab `[data-part="tab"][aria-current]`, and the bar's height `--mobile-tabs-height` (read it to keep your own fixed content above the bar). The names hold; their nesting and anything else inside the bar do not. The bar's older `#mobile-tab-bar` id and `.mobile-tab` class are still in the markup, but they are not promised: move to the hooks above.
 
-Every hook on this page that holds is in the store's sealed list `STOREFRONT_HOST_HOOKS`, by where it is: the buy form, placed offers, kits, related products, the filters wrapper, the sticky buy column and the phone bar. The list only grows.
+The SDK's helpers write the attributes the store's scripts act on, and those names hold too: `data-scalius-when` (`signed-in`, `signed-out`), `data-sticky-header`, `data-menu-drawer`, `data-search-open`, `data-account-link`, `data-color-scheme-toggle`, `data-cart-open`, `data-scalius-cart-count`, `data-card-quick-add`, `data-choose-variant`, `data-buy-variant`, `data-buy-offer` with `data-buy-intent` (`add`, `buy`), `data-header-search`, and an island's `data-island`, `data-hydrate` (`load`, `idle`, `visible`, `interaction`) and `data-props`. The page's scheme is `data-color-scheme` (`light`, `dark`) on the root: select dark pages with `:root[data-color-scheme="dark"]`.
+
+Every hook on this page that holds is in the store's sealed list `STOREFRONT_HOST_HOOKS`, by where it is: the buy form, placed offers, kits, related products, the filters wrapper, the sticky buy column, the helpers' attributes and the phone bar. The list only grows.
 
 ### The single-page order
 

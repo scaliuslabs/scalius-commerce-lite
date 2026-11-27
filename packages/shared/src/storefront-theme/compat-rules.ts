@@ -105,8 +105,13 @@ function anatomy(text: string): Map<string, AnatomyLine> {
     const line = lines.get(key) ?? { kind: words[1] ?? "", attributes: new Map(), flags: new Set(), list };
     for (const word of rest) {
       const equals = word.indexOf("=");
-      if (equals > 0) line.attributes.set(word.slice(0, equals), word.slice(equals + 1));
-      else line.flags.add(word);
+      // Two lines of one subject (`… hooks=a,b` and `… hooks=c`) hold both lists.
+      if (equals > 0) {
+        const name = word.slice(0, equals);
+        const value = word.slice(equals + 1);
+        const had = line.attributes.get(name);
+        line.attributes.set(name, had === undefined ? value : `${had},${value}`);
+      } else line.flags.add(word);
     }
     lines.set(key, line);
   }
@@ -150,7 +155,10 @@ export function privateAnatomyBreakingChanges(before: string, after: string): st
       } else if (nextValue !== value) problems.push(`${subject} ${name}: the value changed from ${value} to ${nextValue ?? "none"}.`);
     }
     for (const name of next.attributes.keys()) {
-      if (RULES.has(name) && !line.attributes.has(name)) problems.push(...refusalListBreaks(`${subject} ${name}`, [], members(next.attributes.get(name)!)));
+      if (line.attributes.has(name) || GROWS.has(name)) continue;
+      if (RULES.has(name)) problems.push(...refusalListBreaks(`${subject} ${name}`, [], members(next.attributes.get(name)!)));
+      else if (name === "max") problems.push(`${subject} max: the limit tightened from none to ${next.attributes.get(name)}.`);
+      else problems.push(`${subject} ${name}: a new attribute (${next.attributes.get(name)}), which a theme must now meet.`);
     }
     for (const flag of line.flags) if (!RULE_FLAGS.has(flag) && !next.flags.has(flag)) problems.push(`${subject}: ${flag} was removed.`);
     for (const flag of next.flags) if (RULE_FLAGS.has(flag) && !line.flags.has(flag)) problems.push(`${subject}: ${flag} was added: a new refusal.`);

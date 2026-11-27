@@ -26,7 +26,7 @@
 // alone never accepts one and an entry never pre-accepts a later break.
 
 import { jsonSchemaBreakingChanges, type SchemaDirection } from "../schema-compat";
-import { contractTableBreaks } from "./contract-tables";
+import { contractTableBreaks } from "../contract/rules";
 
 type Json = Record<string, unknown>;
 
@@ -184,6 +184,10 @@ export function protocolBreakingChanges(before: unknown, after: unknown): string
     if (!(code in nowErrors)) problems.push(`errors.${code}: the error code was removed.`);
     else if (record(entry).status !== record(nowErrors[code]).status) {
       problems.push(`errors.${code}: the status changed from ${String(record(entry).status)} to ${String(record(nowErrors[code]).status)}.`);
+    }
+    // The meaning an app branches on is contract too: a rewording is an acknowledged change.
+    if (code in nowErrors && record(entry).meaning !== undefined && record(entry).meaning !== record(nowErrors[code]).meaning) {
+      problems.push(`errors.${code}: the meaning changed.`);
     }
     // Declared details an app reads: a field is never removed, retyped or made optional.
     if (code in nowErrors && record(entry).details !== undefined) {

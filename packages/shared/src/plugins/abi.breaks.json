@@ -3456,5 +3456,145 @@
   "change": "tables.hostHooks.phoneBar.selectors: the key was removed.",
   "reason": "Pre-lock (rc.1 seals review, Nov 27): the phone bar's promised hooks become data hooks (data-part tab-bar, tab, tab-label, tab-icon, tab-badge, with aria-current and --mobile-tabs-height). The old #mobile-tab-bar id and .mobile-tab class stay in the markup, so a theme styling them keeps working; they are no longer promised. Sealed the same day it was first sealed, before any release carried it.",
   "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "31ce8c507a03fb92",
+  "change": "tables.limits.package.files: a new limit on apps (64).",
+  "reason": "Pre-lock (rc.1 seals review, Nov 27): a limit that already held is now sealed with its direction; the number is the one apps and themes were already held to, so no app or theme meets a new limit. The package's 64-file bound moves to the shared package-limits module that the upload, pack and validate read.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "31ce8c507a03fb92",
+  "change": "tables.limits.theme.privateTokens.keys: a new limit on apps (160).",
+  "reason": "Pre-lock (rc.1 seals review, Nov 27): a limit that already held is now sealed with its direction; the number is the one apps and themes were already held to, so no app or theme meets a new limit. The package's 64-file bound moves to the shared package-limits module that the upload, pack and validate read.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "31ce8c507a03fb92",
+  "change": "tables.limits.theme.privateTokens.apps: a new limit on apps (4).",
+  "reason": "Pre-lock (rc.1 seals review, Nov 27): a limit that already held is now sealed with its direction; the number is the one apps and themes were already held to, so no app or theme meets a new limit. The package's 64-file bound moves to the shared package-limits module that the upload, pack and validate read.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "31ce8c507a03fb92",
+  "change": "tables.limits.theme.privateTokens.rows: a new limit on apps (6000).",
+  "reason": "Pre-lock (rc.1 seals review, Nov 27): a limit that already held is now sealed with its direction; the number is the one apps and themes were already held to, so no app or theme meets a new limit. The package's 64-file bound moves to the shared package-limits module that the upload, pack and validate read.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "31ce8c507a03fb92",
+  "change": "tables.limits.theme.privateWords.languages: a new limit on apps (8).",
+  "reason": "Pre-lock (rc.1 seals review, Nov 27): a limit that already held is now sealed with its direction; the number is the one apps and themes were already held to, so no app or theme meets a new limit. The package's 64-file bound moves to the shared package-limits module that the upload, pack and validate read.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "31ce8c507a03fb92",
+  "change": "tables.limits.theme.privateWords.text: a new limit on apps (500).",
+  "reason": "Pre-lock (rc.1 seals review, Nov 27): a limit that already held is now sealed with its direction; the number is the one apps and themes were already held to, so no app or theme meets a new limit. The package's 64-file bound moves to the shared package-limits module that the upload, pack and validate read.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "31ce8c507a03fb92",
+  "change": "tables.limits.theme.privateCompiledCssBytes: a new limit on apps (65536).",
+  "reason": "Pre-lock (rc.1 seals review, Nov 27): a limit that already held is now sealed with its direction; the number is the one apps and themes were already held to, so no app or theme meets a new limit. The package's 64-file bound moves to the shared package-limits module that the upload, pack and validate read.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "31ce8c507a03fb92",
+  "change": "tables.limits.theme.privateLayoutDepth: a new limit on apps (12).",
+  "reason": "Pre-lock (rc.1 seals review, Nov 27): a limit that already held is now sealed with its direction; the number is the one apps and themes were already held to, so no app or theme meets a new limit. The package's 64-file bound moves to the shared package-limits module that the upload, pack and validate read.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "31ce8c507a03fb92",
+  "change": "tables.limits.theme.contrastFloor: a new limit on apps (4.5).",
+  "reason": "Pre-lock (rc.1 seals review, Nov 27): a limit that already held is now sealed with its direction; the number is the one apps and themes were already held to, so no app or theme meets a new limit. The package's 64-file bound moves to the shared package-limits module that the upload, pack and validate read.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "31ce8c507a03fb92",
+  "change": "tables.limits.theme.markContrastFloor: a new limit on apps (3).",
+  "reason": "Pre-lock (rc.1 seals review, Nov 27): a limit that already held is now sealed with its direction; the number is the one apps and themes were already held to, so no app or theme meets a new limit. The package's 64-file bound moves to the shared package-limits module that the upload, pack and validate read.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "31ce8c507a03fb92",
+  "change": "tables.limits.theme.edgeMinWidth: a new limit on apps (2).",
+  "reason": "Pre-lock (rc.1 seals review, Nov 27): a limit that already held is now sealed with its direction; the number is the one apps and themes were already held to, so no app or theme meets a new limit. The package's 64-file bound moves to the shared package-limits module that the upload, pack and validate read.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "31ce8c507a03fb92",
+  "change": "tables.limits.theme.mobileTabs.max: a new limit on apps (5).",
+  "reason": "Pre-lock (rc.1 seals review, Nov 27): a limit that already held is now sealed with its direction; the number is the one apps and themes were already held to, so no app or theme meets a new limit. The package's 64-file bound moves to the shared package-limits module that the upload, pack and validate read.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "31ce8c507a03fb92",
+  "change": "tables.limits.theme.mobileTabs.min: a new limit on apps (3).",
+  "reason": "Pre-lock (rc.1 seals review, Nov 27): a limit that already held is now sealed with its direction; the number is the one apps and themes were already held to, so no app or theme meets a new limit. The package's 64-file bound moves to the shared package-limits module that the upload, pack and validate read.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "31ce8c507a03fb92",
+  "change": "tables.limits.theme.mobileTabs.label: a new limit on apps (24).",
+  "reason": "Pre-lock (rc.1 seals review, Nov 27): a limit that already held is now sealed with its direction; the number is the one apps and themes were already held to, so no app or theme meets a new limit. The package's 64-file bound moves to the shared package-limits module that the upload, pack and validate read.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "31ce8c507a03fb92",
+  "change": "tables.limits.theme.sections: a new limit on apps (24).",
+  "reason": "Pre-lock (rc.1 seals review, Nov 27): a limit that already held is now sealed with its direction; the number is the one apps and themes were already held to, so no app or theme meets a new limit. The package's 64-file bound moves to the shared package-limits module that the upload, pack and validate read.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "31ce8c507a03fb92",
+  "change": "tables.limits.theme.landingPages: a new limit on apps (20).",
+  "reason": "Pre-lock (rc.1 seals review, Nov 27): a limit that already held is now sealed with its direction; the number is the one apps and themes were already held to, so no app or theme meets a new limit. The package's 64-file bound moves to the shared package-limits module that the upload, pack and validate read.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "31ce8c507a03fb92",
+  "change": "tables.limits.theme.slideProducts: a new limit on apps (10).",
+  "reason": "Pre-lock (rc.1 seals review, Nov 27): a limit that already held is now sealed with its direction; the number is the one apps and themes were already held to, so no app or theme meets a new limit. The package's 64-file bound moves to the shared package-limits module that the upload, pack and validate read.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "31ce8c507a03fb92",
+  "change": "tables.limits.theme.translations.rows: a new limit on apps (40).",
+  "reason": "Pre-lock (rc.1 seals review, Nov 27): a limit that already held is now sealed with its direction; the number is the one apps and themes were already held to, so no app or theme meets a new limit. The package's 64-file bound moves to the shared package-limits module that the upload, pack and validate read.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "31ce8c507a03fb92",
+  "change": "tables.limits.theme.translations.fields: a new limit on apps (2000).",
+  "reason": "Pre-lock (rc.1 seals review, Nov 27): a limit that already held is now sealed with its direction; the number is the one apps and themes were already held to, so no app or theme meets a new limit. The package's 64-file bound moves to the shared package-limits module that the upload, pack and validate read.",
+  "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "31ce8c507a03fb92",
+  "change": "tables.limits.theme.translations.text: a new limit on apps (8000).",
+  "reason": "Pre-lock (rc.1 seals review, Nov 27): a limit that already held is now sealed with its direction; the number is the one apps and themes were already held to, so no app or theme meets a new limit. The package's 64-file bound moves to the shared package-limits module that the upload, pack and validate read.",
+  "type": "pre-lock"
  }
 ]

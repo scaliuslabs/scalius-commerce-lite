@@ -2,7 +2,7 @@
 
 import { execFile as execFileCallback } from "child_process";
 import { createHash } from "crypto";
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { dirname, resolve } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { promisify } from "util";
@@ -14,6 +14,7 @@ import {
   runOpsCheck,
 } from "./ops-check.mjs";
 import { readinessOperatorToken } from "./readiness-operator.mjs";
+import { notesProblems, securityEntriesSince, verifyLock } from "./contract-lock.mjs";
 
 const execFileAsync = promisify(execFileCallback);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -89,6 +90,7 @@ const stringOptions = new Set([
   "api-base-url",
   "storefront-url",
   "dashboard-url",
+  "notes",
 ]);
 const knownOptions = new Set([...booleanOptions, ...stringOptions]);
 
@@ -191,6 +193,7 @@ export function parseReleaseCheckArgs(rawArgs, {
     apiBaseUrl: normalizeHttpBaseUrl(rawOptions["api-base-url"] ?? defaultApiBaseUrl, "API base URL"),
     storefrontUrl: normalizeHttpBaseUrl(rawOptions["storefront-url"] ?? defaultStorefrontUrl, "Storefront URL"),
     dashboardUrl: normalizeHttpBaseUrl(rawOptions["dashboard-url"] ?? defaultDashboardUrl, "Dashboard URL"),
+    notes: rawOptions.notes ?? null,
   };
 }
 
@@ -1633,6 +1636,24 @@ async function runStep(result, name, fn) {
   }
 }
 
+/**
+ * The theme and app contract (scripts/contract-lock.mjs): the tree's lock and
+ * seals, judged by the latest locked release tag's rules, and release notes
+ * that name the advisory of every security change since the last tag.
+ */
+export async function checkContract({ rootDir, notes = null, logger = null, readFile = (path) => readFileSync(path, "utf8") }) {
+  const verdict = await verifyLock(rootDir);
+  if (verdict.problems.length > 0) throw new Error(`The contract lock refuses this tree: ${verdict.problems.join(" ")}`);
+  const security = securityEntriesSince(rootDir);
+  if (security.length > 0) {
+    if (notes === null) throw new Error(`${security.length} security change(s) to the contract since the last release: pass the release notes with --notes <file>.`);
+    const problems = notesProblems(readFile(notes), security);
+    if (problems.length > 0) throw new Error(problems.join(" "));
+  }
+  logger?.log(`  contract: ${verdict.lines[0]}`);
+  return { lock: verdict.lock ? verdict.lock.platform : null, securityChanges: security.length };
+}
+
 async function checkRequiredDocs({ rootDir, fileExistsImpl, logger }) {
   const evaluation = evaluateRequiredDocs({ rootDir, fileExistsImpl });
   if (!evaluation.ok) {
@@ -2574,6 +2595,8 @@ export async function runReleaseCheck(options, {
   logger?.log("Release readiness check");
   await runStep(result, "docs", () =>
     checkRequiredDocs({ rootDir, fileExistsImpl, logger }));
+  await runStep(result, "contract", () =>
+    checkContract({ rootDir, notes: options.notes ?? null, logger }));
 
   if (options.skipLive) {
     result.checks.live = {
@@ -2647,7 +2670,8 @@ Options:
   --storefront-url <url>   Storefront URL (default ${DEFAULT_STOREFRONT_URL})
   --dashboard-url <url>    Dashboard URL (default ${DEFAULT_DASHBOARD_URL})
   --timeout-ms <ms>        Per-request/per-command timeout (default ${DEFAULT_TIMEOUT_MS})
-  --skip-live              Run only the local doc gate
+  --notes <file>           The release notes: they must name every security advisory since the last tag
+  --skip-live              Run only the local doc and contract gates
   --skip-wrangler          Skip read-only Wrangler deployment proof
   --allow-strict-seo-policy-fallback
                            Continue with strict discovery defaults if public SEO policy cannot be read

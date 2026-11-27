@@ -6,9 +6,7 @@
 // and while inflating, so a small archive cannot expand without bound.
 
 import { PluginError } from "@scalius/core/modules/plugins";
-import { PLUGIN_PACKAGE_FILE_MAX_BYTES as MAX_FILE_BYTES, PLUGIN_PACKAGE_MAX_BYTES } from "@scalius/shared/plugins/package-limits";
-
-const MAX_ENTRIES = 64;
+import { PLUGIN_PACKAGE_FILE_MAX_BYTES as MAX_FILE_BYTES, PLUGIN_PACKAGE_MAX_BYTES, PLUGIN_PACKAGE_MAX_ENTRIES as MAX_ENTRIES } from "@scalius/shared/plugins/package-limits";
 const SAFE_NAME = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9._@/-]{1,200}$/;
 
 function invalid(message: string): never {
