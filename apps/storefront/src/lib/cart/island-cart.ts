@@ -69,6 +69,22 @@ function money(amountMinor: number) {
   return { ...value, formatted: formatMinorMoney(value) };
 }
 
+/**
+ * This app's add-ons on a line, one per title: each stored amount is per unit
+ * of the line (a bundle's per bundle unit, its quantity the bundle units), so
+ * the total is exact and so is the amount.
+ */
+function islandAddOns(item: VariantCartItem, pluginId: string): StorefrontCartLine["addOns"] {
+  const sums = new Map<string, { priceMinor: number; per: "unit" | "bundle" }>();
+  for (const adjustment of item.adjustments ?? []) {
+    if (adjustment.appId !== pluginId) continue;
+    const sum = sums.get(adjustment.displayValue) ?? { priceMinor: 0, per: adjustment.per ?? "unit" };
+    sum.priceMinor += adjustment.priceMinor;
+    sums.set(adjustment.displayValue, sum);
+  }
+  return [...sums].map(([title, { priceMinor, per }]) => ({ title, total: money(priceMinor * item.quantity), amount: money(priceMinor), per, units: item.quantity }));
+}
+
 /** The cart's lines with this app's parts only. */
 export async function islandCartLines(pluginId: string): Promise<StorefrontCartLine[]> {
   hydrateCartFromStorage();
@@ -89,8 +105,7 @@ export async function islandCartLines(pluginId: string): Promise<StorefrontCartL
     inputs: (facts.byLine.get(lineKey) ?? []).filter((key) => key.startsWith(prefix)).map((key) => key.slice(prefix.length)),
     answers: Object.fromEntries((item.properties ?? []).filter((property) => property.key.startsWith(prefix)).map((property) => [property.key.slice(prefix.length), property.value])),
     undecided: undecided.filter((entry) => entry.lineKey === lineKey).map((entry) => entry.key.slice(prefix.length)),
-    addOns: (item.adjustments ?? []).filter((adjustment) => adjustment.appId === pluginId)
-      .map((adjustment) => ({ title: adjustment.displayValue, amount: money(adjustment.priceMinor) })),
+    addOns: islandAddOns(item, pluginId),
   }));
 }
 

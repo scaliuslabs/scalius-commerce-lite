@@ -121,6 +121,8 @@ export type CartValidationItem = {
   properties?: OrderLineProperty[];
   /** Apps' add-ons to each unit, in `unitPrice` ("Add-on: …"); never sent back. */
   adjustments?: OrderLineProperty[];
+  /** A kit or an app's bundle sold as one line: each add-on is once per bundle unit. */
+  bundle?: boolean;
   /** The apps' purchase options the line is bought with, sorted by id, and their titles. */
   purchaseOptions?: Array<{ id: string; title: string }>;
   /** Canonical identity hash (inputs, then purchase option) for the v3 line key; "none" without either. */

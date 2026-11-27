@@ -131,13 +131,13 @@ export { adminContext, adminLocale, adminNumber, ui, wantsPage, type PluginAdmin
 /** Your words in the buyer's or staff member's language (`input.language`, `adminContext(request).locale`), else English. */
 export { moneyFor, textFor } from "./text";
 /** The cart a checkout function sees (`cart` in every point's input). */
-export type { BuyerUiLine, BuyerUiOrderLine, FunctionCart, FunctionCartLine, FunctionLineOffer, FunctionLinePriceFacts, LineInputChange } from "@scalius/shared/plugins";
+export type { BuyerUiLine, BuyerUiOrderLine, FunctionCart, FunctionCartLine, FunctionLineOffer, FunctionLinePriceFacts, LineAddOn, LineInputChange } from "@scalius/shared/plugins";
 export type { EventRepresentation, EventRepresentationType } from "@scalius/shared/events";
 import type { EventRepresentation } from "@scalius/shared/events";
 /**
  * An order as `orders.get`, `orders.list` and order webhooks carry it: money
  * in integer minor units of `currency`, each line's buyer answers
- * (`properties`, yours and the store's), add-ons (`adjustments`) and purchase
+ * (`properties`, yours and the store's), add-ons (`addOns`, `LineAddOn`) and purchase
  * options, and the discounts it used. Type your reads with it instead of
  * describing the order by hand: `ctx.api.call<{ order: OrderRepresentation }>("orders.get", ...)`.
  */
@@ -192,7 +192,7 @@ export function priceLines<Settings = Readonly<Record<string, PluginSettingValue
     const lines = new Map(input.cart.lines.map((line) => [line.lineId, line]));
     return {
       prices: [],
-      adjustments: input.cart.lines.flatMap((line) => price(line, facts.get(line.lineId), input, settings).map((addOn) => ({ lineId: line.lineId, ...addOn }))),
+      addOns: input.cart.lines.flatMap((line) => price(line, facts.get(line.lineId), input, settings).map((addOn) => ({ lineId: line.lineId, ...addOn }))),
       ...(input.offers ? { offers: input.offers.flatMap((offer) => {
         const line = lines.get(offer.lineId);
         if (!line) return [];

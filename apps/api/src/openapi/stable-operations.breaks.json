@@ -3658,5 +3658,59 @@
   "from": "6664ca148b07f681",
   "change": "webhook_subscriptions.update input body.topics[]: no longer accepts \"customer.redact_requested\", \"customer.data_requested\".",
   "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics `customer.redact_requested` and `customer.data_requested` leave the event catalogue because nothing emits them; a subscription could never have received one. The topics list's cap is the catalogue's filter count, so it falls by the same two."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "5c884e0ad30524dc",
+  "change": "fulfillments.void output data.order.lines[].adjustments: the field was removed.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app reads one. An order line's `adjustments` (`{ appId, title, amountMinor }`, per unit, and per anchor unit on a bundle) becomes `addOns`, the same `LineAddOn` the checkout functions and buyer UI carry: `{ appId, title, totalMinor, amountMinor, per }`, one per app and title, `totalMinor` the exact amount on the line, `amountMinor` per unit (`per: \"unit\"`) or per bundle unit (`per: \"bundle\"`, an expanded bundle's or a kit's add-on on its anchor) only when exact for every one, else null (a bundle line whose quantity staff changed). An app that read `lines[].adjustments[].amountMinor` reads `lines[].addOns[]`: `totalMinor` for money, `amountMinor` with `per` for a unit price. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "5c884e0ad30524dc",
+  "change": "orders.mark_delivered output data.order.lines[].adjustments: the field was removed.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app reads one. An order line's `adjustments` (`{ appId, title, amountMinor }`, per unit, and per anchor unit on a bundle) becomes `addOns`, the same `LineAddOn` the checkout functions and buyer UI carry: `{ appId, title, totalMinor, amountMinor, per }`, one per app and title, `totalMinor` the exact amount on the line, `amountMinor` per unit (`per: \"unit\"`) or per bundle unit (`per: \"bundle\"`, an expanded bundle's or a kit's add-on on its anchor) only when exact for every one, else null (a bundle line whose quantity staff changed). An app that read `lines[].adjustments[].amountMinor` reads `lines[].addOns[]`: `totalMinor` for money, `amountMinor` with `per` for a unit price. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "5c884e0ad30524dc",
+  "change": "orders.mark_pickup_ready output data.order.lines[].adjustments: the field was removed.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app reads one. An order line's `adjustments` (`{ appId, title, amountMinor }`, per unit, and per anchor unit on a bundle) becomes `addOns`, the same `LineAddOn` the checkout functions and buyer UI carry: `{ appId, title, totalMinor, amountMinor, per }`, one per app and title, `totalMinor` the exact amount on the line, `amountMinor` per unit (`per: \"unit\"`) or per bundle unit (`per: \"bundle\"`, an expanded bundle's or a kit's add-on on its anchor) only when exact for every one, else null (a bundle line whose quantity staff changed). An app that read `lines[].adjustments[].amountMinor` reads `lines[].addOns[]`: `totalMinor` for money, `amountMinor` with `per` for a unit price. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "5c884e0ad30524dc",
+  "change": "orders.set_status output data.order.lines[].adjustments: the field was removed.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app reads one. An order line's `adjustments` (`{ appId, title, amountMinor }`, per unit, and per anchor unit on a bundle) becomes `addOns`, the same `LineAddOn` the checkout functions and buyer UI carry: `{ appId, title, totalMinor, amountMinor, per }`, one per app and title, `totalMinor` the exact amount on the line, `amountMinor` per unit (`per: \"unit\"`) or per bundle unit (`per: \"bundle\"`, an expanded bundle's or a kit's add-on on its anchor) only when exact for every one, else null (a bundle line whose quantity staff changed). An app that read `lines[].adjustments[].amountMinor` reads `lines[].addOns[]`: `totalMinor` for money, `amountMinor` with `per` for a unit price. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "5c884e0ad30524dc",
+  "change": "fulfillments.create output data.order.lines[].adjustments: the field was removed.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app reads one. An order line's `adjustments` (`{ appId, title, amountMinor }`, per unit, and per anchor unit on a bundle) becomes `addOns`, the same `LineAddOn` the checkout functions and buyer UI carry: `{ appId, title, totalMinor, amountMinor, per }`, one per app and title, `totalMinor` the exact amount on the line, `amountMinor` per unit (`per: \"unit\"`) or per bundle unit (`per: \"bundle\"`, an expanded bundle's or a kit's add-on on its anchor) only when exact for every one, else null (a bundle line whose quantity staff changed). An app that read `lines[].adjustments[].amountMinor` reads `lines[].addOns[]`: `totalMinor` for money, `amountMinor` with `per` for a unit price. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "5c884e0ad30524dc",
+  "change": "orders.create output data.order.lines[].adjustments: the field was removed.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app reads one. An order line's `adjustments` (`{ appId, title, amountMinor }`, per unit, and per anchor unit on a bundle) becomes `addOns`, the same `LineAddOn` the checkout functions and buyer UI carry: `{ appId, title, totalMinor, amountMinor, per }`, one per app and title, `totalMinor` the exact amount on the line, `amountMinor` per unit (`per: \"unit\"`) or per bundle unit (`per: \"bundle\"`, an expanded bundle's or a kit's add-on on its anchor) only when exact for every one, else null (a bundle line whose quantity staff changed). An app that read `lines[].adjustments[].amountMinor` reads `lines[].addOns[]`: `totalMinor` for money, `amountMinor` with `per` for a unit price. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "5c884e0ad30524dc",
+  "change": "orders.get output data.order.lines[].adjustments: the field was removed.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app reads one. An order line's `adjustments` (`{ appId, title, amountMinor }`, per unit, and per anchor unit on a bundle) becomes `addOns`, the same `LineAddOn` the checkout functions and buyer UI carry: `{ appId, title, totalMinor, amountMinor, per }`, one per app and title, `totalMinor` the exact amount on the line, `amountMinor` per unit (`per: \"unit\"`) or per bundle unit (`per: \"bundle\"`, an expanded bundle's or a kit's add-on on its anchor) only when exact for every one, else null (a bundle line whose quantity staff changed). An app that read `lines[].adjustments[].amountMinor` reads `lines[].addOns[]`: `totalMinor` for money, `amountMinor` with `per` for a unit price. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "5c884e0ad30524dc",
+  "change": "orders.list output data.orders[].lines[].adjustments: the field was removed.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app reads one. An order line's `adjustments` (`{ appId, title, amountMinor }`, per unit, and per anchor unit on a bundle) becomes `addOns`, the same `LineAddOn` the checkout functions and buyer UI carry: `{ appId, title, totalMinor, amountMinor, per }`, one per app and title, `totalMinor` the exact amount on the line, `amountMinor` per unit (`per: \"unit\"`) or per bundle unit (`per: \"bundle\"`, an expanded bundle's or a kit's add-on on its anchor) only when exact for every one, else null (a bundle line whose quantity staff changed). An app that read `lines[].adjustments[].amountMinor` reads `lines[].addOns[]`: `totalMinor` for money, `amountMinor` with `per` for a unit price. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "5c884e0ad30524dc",
+  "change": "orders.release_hold output data.order.lines[].adjustments: the field was removed.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app reads one. An order line's `adjustments` (`{ appId, title, amountMinor }`, per unit, and per anchor unit on a bundle) becomes `addOns`, the same `LineAddOn` the checkout functions and buyer UI carry: `{ appId, title, totalMinor, amountMinor, per }`, one per app and title, `totalMinor` the exact amount on the line, `amountMinor` per unit (`per: \"unit\"`) or per bundle unit (`per: \"bundle\"`, an expanded bundle's or a kit's add-on on its anchor) only when exact for every one, else null (a bundle line whose quantity staff changed). An app that read `lines[].adjustments[].amountMinor` reads `lines[].addOns[]`: `totalMinor` for money, `amountMinor` with `per` for a unit price. Settled now because the seal forbids a field becoming nullable after the freeze."
  }
 ]

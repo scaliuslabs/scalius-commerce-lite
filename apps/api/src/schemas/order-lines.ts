@@ -218,6 +218,7 @@ export const buyerLineAddOnSchema = z.object({
   amount: z.number().nullable(),
   amountMinor: z.number().int().nullable().openapi({ description: "Per unit (`per: unit`) or per bundle unit (`per: bundle`), when one amount is exact for every unit; null: show `totalMinor`." }),
   per: z.enum(["unit", "bundle"]).openapi({ description: "From what the line froze: `bundle` for a kit's or an expanded bundle's add-on (on its anchor item's row), else `unit`." }),
+  units: z.number().int().nullable().openapi({ description: "How many units (`per: unit`) or bundle units (`per: bundle`) the row holds; null when no longer known. `totalMinor = amountMinor × units` whenever `amountMinor` is a number." }),
   details: addOnDetailsSchema.optional(),
 }).openapi("BuyerLineAddOn", { description: "What an app's `cart.line_prices` charged on this row (\"Protection ৳350\"), from the order's real lines." });
 
