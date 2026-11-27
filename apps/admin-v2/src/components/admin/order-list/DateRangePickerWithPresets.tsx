@@ -19,6 +19,7 @@ import { useMediaQuery } from "~/hooks/use-media-query";
 import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
 import { orderListMessages } from "~/i18n/order-list";
+import { orderListMoreMessages } from "~/i18n/order-list-more";
 
 /** Quick ranges on Bangladesh calendar-day boundaries. */
 export const DATE_PRESETS = {
@@ -75,7 +76,8 @@ export function DateRangePickerWithPresets({
   setDate: (date: DateRange | undefined) => void;
   trigger: ReactNode;
 }) {
-  const t = useMessages(orderListMessages);
+  const t = useMessages(orderListMoreMessages);
+  const tl = useMessages(orderListMessages);
   const tr = useMessages(resourceMessages);
   const narrow = useMediaQuery(COMPACT_DATE_PICKER_QUERY);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -137,7 +139,7 @@ export function DateRangePickerWithPresets({
         </DialogTrigger>
         <DialogContent aria-describedby={undefined} data-slot="date-range-picker" className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>{t("date")}</DialogTitle>
+            <DialogTitle>{tl("date")}</DialogTitle>
           </DialogHeader>
           <div data-slot="date-range-presets" className="flex flex-wrap gap-1">
             {presetButtons}
