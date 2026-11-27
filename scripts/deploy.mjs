@@ -25,35 +25,15 @@
  *
  * A remote D1 API deploy is a guarded upgrade (scripts/deploy-upgrade.mjs):
  * a read-only pre-flight first (the API's /meta, both migration ledgers, the
- * freeze state; it refuses a diverged or newer database), then, when
- * migrations are pending on a store with data, DATABASE_MIGRATION_FREEZE on
- * the API Worker, a D1 Time Travel bookmark and a receipt in deploy-receipts/,
- * the migrations, the API deploy and its verification, and the release. A
- * failure after the schema changed leaves the store frozen and says how to
- * finish or roll back; `--resume-frozen` acknowledges a freeze a failed deploy
- * on another machine left.
- *
- * Post-deploy verification URLs (Wrangler configs carry no vars):
- *   --storefront-url <origin> / SCALIUS_STOREFRONT_URL
- *       Public storefront origin. Defaults to https://<pattern> of the
- *       custom_domain route in apps/storefront/wrangler.jsonc, then to the
- *       dashboard Platform setting read from ${apiUrl}/api/v1/platform.
- *   --api-url <origin> / SCALIUS_API_URL
- *       Public API origin. Without it, live API verification and the
- *       API-driven storefront warm paths are skipped with a notice.
- *   # External provider upgrades are an explicit frozen control-plane step:
- *   pnpm --filter @scalius/database upgrade:schema --provider <provider> ...
- *
- * Runs in order (full deploy):
- *   1. turbo build       — builds all workspaces, then fails if dist/ carries
- *                          any local env value (check-dist-secrets.mjs) or a
- *                          canary build leaks one (check-build-canaries.mjs),
- *                          or a bundle breaks its budget (the API Worker size,
- *                          the dashboard routes, the storefront's buyer pages)
- *   2. D1 migration, or read-only external schema compatibility preflight
- *   3. wrangler deploy   — deploys the API Worker (which also serves the
- *                          dashboard SPA from its ASSETS binding) and the
- *                          Storefront Worker
+ * freeze state as the API answers it; it refuses a diverged or newer
+ * database), then, when migrations are pending on a store with data and
+ * --api-url is given: DATABASE_MIGRATION_FREEZE on the API Worker, watched
+ * until the API refuses requests for a minute, a D1 Time Travel bookmark and a
+ * receipt in ~/.scalius/deploy-receipts/ (SCALIUS_DEPLOY_RECEIPTS), the
+ * migrations (once), the API deploy and its verification, and the release,
+ * watched until the API serves. A failure after the schema changed leaves the
+ * store frozen and prints the restore and the rollback; `--resume-frozen`
+ * acknowledges a freeze a failed deploy on another machine left.
  *
  * The database name is read from apps/api/wrangler.jsonc (API worker owns D1);
  * with --local, from apps/api/wrangler.local.jsonc, the config the dev stack uses.
@@ -62,7 +42,7 @@
 import { execSync } from "child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
-import { delimiter, dirname, join, relative, resolve } from "path";
+import { delimiter, dirname, join, resolve } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { getArgValue, resolvePnpmExecutable, shellQuote } from "./dev-local-utils.mjs";
 import { readLockfile } from "./plugin-build.mjs";
@@ -73,6 +53,8 @@ import { readinessChecksOf, readinessHeaders, readinessOperatorToken, readinessS
 import {
   FREEZE_SECRET,
   GuardedUpgradeError,
+  awaitObservedFreeze,
+  awaitObservedRelease,
   createReceipt,
   decideUpgrade,
   describeUpgradeDecision,
@@ -81,8 +63,8 @@ import {
   readFreezeState,
   readMeta,
   readRemoteLedgers,
+  releaseCommand,
   readTreeMigrations,
-  receiptHoldsFreeze,
   receiptPath,
   receiptsDirectory,
   rollbackCommands,
@@ -93,33 +75,48 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
 const apiDir = resolve(root, "apps", "api");
-const args = process.argv.slice(2);
 const DEPLOY_FLAGS = new Set([
   "--migrate-only", "--local", "--dry-run", "--skip-verified", "--health-only", "--plugin-sandbox",
-  "--resume-frozen", "--check-upgrade", "--help", "-h", "--",
+  "--resume-frozen", "--check-upgrade", "--help", "-h",
 ]);
 const DEPLOY_VALUE_FLAGS = new Set([
   "--only", "--wrangler-config", "--database-target-host", "--database-provider", "--storefront-url", "--api-url", "--plan",
 ]);
 
 /**
- * The arguments this script does not know. A deploy is the default action, so
- * a mistyped or unsupported flag (`--hlep`, `--preflight`) must refuse rather
- * than deploy.
+ * The script's one argument parser. A deploy is the default action, so every
+ * spelling it accepts is honoured and every other is refused: `--only=api`
+ * and `--only api` are the same, `--hlep` or `--dry-run=1` refuse rather than
+ * deploy. `args` is the canonical form every later read uses (each value flag
+ * followed by its value; pnpm's `--` separator dropped).
  */
-export function unknownDeployArgs(inputArgs) {
-  const unknown = [];
+export function parseDeployArgs(inputArgs) {
+  const parsed = [];
+  const errors = [];
   for (let index = 0; index < inputArgs.length; index += 1) {
     const arg = inputArgs[index];
-    const name = arg.split("=")[0];
+    if (arg === "--") continue;
+    const equals = arg.indexOf("=");
+    const name = arg.startsWith("--") && equals !== -1 ? arg.slice(0, equals) : arg;
     if (DEPLOY_VALUE_FLAGS.has(name)) {
-      if (!arg.includes("=")) index += 1;
-      continue;
+      const value = equals !== -1 && name !== arg ? arg.slice(equals + 1) : inputArgs[++index];
+      if (value === undefined || value === "" || (name === arg && value.startsWith("--"))) {
+        errors.push(`${name} needs a value`);
+        continue;
+      }
+      parsed.push(name, value);
+    } else if (DEPLOY_FLAGS.has(name)) {
+      if (name !== arg) errors.push(`${name} takes no value (got ${arg})`);
+      else parsed.push(arg);
+    } else {
+      errors.push(`unknown argument ${arg}`);
     }
-    if (!DEPLOY_FLAGS.has(arg)) unknown.push(arg);
   }
-  return unknown;
+  return { args: parsed, errors };
 }
+
+const parsedArgs = parseDeployArgs(process.argv.slice(2));
+const args = parsedArgs.args;
 
 /** The usage text: this file's header comment. */
 export function deployUsage() {
@@ -1427,9 +1424,8 @@ export async function main() {
     console.log(deployUsage());
     return;
   }
-  const unknown = unknownDeployArgs(args);
-  if (unknown.length > 0) {
-    console.error(`✗ Unknown argument(s): ${unknown.join(" ")}. Nothing was deployed; see node scripts/deploy.mjs --help.`);
+  if (parsedArgs.errors.length > 0) {
+    console.error(`✗ ${parsedArgs.errors.join("; ")}. Nothing was deployed; see node scripts/deploy.mjs --help.`);
     process.exit(1);
   }
   if (wranglerConfigArgIndex !== -1 && !args[wranglerConfigArgIndex + 1]) {
@@ -1585,8 +1581,12 @@ export async function main() {
     `${pnpm} exec wrangler d1 execute ${d1Target} --remote --json --command ${shellQuote(sql)}${d1ConfigFlag}`,
     { cwd: apiDir, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] },
   ));
-  const receipts = receiptsDirectory(root);
-  const rollbackHint = (receipt) => rollbackCommands(receipt, { d1ConfigFlag, workerConfigFlag: apiConfigFlag });
+  const receipts = receiptsDirectory();
+  const upgradeCommands = {
+    rollback: (receipt) => rollbackCommands(receipt, { d1ConfigFlag, workerConfigFlag: apiConfigFlag }),
+    release: () => releaseCommand({ workerConfigFlag: apiConfigFlag }),
+  };
+  const probeFreeze = () => (apiUrl ? readFreezeState(apiUrl) : Promise.resolve(null));
 
   /** Read-only. A dry run reads nothing remote: the decision then only names the tree's chain. */
   const preflightUpgrade = async ({ readRemote }) => {
@@ -1598,18 +1598,14 @@ export async function main() {
     }
     console.log(`\n▶ Upgrade pre-flight → D1 "${d1Target}" (read-only)`);
     let meta = null;
-    let frozen = null;
     if (apiUrl) {
       meta = await readMeta(apiUrl);
       if (!meta) console.warn(`⚠ Could not read ${apiUrl}/api/v1/meta: the running code's schema and release are not checked.`);
-      frozen = await readFreezeState(apiUrl);
     } else {
       console.warn(`⚠ The public API origin is unknown: the running code's schema and release and the freeze state are not checked. To check them, ${API_URL_HINT}.`);
     }
-    const previous = latestReceipt(receipts, receiptDatabase);
-    const previousHolds = receiptHoldsFreeze(previous);
-    // Without the API to ask, a receipt that left the store frozen is the evidence.
-    if (frozen === null && previousHolds) frozen = true;
+    // Only what the API answers counts as frozen; a receipt says who froze it, never whether it still is.
+    const frozen = await probeFreeze();
     let remote;
     try {
       remote = await readRemoteLedgers(queryRemoteD1);
@@ -1621,16 +1617,19 @@ export async function main() {
     const treeRelease = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")).version;
     const decision = decideUpgrade({
       tree, remote, meta, frozen, treeRelease,
-      resumable: previousHolds || args.includes("--resume-frozen"),
+      previous: latestReceipt(receipts, receiptDatabase),
+      resumeFrozen: args.includes("--resume-frozen"),
+      freezes: !migrateOnly,
     });
     for (const line of describeUpgradeDecision(decision)) (decision.ok ? console.log : console.error)(line);
     if (!decision.ok) {
       console.error("  Nothing was changed.");
       process.exit(1);
     }
-    return { ...decision, previous: previousHolds ? previous : null };
+    return decision;
   };
 
+  /** The version serving 100% of the API Worker's traffic, or null when Wrangler cannot say (one is never guessed). */
   const readApiVersion = () => {
     try {
       const list = JSON.parse(execSync(`${pnpm} exec wrangler deployments list --json${apiConfigFlag}`, {
@@ -1652,21 +1651,32 @@ export async function main() {
     const decision = await preflightUpgrade({ readRemote: true });
     const effective = migrateOnlyRun ? { ...decision, freeze: false, resume: false } : decision;
     const migrationsApplied = (decision.pending?.length ?? 0) > 0 || decision.resume === true;
+    const apiVersionBefore = migrateOnlyRun ? null : readApiVersion();
+    // A freeze is set only with the way back known: the version to roll back to is the release.
+    if (effective.freeze && !effective.resume && !apiVersionBefore) {
+      console.error(
+        "✗ Wrangler did not name one API Worker version serving 100% of traffic, so a rollback after the migration would have no version to return to. "
+        + `Run ${pnpm} --dir apps/api exec wrangler deployments list${apiConfigFlag}, finish any gradual deployment so one version serves 100%, then deploy again. Nothing was changed.`,
+      );
+      process.exit(1);
+    }
     const receipt = createReceipt({
       database: receiptDatabase,
       worker: config.name ?? null,
       decision: effective,
       startedAt: new Date().toISOString(),
-      apiVersionBefore: migrateOnlyRun ? null : readApiVersion(),
+      apiVersionBefore,
       resumes: effective.resume ? decision.previous : null,
     });
-    const path = relative(root, receiptPath(receipts, receipt));
+    const path = receiptPath(receipts, receipt);
     console.log(`  Receipt: ${path}`);
+    const clock = { sleep, now: () => Date.now() };
     try {
       await runGuardedUpgrade({
         decision: effective,
         receipt,
-        rollbackHint,
+        migrateOnly: migrateOnlyRun,
+        commands: upgradeCommands,
         steps: {
           now: () => new Date().toISOString(),
           saveReceipt: (next) => writeReceipt(receipts, next),
@@ -1676,22 +1686,8 @@ export async function main() {
               cwd: apiDir, input: "1\n", stdio: ["pipe", "inherit", "inherit"],
             });
           },
-          awaitFreeze: async () => {
-            if (!apiUrl) {
-              console.warn("⚠ The API origin is unknown, so the freeze cannot be observed: waiting 30s for it to reach every location.");
-              await sleep(30_000);
-              return;
-            }
-            for (let attempt = 0; attempt < 30; attempt += 1) {
-              if (await readFreezeState(apiUrl) === true) {
-                console.log("✓ The API refuses ordinary requests. Waiting 15s for in-flight requests to finish.");
-                await sleep(15_000);
-                return;
-              }
-              await sleep(3_000);
-            }
-            throw new Error("The API did not start refusing requests within 90s of the freeze being set.");
-          },
+          awaitFreeze: () => awaitObservedFreeze({ probe: probeFreeze, ...clock, log: console.log }),
+          freezeState: probeFreeze,
           bookmark: async () => {
             const output = execSync(`${pnpm} exec wrangler d1 time-travel info ${d1Target} --json${d1ConfigFlag}`, {
               cwd: apiDir, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"],
@@ -1700,35 +1696,24 @@ export async function main() {
             if (typeof parsed?.bookmark !== "string" || !parsed.bookmark) throw new Error("Wrangler did not return a D1 bookmark.");
             return { bookmark: parsed.bookmark, takenAt: new Date().toISOString() };
           },
-          migrate: () => runWithRetry(
+          // Once: a guarded upgrade stops at the first failure and hands it to the operator.
+          migrate: () => run(
             `${pnpm} exec wrangler d1 migrations apply ${d1Target} --remote${d1ConfigFlag}`,
             `Apply D1 migrations → ${d1Target} (remote)`,
             apiDir,
           ),
           appliedCount: () => Number(queryRemoteD1("SELECT count(*) AS n FROM d1_migrations")[0]?.n),
-          deployApi: () => {
-            if (!migrateOnlyRun) deployTarget("api", apiDeployConfigPath, plan, pluginSandbox);
-          },
-          verifyApi: async () => {
-            if (migrateOnlyRun) return;
-            await verifyPostDeployTarget("api", config, apiDeployConfigPath, {
-              healthOnly, deploymentUrls, migrationsApplied, databaseProvider,
-            });
-          },
+          deployApi: () => deployTarget("api", apiDeployConfigPath, plan, pluginSandbox),
+          verifyApi: () => verifyPostDeployTarget("api", config, apiDeployConfigPath, {
+            healthOnly, deploymentUrls, migrationsApplied, databaseProvider,
+          }),
           releaseFreeze: async () => {
             console.log(`\n▶ Release the freeze: delete ${FREEZE_SECRET} on the API Worker`);
             execSync(`${pnpm} exec wrangler secret delete ${FREEZE_SECRET}${apiConfigFlag}`, {
               cwd: apiDir, stdio: ["ignore", "inherit", "inherit"],
             });
-            if (!apiUrl) return;
-            for (let attempt = 0; attempt < 20; attempt += 1) {
-              if (await readFreezeState(apiUrl) === false) {
-                console.log("✓ The API serves ordinary requests again.");
-                return;
-              }
-              await sleep(3_000);
-            }
-            console.warn("⚠ The API still answered database_migration_in_progress 60s after the release; check it with pnpm ops:check.");
+            await awaitObservedRelease({ probe: probeFreeze, ...clock });
+            console.log("✓ The API serves ordinary requests again.");
           },
         },
       });

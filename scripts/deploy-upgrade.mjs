@@ -7,30 +7,42 @@
 //      history this tree does not (a newer release deployed, two branches each
 //      adding a migration, a deployed migration edited, a file half applied).
 //   2. When migrations are pending on a store with data: freeze writes
-//      (`DATABASE_MIGRATION_FREEZE` on the API Worker), take a D1 Time Travel
-//      bookmark once in-flight writes have drained, and write the receipt
-//      (bookmark, time, database, migration range, the API version before).
-//   3. Migrate, deploy the API Worker, verify it, then release the freeze.
+//      (`DATABASE_MIGRATION_FREEZE` on the API Worker), watch the API refuse
+//      requests for a minute while old invocations drain, take a D1 Time
+//      Travel bookmark, and write the receipt (bookmark, time, database,
+//      migration range, the API Worker version that served before).
+//   3. Migrate, deploy the API Worker, verify it, then release the freeze and
+//      watch the API serve again.
 //
-// A failure releases the freeze whenever the code and the schema are still a
-// matched pair (both old): the store is exactly as before. Once the schema has
-// changed it keeps the store frozen, because releasing would let the old code
-// write to a schema it was not built for, and because a frozen store has
-// taken no write since the bookmark, so restoring it loses nothing. The
-// receipt and the message name both ways out: deploy again (fix forward), or
-// restore the bookmark, roll the API Worker back and release (roll back).
+// Frozen means observed: only the API answering 503 database_migration_in_progress
+// counts, never a receipt. A failure releases the freeze while the code and
+// the schema still match (both old). Once the schema changed it keeps the
+// store frozen: the old code must not write to a schema it was not built for,
+// and a frozen store has taken no write since the bookmark, so a restore
+// loses nothing. Every outcome's words say what is true and the next step.
+//
+// How Wrangler changes a Worker here (wrangler 4.161, read from its source):
+// `secret put` and `secret delete` send the secret change to the Worker's
+// secrets endpoint, which makes a new version from the latest one and deploys
+// it (error 10215 when the latest version is not the deployed one). Secrets
+// belong to each version, so `wrangler rollback <version>` deploys that
+// version with its own secrets (after confirming the changed ones, code
+// 10220): rolling back to the version from before the freeze is itself the
+// release, and a `secret delete` after it would act on the latest version,
+// which no longer serves.
 //
 // Every side effect is an injected function: deploy.mjs passes Wrangler and
 // fetch, the tests pass fakes.
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
 import { parseRewriteDeclarations } from "../packages/database/scripts/migration-writes.mjs";
 
 export const FREEZE_SECRET = "DATABASE_MIGRATION_FREEZE";
 export const RECEIPT_CONTRACT = "scalius-deploy-receipt/v1";
-/** Where receipts are written, relative to the repository root (git-ignored). */
-export const RECEIPT_DIRECTORY = "deploy-receipts";
+/** Where receipts are written by default: outside every checkout, so removing a worktree keeps them. */
+export const RECEIPT_DIRECTORY = "~/.scalius/deploy-receipts";
 /** The first migration that records itself in `scalius_schema_migrations`. */
 const FIRST_RELEASE_LEDGER_VERSION = 50;
 const FREEZE_RESPONSE_CODE = "database_migration_in_progress";
@@ -178,11 +190,14 @@ const refuse = (code, message) => ({ ok: false, code, message });
 
 /**
  * The pre-flight decision. `remote` is null when the database was not read (a
- * dry run); `meta` is null when the API was not read. `frozen` is the freeze
- * probe's answer; `resumable` says a receipt here (or the operator's
- * `--resume-frozen`) shows that a deploy, not a cutover, holds that freeze.
+ * dry run); `meta` is null when the API was not read. `frozen` is what the
+ * freeze probe observed: true, false, or null when the API could not be asked.
+ * `previous` is the newest receipt for the database; `resumeFrozen` is the
+ * operator's `--resume-frozen`, for a failed deploy's freeze whose receipt is
+ * on another machine. `freezes` is false for `--migrate-only`, which never
+ * freezes and so needs no API to watch.
  */
-export function decideUpgrade({ tree, remote = null, meta = null, frozen = null, resumable = false, treeRelease = null }) {
+export function decideUpgrade({ tree, remote = null, meta = null, frozen = null, previous = null, resumeFrozen = false, treeRelease = null, freezes = true }) {
   const latest = tree.at(-1);
   if (!latest) return refuse("no_migrations", "This tree has no migrations to compare with the database.");
 
@@ -213,14 +228,22 @@ export function decideUpgrade({ tree, remote = null, meta = null, frozen = null,
     }
   }
 
-  if (frozen === true && !resumable) {
+  // Frozen is what the API answers, never what a receipt says: a receipt stays
+  // "held" after an operator released by hand, or a kill between its save and
+  // the Wrangler call.
+  const receiptHolds = receiptHoldsFreeze(previous);
+  if (frozen === true && !receiptHolds && !resumeFrozen) {
     return refuse("frozen_by_someone_else", "The store is frozen (its API answers database_migration_in_progress) and no deploy receipt here says a deploy froze it: "
-      + "a database cutover or another operator may hold the freeze. Finish that work first. If a failed deploy from another machine left it, "
-      + "copy that machine's receipt into deploy-receipts/ or pass --resume-frozen, then deploy again.");
+      + "a database cutover or another operator may hold the freeze. Finish that work first. If a failed deploy on another machine left it, "
+      + `copy that machine's receipt into ${RECEIPT_DIRECTORY}/<database>/ or pass --resume-frozen, then deploy again.`);
+  }
+  if (frozen === null && receiptHolds) {
+    return refuse("freeze_unobservable", `The last deploy receipt (${previous.startedAt}) says that deploy left the store frozen, but the API could not be asked whether it still is. `
+      + "Pass --api-url with the store's API origin, reachable from here, and deploy again; nothing was changed.");
   }
 
   if (!remote) {
-    return { ok: true, remoteRead: false, latest: latest.name, pending: null, freeze: false, recoveryPoint: false, resume: false, firstInstall: false };
+    return { ok: true, remoteRead: false, latest: latest.name, pending: null, freeze: false, recoveryPoint: false, resume: false, firstInstall: false, notes: [] };
   }
 
   const known = new Set(tree.map((migration) => migration.file));
@@ -255,13 +278,26 @@ export function decideUpgrade({ tree, remote = null, meta = null, frozen = null,
   ];
   if (halfApplied.length > 0) {
     const names = halfApplied.map((version) => byVersion.get(version)?.name ?? String(version));
-    return refuse("half_applied", `The database's two migration ledgers disagree about ${listNames(names)}: a migration may have applied in part. `
-      + `Do not migrate on top of it. Restore the recovery point in the last deploy receipt (${RECEIPT_DIRECTORY}/), then deploy again.`);
+    // A restore is advised only for the bookmark of the deploy that did this, and only while the store stayed frozen since.
+    const cause = previous?.outcome === "failed-frozen" && frozen === true && receiptHolds && previous.recoveryPoint?.bookmark ? previous : null;
+    const advice = cause
+      ? `The deploy of ${cause.startedAt} stopped there and the store has stayed frozen since, so restoring its recovery point loses no write: `
+        + `pnpm --dir apps/api exec wrangler d1 time-travel restore ${cause.database} --bookmark=${cause.recoveryPoint.bookmark}, then deploy again.`
+      : "Investigate first: compare d1_migrations, scalius_schema_migrations and the file's statements. Do not restore a bookmark blindly: a restore loses every write since it was taken.";
+    return refuse("half_applied", `The database's two migration ledgers disagree about ${listNames(names)}: a migration may have applied in part. Do not migrate on top of it. ${advice}`);
   }
 
   const pending = tree.slice(remote.applied.length);
   const firstInstall = remote.applied.length === 0;
   const resume = frozen === true;
+  if (freezes && pending.length > 0 && !firstInstall && !resume && frozen === null) {
+    return refuse("freeze_unobservable", `${pending.length} migration(s) are pending on a store with data. The deploy freezes the store first and must watch the freeze take effect before the bookmark, `
+      + "but the API could not be asked. Pass --api-url with the store's API origin, reachable from here, and deploy again; nothing was changed.");
+  }
+  const notes = [];
+  if (receiptHolds && frozen === false) {
+    notes.push(`The last receipt (${previous.startedAt}) says its freeze was held, but the API serves: that freeze was released outside the deploy. This deploy treats the store as live.`);
+  }
   return {
     ok: true,
     remoteRead: true,
@@ -271,9 +307,13 @@ export function decideUpgrade({ tree, remote = null, meta = null, frozen = null,
     pending,
     firstInstall,
     resume,
+    // A resumed freeze: did the deploy that left it change the schema? Unknown counts as yes (the side that keeps it frozen).
+    resumeSchemaChanged: resume ? previous?.schemaChanged !== false : false,
+    previous: resume ? previous : null,
     // A store with data is frozen around its migrations; a resumed freeze is finished and released.
     freeze: resume || (pending.length > 0 && !firstInstall),
     recoveryPoint: pending.length > 0 && !firstInstall,
+    notes,
   };
 }
 
@@ -299,6 +339,7 @@ export function describeUpgradeDecision(decision) {
       for (const { table, basis } of migration.rewrites ?? []) lines.push(`  ${migration.name} rewrites ${table}: ${basis}`);
     }
   }
+  for (const note of decision.notes ?? []) lines.push(`  ${note}`);
   if (decision.resume) lines.push("  The store is still frozen by an earlier deploy: this one finishes it and releases the freeze.");
   else if (decision.freeze) lines.push("  Writes are frozen from before the bookmark until the new API is verified (planned downtime; probes stay up).");
   return lines;
@@ -325,32 +366,45 @@ export function createReceipt({ database, worker, decision, startedAt, apiVersio
     },
     recoveryPoint: resumes?.recoveryPoint ?? null,
     freeze: { held: decision.resume === true, setByThisDeploy: false, released: false },
+    schemaChanged: decision.resume === true ? decision.resumeSchemaChanged !== false : false,
     outcome: "in-progress",
     steps: [],
   };
 }
 
+const WRANGLER = "pnpm --dir apps/api exec wrangler";
+
+/** The one command that releases a freeze while the version holding it serves. */
+export function releaseCommand({ wranglerPrefix = WRANGLER, workerConfigFlag = "" } = {}) {
+  return `${wranglerPrefix} secret delete ${FREEZE_SECRET}${workerConfigFlag}`;
+}
+
 /**
- * The commands that take a receipt's store back to its recovery point, in
- * this order: restore the database while the store is still frozen (no write
- * is lost), roll the API Worker back to the version before the deploy, then
- * release the freeze (if the rollback already dropped it, Wrangler answers
- * that the secret does not exist: nothing is left to release).
+ * The way back to a receipt's recovery point, in the order that loses
+ * nothing: restore the database while the store is still frozen, then roll
+ * the API Worker back to the version that served before the freeze. That
+ * version has no freeze secret, so the rollback also releases the store; no
+ * `secret delete` follows it (it would edit the latest version, which no
+ * longer serves). Without the version id, the step says how to find it: in
+ * `wrangler deployments list` the deployment just before this deploy is the
+ * freeze (`secret put`: the old code with the freeze), and the one before
+ * that is the version to roll back to.
  */
-export function rollbackCommands(receipt, { wranglerPrefix = "pnpm --dir apps/api exec wrangler", d1ConfigFlag = "", workerConfigFlag = "" } = {}) {
+export function rollbackCommands(receipt, { wranglerPrefix = WRANGLER, d1ConfigFlag = "", workerConfigFlag = "" } = {}) {
   const commands = [];
   if (receipt.recoveryPoint?.bookmark) {
     commands.push(`${wranglerPrefix} d1 time-travel restore ${receipt.database} --bookmark=${receipt.recoveryPoint.bookmark}${d1ConfigFlag}`);
   }
-  if (receipt.apiVersionBefore) commands.push(`${wranglerPrefix} rollback ${receipt.apiVersionBefore}${workerConfigFlag}`);
-  commands.push(`${wranglerPrefix} secret delete ${FREEZE_SECRET}${workerConfigFlag}`);
+  commands.push(receipt.apiVersionBefore
+    ? `${wranglerPrefix} rollback ${receipt.apiVersionBefore} --message "Back to before the ${receipt.startedAt} upgrade"${workerConfigFlag}`
+    : `# The version from before the freeze is not recorded: run ${wranglerPrefix} deployments list${workerConfigFlag}, skip the freeze deployment (created by secret put just before this deploy), and run ${wranglerPrefix} rollback <the version before it>${workerConfigFlag}`);
   return commands;
 }
 
-/** Where receipts live: `SCALIUS_DEPLOY_RECEIPTS`, else `deploy-receipts/` in the repository. */
-export function receiptsDirectory(root, env = process.env) {
+/** Where receipts live: `SCALIUS_DEPLOY_RECEIPTS`, else ~/.scalius/deploy-receipts (outside every checkout). */
+export function receiptsDirectory(env = process.env, home = homedir()) {
   const configured = String(env.SCALIUS_DEPLOY_RECEIPTS ?? "").trim();
-  return configured ? resolve(configured) : join(root, RECEIPT_DIRECTORY);
+  return configured ? resolve(configured) : join(home, ".scalius", "deploy-receipts");
 }
 
 export function receiptPath(directory, receipt) {
@@ -384,9 +438,53 @@ export function latestReceipt(directory, database) {
   return null;
 }
 
-/** Whether a receipt shows a deploy that left the store frozen. */
+/** Whether a receipt says its deploy left the store frozen (evidence of who froze it, never of whether it still is). */
 export function receiptHoldsFreeze(receipt) {
   return Boolean(receipt && receipt.freeze?.held === true && receipt.freeze?.released !== true);
+}
+
+/**
+ * Wait until the API is seen refusing ordinary requests continuously for
+ * `holdMs` (default 60 s): repeated answers, not one location's first. An
+ * invocation that started before the freeze keeps its old environment, so the
+ * hold is what lets requests and their after-response work finish. Throws when
+ * no refusal is seen within `firstWithinMs` or the hold never completes within
+ * `totalMs`.
+ */
+export async function awaitObservedFreeze({ probe, sleep, now, firstWithinMs = 90_000, holdMs = 60_000, totalMs = 240_000, intervalMs = 3_000, log = () => {} }) {
+  const started = now();
+  let since = null;
+  let observations = 0;
+  for (;;) {
+    const state = await probe();
+    const at = now();
+    if (state === true) {
+      if (since === null) {
+        since = at;
+        log("✓ The API refuses ordinary requests; holding while old invocations drain.");
+      }
+      observations += 1;
+      if (at - since >= holdMs && observations >= 3) return { observations, heldMs: at - since };
+    } else {
+      since = null;
+      observations = 0;
+      if (at - started >= firstWithinMs && state !== true) {
+        throw new Error(`The API did not start refusing requests within ${Math.round(firstWithinMs / 1000)}s of the freeze being set.`);
+      }
+    }
+    if (at - started >= totalMs) throw new Error(`The API's refusals did not hold for ${Math.round(holdMs / 1000)}s within ${Math.round(totalMs / 1000)}s.`);
+    await sleep(intervalMs);
+  }
+}
+
+/** Wait until the API serves ordinary requests again; throws when it still refuses after `withinMs`. */
+export async function awaitObservedRelease({ probe, sleep, now, withinMs = 60_000, intervalMs = 3_000 }) {
+  const started = now();
+  for (;;) {
+    if (await probe() === false) return;
+    if (now() - started >= withinMs) throw new Error(`The API still answered database_migration_in_progress ${Math.round(withinMs / 1000)}s after the release.`);
+    await sleep(intervalMs);
+  }
 }
 
 export class GuardedUpgradeError extends Error {
@@ -405,87 +503,126 @@ const errorText = (error) => (error instanceof Error ? error.message : String(er
  * Freeze, recovery point, migrate, deploy the API, verify, release.
  *
  * steps: {
- *   setFreeze(), awaitFreeze(), bookmark() -> { bookmark, takenAt },
- *   migrate(), appliedCount() -> number, deployApi(), verifyApi(),
- *   releaseFreeze(), saveReceipt(receipt), now() -> ISO string,
+ *   setFreeze(), awaitFreeze() (throws unless the freeze is observed holding),
+ *   freezeState() -> true | false | null (what the API answers now),
+ *   bookmark() -> { bookmark, takenAt }, migrate(), appliedCount() -> number,
+ *   deployApi(), verifyApi(), releaseFreeze() (throws unless the release is observed),
+ *   saveReceipt(receipt), now() -> ISO string,
  * }
+ * `migrateOnly` (`--migrate-only`): no freeze, no deploy, no verification.
+ * `commands`: { rollback(receipt) -> string[], release() -> string }.
  *
  * Outcomes written to the receipt (and on the thrown error):
- *   deployed          new code on the new schema, freeze released (or never set)
- *   failed-unchanged  the schema is as before and the freeze released: old code serves as before
- *   failed-frozen     the schema changed (or may have) and the store stays frozen; no write since the bookmark
- *   deployed-frozen   new code verified on the new schema, but releasing the freeze failed
- *   failed-first-install  a new database stopped part way; nothing was serving from it
+ *   deployed                 new code verified on the new schema; any freeze released and seen released
+ *   migrated                 --migrate-only applied its migrations (the running code serves them)
+ *   deployed-frozen          new code verified, but the store still refuses writes (a release that did not take, or a freeze the new version inherited)
+ *   failed-unchanged         nothing changed: old code on the old schema serves as before
+ *   failed-unchanged-frozen  nothing changed, but the freeze this run set did not release: the store refuses writes
+ *   failed-freeze-unknown    the freeze call failed and the API could not be asked whether it took
+ *   failed-frozen            the schema changed (or may have) and the store stays frozen; no write since the bookmark
+ *   failed-deploy            a code-only deploy's upload failed: Wrangler normally leaves the previous version serving
+ *   failed-unverified        a code-only deploy's new code serves but did not verify
+ *   failed-migrate-partial   --migrate-only applied some files, not all: the running code serves a schema part way
+ *   failed-first-install     a new database stopped part way; nothing served from it
  */
-export async function runGuardedUpgrade({ decision, receipt, steps, log = console.log, rollbackHint = rollbackCommands }) {
+export async function runGuardedUpgrade({ decision, receipt, steps, log = console.log, migrateOnly = false, commands = {} }) {
+  const rollback = commands.rollback ?? ((next) => rollbackCommands(next));
+  const release = commands.release ?? (() => releaseCommand());
   const pending = decision.pending ?? [];
+  // Observed by the pre-flight (a resume), or once this run's freeze is set.
   let frozen = decision.resume === true;
-  // A resumed freeze was left by a deploy whose schema had already changed.
-  let schemaChanged = decision.resume === true;
+  let schemaChanged = decision.resume === true && decision.resumeSchemaChanged !== false;
 
   const record = async (step, ok, detail) => {
     receipt.steps.push({ step, at: steps.now(), ok, ...(detail ? { detail } : {}) });
+    receipt.schemaChanged = schemaChanged;
     await steps.saveReceipt(receipt);
   };
   const finish = async (outcome) => {
     receipt.outcome = outcome;
+    receipt.schemaChanged = schemaChanged;
     receipt.finishedAt = steps.now();
     await steps.saveReceipt(receipt);
   };
+  const stop = async (step, outcome, message) => {
+    await finish(outcome);
+    throw new GuardedUpgradeError(message, { outcome, step, receipt });
+  };
+  const rollbackText = () => rollback(receipt).map((command) => `  ${command}`).join("\n");
 
   const fail = async (step, error) => {
     await record(step, false, errorText(error));
-    let outcome;
-    let advice;
+    const cause = `${step} failed: ${errorText(error)}`;
     if (frozen && !schemaChanged) {
       try {
         await steps.releaseFreeze();
         frozen = false;
         receipt.freeze.released = true;
         await record("release-freeze", true);
-        outcome = "failed-unchanged";
-        advice = "No migration was applied and the freeze is released: the store serves its old code on its old schema, as before. Fix the cause and deploy again.";
+        return stop(step, "failed-unchanged", `${cause}\nNo migration was applied and the freeze is released: the store serves its old code on its old schema, as before. Fix the cause and deploy again.`);
       } catch (releaseError) {
         await record("release-freeze", false, errorText(releaseError));
-        outcome = "failed-frozen";
-        advice = `No migration was applied, but releasing the freeze failed: the store refuses writes. Release it: ${rollbackHint(receipt).at(-1)}`;
+        return stop(step, "failed-unchanged-frozen", `${cause}\nNo migration was applied, but the freeze this deploy set did not release (${errorText(releaseError)}): the store refuses writes. Release it:\n  ${release()}`);
       }
-    } else if (frozen) {
-      outcome = "failed-frozen";
-      advice = [
-        "The schema changed but the new code is not verified, so the store stays frozen: the old code must not write to the new schema, and nothing has been written since the bookmark.",
-        "Either fix the cause and deploy again (the pre-flight finds this freeze and finishes the upgrade),",
-        "or roll back, losing nothing:",
-        ...rollbackHint(receipt).map((command) => `  ${command}`),
-      ].join("\n");
-    } else if (decision.firstInstall && schemaChanged) {
-      outcome = "failed-first-install";
-      advice = "The new database is part way migrated and nothing serves from it yet. Fix the cause and deploy again: Wrangler continues from the last applied file.";
-    } else {
-      outcome = "failed-unchanged";
-      advice = "Nothing was changed by this step. Fix the cause and deploy again.";
     }
-    await finish(outcome);
-    throw new GuardedUpgradeError(`${step} failed: ${errorText(error)}\n${advice}`, { outcome, step, receipt });
+    if (frozen) {
+      return stop(step, "failed-frozen", [
+        cause,
+        "The schema changed but the new code is not verified, so the store stays frozen: the old code must not write to the new schema, and nothing has been written since the bookmark.",
+        "Either fix the cause and deploy again (the pre-flight sees this freeze, finds the receipt and finishes the upgrade),",
+        "or roll back, losing nothing (the rollback also releases the store):",
+        rollbackText(),
+      ].join("\n"));
+    }
+    if (decision.firstInstall && schemaChanged) {
+      return stop(step, "failed-first-install", `${cause}\nThe new database is part way migrated and nothing serves from it yet. Fix the cause and deploy again: Wrangler continues from the last applied file.`);
+    }
+    if (migrateOnly && schemaChanged) {
+      return stop(step, "failed-migrate-partial", `${cause}\nSome migrations applied and some did not; the running API now serves a schema it was not built for. `
+        + `Finish with pnpm run deploy (it freezes the store and ships the matching code), or restore the bookmark taken before (it loses every write since):\n${rollbackText()}`);
+    }
+    if (step === "verify-api") {
+      return stop(step, "failed-unverified", `${cause}\nThe new code is serving but did not verify. Investigate (pnpm ops:check), or roll it back:\n${rollbackText()}`);
+    }
+    if (step === "deploy-api") {
+      return stop(step, "failed-deploy", `${cause}\nThe API upload failed; Wrangler normally leaves the previous version serving. Confirm with pnpm --dir apps/api exec wrangler deployments list, then deploy again.`);
+    }
+    return stop(step, "failed-unchanged", `${cause}\nNothing was changed. Fix the cause and deploy again.`);
   };
 
-  if (decision.freeze && !decision.resume) {
-    // Counted as frozen before the call, and on disk before it: a lost answer
-    // to a successful freeze, or a deploy killed mid-call, must still be released.
-    frozen = true;
-    receipt.freeze.held = true;
-    receipt.freeze.setByThisDeploy = true;
-  }
   await steps.saveReceipt(receipt);
 
-  if (decision.freeze && !decision.resume) {
+  if (decision.freeze && !decision.resume && !migrateOnly) {
+    receipt.freeze.setByThisDeploy = true;
     try {
       await steps.setFreeze();
-      await record("set-freeze", true);
+    } catch (error) {
+      // Did the freeze take anyway (a lost answer)? Only what the API answers says.
+      let state = null;
+      try {
+        state = await steps.freezeState();
+      } catch {
+        state = null;
+      }
+      if (state === true) {
+        frozen = true;
+        receipt.freeze.held = true;
+        await fail("set-freeze", error);
+      }
+      receipt.freeze.setByThisDeploy = false;
+      await record("set-freeze", false, errorText(error));
+      if (state === false) return stop("set-freeze", "failed-unchanged", `set-freeze failed: ${errorText(error)}\nThe freeze was not applied and nothing changed: the store serves as before. Fix the cause and deploy again.`);
+      return stop("set-freeze", "failed-freeze-unknown", `set-freeze failed: ${errorText(error)}\nThe API could not be asked whether the freeze took. If ${"/api/v1/platform"} answers 503 database_migration_in_progress, release it:\n  ${release()}`);
+    }
+    // Wrangler set it: from here the freeze is this run's to release.
+    frozen = true;
+    receipt.freeze.held = true;
+    await record("set-freeze", true);
+    try {
       await steps.awaitFreeze();
       await record("freeze-effective", true);
     } catch (error) {
-      await fail("set-freeze", error);
+      await fail("freeze-effective", error);
     }
   }
 
@@ -496,7 +633,7 @@ export async function runGuardedUpgrade({ decision, receipt, steps, log = consol
       receipt.recoveryPoint = { bookmark: point.bookmark, takenAt: point.takenAt, database: receipt.database };
       await record("recovery-point", true, point.bookmark);
       log(`✓ Recovery point: D1 bookmark ${point.bookmark} at ${point.takenAt}.`);
-      log(`  Restore (destructive; while still frozen it loses no write): ${rollbackHint(receipt)[0]}`);
+      log(`  Restore (destructive; while still frozen it loses no write): ${rollback(receipt)[0]}`);
     } catch (error) {
       await fail("recovery-point", error);
     }
@@ -521,6 +658,11 @@ export async function runGuardedUpgrade({ decision, receipt, steps, log = consol
     }
   }
 
+  if (migrateOnly) {
+    await finish("migrated");
+    return receipt;
+  }
+
   try {
     await steps.deployApi();
     await record("deploy-api", true);
@@ -543,11 +685,20 @@ export async function runGuardedUpgrade({ decision, receipt, steps, log = consol
       await record("release-freeze", true);
     } catch (error) {
       await record("release-freeze", false, errorText(error));
-      await finish("deployed-frozen");
-      throw new GuardedUpgradeError(
-        `The new API is deployed and verified, but releasing the freeze failed: the store refuses writes. Release it: ${rollbackHint(receipt).at(-1)}`,
-        { outcome: "deployed-frozen", step: "release-freeze", receipt },
-      );
+      return stop("release-freeze", "deployed-frozen", `The new API is deployed and verified, but the release did not take (${errorText(error)}): the store refuses writes. Release it:\n  ${release()}\nthen check pnpm ops:check.`);
+    }
+  } else {
+    // A rollback leaves the freeze on the Worker's latest version; a later deploy inherits that version's secrets.
+    let state = null;
+    try {
+      state = await steps.freezeState();
+    } catch {
+      state = null;
+    }
+    if (state === true) {
+      await record("inherited-freeze", false, "the new version answers database_migration_in_progress");
+      return stop("verify-api", "deployed-frozen", `The new API is deployed and verified, but it refuses writes: it inherited ${FREEZE_SECRET} from the Worker's latest version (a rollback leaves the freeze there). `
+        + `This deploy set no freeze; if no cutover holds one, release it:\n  ${release()}`);
     }
   }
   await finish("deployed");
