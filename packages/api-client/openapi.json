@@ -33676,6 +33676,10 @@
             "type": "boolean",
             "description": "Runs a pixel that hears buyer events on every page, checkout included, in a sandboxed frame, once the buyer's consent allows it."
           },
+          "storefrontBuyerPages": {
+            "type": "boolean",
+            "description": "Draws its header or footer on the buyer's account, receipt and order pages, rebuilt inert inside a shadow root: no app code runs there and nothing it draws takes input."
+          },
           "buyerFiles": {
             "type": "boolean",
             "description": "Asks buyers to upload files (a checkout attribute or line input of type file): it receives their files."
@@ -33710,6 +33714,7 @@
           "storefrontCode",
           "storefrontConnect",
           "storefrontPixel",
+          "storefrontBuyerPages",
           "buyerFiles",
           "features",
           "messageRecipients"
