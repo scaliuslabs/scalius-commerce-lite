@@ -30,6 +30,13 @@
 //   its signed-in and guest versions follow the sign-in hint, its cart count
 //   shows the browser's cart, and on a phone its menu drawer opens over the page
 //   on a press and closes with Escape;
+// - the cart count reads the store's own cart (`cart:v3`) at load, after
+//   another tab adds, after a sign-in on the drawn header, and after moving to
+//   the next page and back, guest and signed in, at 390 and 1280 px;
+// - with JavaScript off (a browser context without it): the theme's signed-in
+//   and guest versions follow the server's hint on the host, and the store's
+//   own "Menu" button opens the theme's drawer as the store's panel, which
+//   Escape closes;
 // - no request answers 5xx.
 //
 // From the repo root (under the lock: it starts a Vite server and a browser):
@@ -357,6 +364,7 @@ for (const width of WIDTHS) {
         return button ? getComputedStyle(button).display !== "none" && !button.hidden : false;
       });
       if (storeSwitch) problems.push("scheme: the store's switch still shows beside the theme's own");
+      if (await page.locator(".buyer-chrome-noscript-bar").count() !== 0) problems.push("no script: the store's no-script menu button is drawn with scripts on");
       // Its own switch flips the page and the chrome.
       await page.evaluate(() => document.querySelector('scalius-chrome[data-chrome="header"]').shadowRoot.querySelector(".gc-scheme").scrollIntoView());
       await page.locator('scalius-chrome[data-chrome="header"] .gc-scheme').click();
@@ -400,6 +408,110 @@ for (const width of WIDTHS) {
     fail(`${label} (a theme's sheet)`, problems);
     if (!failures.some((failure) => failure.startsWith(`${label} `))) console.log(`✓ ${label}`);
   }
+}
+
+// ── The cart count against the store's own cart, as the cart changes under a drawn header.
+/** The header's count and the store's own (the cart the store keeps in the browser), as the header words it. */
+const counts = (page) => page.evaluate(() => {
+  const own = JSON.parse(localStorage.getItem("cart:v3") ?? "null")?.totalItems ?? 0;
+  const header = document.querySelector('scalius-chrome[data-chrome="header"]')?.shadowRoot?.querySelector(".gc-count")?.textContent?.trim() ?? null;
+  return { header, store: own > 0 ? String(own) : "" };
+});
+/** The seeded cart with one more of each line: a different total, as a sign-in's merge or another tab's add leaves it. */
+const MORE = CART ? (() => {
+  const cart = JSON.parse(CART);
+  for (const item of Object.values(cart.items)) item.quantity += 1;
+  cart.totalItems = Object.values(cart.items).reduce((sum, item) => sum + item.quantity, 0);
+  return JSON.stringify(cart);
+})() : null;
+for (const width of [390, 1280]) {
+  for (const signedIn of [false, true]) {
+    const label = `${width}px ${signedIn ? "signed in" : "guest"} (cart count)`;
+    const { context, page, errors } = await open(ids.theme, width, "light", { signedIn });
+    draws += 1;
+    const problems = [];
+    const same = async (when) => {
+      await page.waitForTimeout(300);
+      const { header, store } = await counts(page);
+      if (header !== store) problems.push(`cart count: ${when}, the header reads ${JSON.stringify(header)}, the store's cart ${JSON.stringify(store)}`);
+    };
+    try {
+      if (!CART) throw new Error("the gallery holds no cart to seed");
+      await same("an empty cart at load");
+      // Another tab adds to the cart.
+      const other = await context.newPage();
+      await other.goto(`${gallery.url}/__gallery/e/${ids.none}`, { waitUntil: "load" });
+      await other.evaluate((value) => localStorage.setItem("cart:v3", value), CART);
+      await same("after another tab's add");
+      // A sign-in on the drawn header: the hint and the merged cart arrive together.
+      if (!signedIn) {
+        await context.addCookies([{ name: "cs_auth", value: "1", url: gallery.url }]);
+        await other.evaluate((value) => localStorage.setItem("cart:v3", value), MORE);
+        await page.evaluate(() => window.dispatchEvent(new CustomEvent("customer-login")));
+        await same("after a sign-in on the drawn header");
+        const versions = await page.evaluate(() => {
+          const root = document.querySelector('scalius-chrome[data-chrome="header"]')?.shadowRoot;
+          const shown = (css) => { const element = root?.querySelector(css); return Boolean(element) && getComputedStyle(element).display !== "none"; };
+          return { account: shown(".gc-account"), signIn: shown(".gc-sign-in") };
+        });
+        if (!versions.account || versions.signIn) problems.push(`signed in: after a sign-in on the drawn header the theme shows ${JSON.stringify(versions)}`);
+      }
+      await other.close();
+      // Account page to account page, and back to one the cart changed under.
+      await page.goto(`${gallery.url}/__gallery/e/${ids.theme}`, { waitUntil: "load" });
+      await same("on the next account page");
+      await page.goto(`${gallery.url}/__gallery/e/${ids.none}`, { waitUntil: "load" });
+      await page.evaluate((value) => localStorage.setItem("cart:v3", value), signedIn ? MORE : CART);
+      await page.goBack({ waitUntil: "load" });
+      await same("back on an account page after the cart changed");
+    } catch (error) {
+      problems.push(`cart count: could not be checked (${String(error?.message ?? error).split("\n")[0]})`);
+    }
+    problems.push(...errors.map((error) => `request: ${error}`));
+    await context.close();
+    fail(label, problems);
+    if (problems.length === 0) console.log(`✓ ${label}`);
+  }
+}
+
+// ── With JavaScript off: the server's sign-in hint, and the store's own button for the theme's drawer.
+for (const signedIn of [false, true]) {
+  const label = `390px ${signedIn ? "signed in" : "guest"} (no script)`;
+  const context = await browser.newContext({ viewport: { width: 390, height: 800 }, javaScriptEnabled: false });
+  if (signedIn) await context.addCookies([{ name: "cs_tok", value: "gallery-session", url: gallery.url }, { name: "cs_auth", value: "1", url: gallery.url }]);
+  const page = await context.newPage();
+  const errors = [];
+  const entry = `${gallery.url}/__gallery/e/${ids.theme}`;
+  // The signed-in account itself answers 503 here (the entry's fixture holds no account for the session): its
+  // chrome is what is checked, so only the page's other requests count.
+  page.on("response", (response) => { if (response.status() >= 500 && response.url() !== entry) errors.push(`${response.status()} ${response.url()}`); });
+  draws += 1;
+  const problems = [];
+  try {
+    await page.goto(entry, { waitUntil: "load" });
+    const seen = await page.evaluate(() => {
+      const host = document.querySelector('scalius-chrome[data-chrome="header"]');
+      const shown = (css) => { const element = host?.shadowRoot?.querySelector(css); return Boolean(element) && getComputedStyle(element).display !== "none"; };
+      return { hint: host?.hasAttribute("data-scalius-signed-in") ?? null, account: shown(".gc-account"), signIn: shown(".gc-sign-in") };
+    });
+    if (seen.hint !== signedIn || seen.account !== signedIn || seen.signIn === signedIn) problems.push(`no script: signed-in versions follow no server hint (${JSON.stringify(seen)})`);
+    const button = page.locator(".buyer-chrome-noscript-bar button");
+    if (await button.count() !== 1 || !(await button.isVisible())) problems.push("no script: the store draws no button of its own for the theme's drawer");
+    else {
+      await button.click();
+      await page.waitForTimeout(100);
+      if (!await page.evaluate(() => document.querySelector('[data-buyer-chrome-panel="drawer"]')?.matches(":popover-open") === true)) problems.push("no script: the store's button does not open the theme's drawer");
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(100);
+      if (await page.evaluate(() => document.querySelector('[data-buyer-chrome-panel="drawer"]')?.matches(":popover-open") === true)) problems.push("no script: Escape leaves the drawer open");
+    }
+  } catch (error) {
+    problems.push(`no script: could not be checked (${String(error?.message ?? error).split("\n")[0]})`);
+  }
+  problems.push(...errors.map((error) => `request: ${error}`));
+  await context.close();
+  fail(label, problems);
+  if (problems.length === 0) console.log(`✓ ${label}`);
 }
 
 // ── Each effect alone, and the popover that tries to cover the screen.

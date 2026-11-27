@@ -431,6 +431,9 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         const plan = gallery.galleryRenderPlan(id, origin);
         if (!plan) return sendJson(response, 404, { error: `unknown entry ${id}` });
         const pageModule = await vite.ssrLoadModule(plan.page);
+        // A theme's chrome on the account renders for the browser's own session cookie (signed in or not), as the
+        // store renders a buyer's page: the gate reads the server's sign-in hint with scripts off.
+        if (plan.entry.family === "buyer-chrome") plan.headers = { ...plan.headers, cookie: String(request.headers.cookie ?? "") };
         // Read before the render: the layout payload resets the request's platform origins.
         const fixtureApiUrl = plan.runtime.PUBLIC_API_URL;
         const rendered = await currentEntry.run(plan.entry, () =>

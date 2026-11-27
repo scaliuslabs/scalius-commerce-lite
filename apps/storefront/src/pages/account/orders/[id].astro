@@ -4,8 +4,13 @@
 // in side cards, and a link to the order's printable receipt (order success,
 // which proves the owner by the session). The shell and the tab counts render on the server; the order
 // itself renders in the browser (lib/account-order-detail.ts: payment retry,
-// cancel/return requests, Buy again, the order's conversation).
+// cancel/return requests, Buy again, the order's conversation). Whether the
+// page holds a payment step is decided here, on the server, as the receipt
+// decides it (lib/private-pages/payment-step.ts): only then is it a payment
+// page (the payment provider's scripts, the store's own header and footer),
+// and only then does the browser draw the payment card.
 import { markPaymentPage } from "@/lib/analytics-csp";
+import { orderHoldsPaymentStep } from "@/lib/private-pages/payment-step";
 import Layout from "@/layouts/Layout.astro";
 import AccountShell from "@/components/account/AccountShell.astro";
 import StoreContact from "@/components/StoreContact.astro";
@@ -19,7 +24,7 @@ import { storefrontLanguage } from "@/lib/storefront-language";
 import { pageLanguage } from "@/lib/store-time-zone";
 import { sessionCookieOf } from "@/lib/account-inbox-server";
 import { isOrderId } from "@/lib/account-inbox";
-import { readAccountSummaryForRequest } from "@/lib/account-server";
+import { readAccountOrderPayment, readAccountSummaryForRequest } from "@/lib/account-server";
 import { accountUi as ui } from "@/lib/account-ui";
 import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
@@ -29,10 +34,11 @@ export const prerender = false;
 
 const orderId = Astro.params.id ?? "";
 const signedIn = Boolean(sessionCookieOf(Astro.request));
-const [layoutData, summary, checkoutLanguage] = await Promise.all([
+const [layoutData, summary, checkoutLanguage, payment] = await Promise.all([
   getLayoutData(),
   signedIn ? readAccountSummaryForRequest(Astro.request) : Promise.resolve(null),
   signedIn ? getActiveCheckoutLanguage().catch(() => null) : Promise.resolve(null),
+  signedIn && isOrderId(orderId) ? readAccountOrderPayment(Astro.request, orderId) : Promise.resolve(null),
 ]);
 // The store's language: the page's words, and the checkout language the
 // order renders with in the browser (status, delivery, payment wording).
@@ -48,8 +54,11 @@ const receiptHref = isOrderId(orderId) ? `/order-success?${new URLSearchParams({
 const card = `${ui.card} ${ui.cardBody}`;
 const heading = `${ui.cardTitle} mb-3`;
 const skeleton = "theme-skeleton block";
-// A payment page: only the payment provider's scripts run here, none of the store's (lib/analytics-csp.ts).
-markPaymentPage(Astro.locals);
+// A payment step (a payment the order waits on, a retry or a balance to pay): a payment page, where only the
+// payment provider's scripts run (lib/analytics-csp.ts) and the store's own header and footer draw. An order
+// the API could not read is treated as one; a paid or closed order, another buyer's or none, is not.
+const paymentStep = payment !== null && (payment.ok ? orderHoldsPaymentStep(payment.data) : payment.reason === "unavailable");
+if (paymentStep) markPaymentPage(Astro.locals);
 // The theme's look for the account, only when it set tokens for it: else the page draws as without a theme.
 const look = privateRouteLook(Astro, (await resolveRequestTheme(Astro, layoutData)).theme);
 ---
@@ -65,7 +74,7 @@ const look = privateRouteLook(Astro, (await resolveRequestTheme(Astro, layoutDat
   >
     <a slot="signed-out" href={trackHref} data-astro-prefetch="false" class={ui.secondaryButton}>{orderWords.trackInstead}</a>
 
-    <div data-order-detail-page data-order-id={orderId}>
+    <div data-order-detail-page data-order-id={orderId} data-payment-step={paymentStep ? "" : undefined}>
       {signedIn && <script type="application/json" id="orderCheckoutCopy" set:html={serializeJsonForInlineScript(checkoutCopy)}></script>}
       <noscript>
         <style>#orderLoading { display: none; }</style>
@@ -211,12 +220,11 @@ const look = privateRouteLook(Astro, (await resolveRequestTheme(Astro, layoutDat
 
 <script>
   import { bindOrderDetailPage, loadOrderDetail } from "@/lib/account-order-detail";
-  import { focusMainHeadingIfLost } from "@/lib/focus-main-heading";
 
   if (document.querySelector("[data-order-detail-page]")) {
     bindOrderDetailPage();
     void loadOrderDetail();
-    // Signing in from this page shows the order right here; focus lands on its heading.
-    window.addEventListener("customer-login", () => void loadOrderDetail().then(focusMainHeadingIfLost));
+    // Signing in from this page loads it again: the server decides its payment step for the signed-in buyer.
+    window.addEventListener("customer-login", () => location.reload());
   }
 </script>
