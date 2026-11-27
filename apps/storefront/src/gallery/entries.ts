@@ -63,7 +63,7 @@ export type GalleryPage =
 /** The account's pages the rendered gate draws under a theme's look (every page `PRIVATE_PAGE_ROUTES.account` names but its orders and an order, which the sample account and its own tests draw). */
 export const GALLERY_ACCOUNT_PAGES = [
   "account-inbox", "account-thread", "account-order", "account-profile", "account-profile-dialog", "account-profile-error", "account-profile-remove-address", "account-profile-remove-card",
-  "account-reviews", "account-gift-cards", "account-downloads", "account-warranties", "account-warranty-claim-form", "warranty-claim",
+  "account-reviews", "account-gift-cards", "account-downloads", "account-warranties", "account-warranty-claim-form", "warranty-claim", "account-order-paid",
 ] as const;
 export type GalleryAccountPage = (typeof GALLERY_ACCOUNT_PAGES)[number];
 
@@ -1036,7 +1036,7 @@ export function registerPrivatePagesEntry(id: string, theme: StorefrontThemeDocu
  * stylesheet, a theme's or a hostile one), or the store's own chrome
  * (`none`), with the light or dark switch offered and the device's scheme.
  */
-export function registerBuyerChromeEntry(id: string, chrome: "theme" | "forged" | "none", probeApp: string | null = null): GalleryEntry {
+export function registerBuyerChromeEntry(id: string, chrome: "theme" | "forged" | "none", probeApp: string | null = null, page: "account" | "account-order" | "account-order-paid" = "account"): GalleryEntry {
   const base = galleryEntry(entryId("app", "buyer-ui"))!;
   const theme = clone(base.theme);
   const colors = theme.tokens.colors;
@@ -1044,7 +1044,7 @@ export function registerBuyerChromeEntry(id: string, chrome: "theme" | "forged" 
   const app = probeApp ?? (chrome === "forged" ? "forged.chrome" : "gallery.chrome");
   if (chrome !== "none") theme.apps = { ...theme.apps, skins: { ...theme.apps?.skins, header: { app: `${app}/gallery_header`, values: {} }, footer: { app: `${app}/gallery_footer`, values: {} } } };
   const scenario: GalleryScenario = { menu: "compact", ...(chrome !== "none" ? { buyerChrome: chrome } : {}), ...(probeApp ? { buyerChromeApp: probeApp } : {}) };
-  const entry: GalleryEntry = { id, family: "buyer-chrome", title: `A theme's chrome on the account (${chrome})`, page: "account", theme, focus: WHOLE_PAGE, scenario };
+  const entry: GalleryEntry = { id, family: "buyer-chrome", title: `A theme's chrome on the account (${chrome})`, page, theme, focus: WHOLE_PAGE, scenario };
   registered.set(id, entry);
   return entry;
 }

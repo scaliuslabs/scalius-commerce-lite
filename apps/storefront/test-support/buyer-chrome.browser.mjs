@@ -37,6 +37,9 @@
 //   and guest versions follow the server's hint on the host, and the store's
 //   own "Menu" button opens the theme's drawer as the store's panel, which
 //   Escape closes;
+// - an account order's page: a paid order draws the theme's chrome and no
+//   payment card (no `data-payment-step`); an order the buyer can still pay
+//   draws the store's chrome, marked, with its card;
 // - no request answers 5xx.
 //
 // From the repo root (under the lock: it starts a Vite server and a browser):
@@ -123,6 +126,12 @@ const registerSheet = async (id, sheet) => {
   return (await answer.json()).id;
 };
 const ids = { none: await register("buyer-chrome-none", "none"), theme: await register("buyer-chrome-theme", "theme"), forged: await register("buyer-chrome-forged", "forged") };
+const registerOrder = async (id, page) => {
+  const answer = await fetch(`${gallery.url}/__gallery/buyer-chrome`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, chrome: "theme", page }) });
+  if (!answer.ok) throw new Error(`the gallery refused the ${page} entry (${answer.status})`);
+  return (await answer.json()).id;
+};
+const orders = { paid: await registerOrder("buyer-chrome-order-paid", "account-order-paid"), payable: await registerOrder("buyer-chrome-order-payable", "account-order") };
 // A cart in the browser (the gallery's own seed, as the cart page's entries hold it).
 const index = await fetch(`${gallery.url}/__gallery/index.json`).then((answer) => answer.json());
 const CART = index.entries.find((entry) => entry.storage?.["cart:v3"])?.storage["cart:v3"] ?? null;
@@ -470,6 +479,39 @@ for (const width of [390, 1280]) {
     problems.push(...errors.map((error) => `request: ${error}`));
     await context.close();
     fail(label, problems);
+    if (problems.length === 0) console.log(`✓ ${label}`);
+  }
+}
+
+// ── An account order's page: the payment step decided on the server, the card drawn only where it was.
+for (const width of [390, 1280]) {
+  for (const [kind, id] of Object.entries(orders)) {
+    const label = `${width}px light (an account order, ${kind})`;
+    const { context, page, errors } = await open(id, width, "light");
+    draws += 1;
+    const problems = [];
+    try {
+      await page.waitForSelector("#orderContent:not(.hidden)", { timeout: 10000 });
+      await page.waitForTimeout(300);
+      const seen = await page.evaluate(() => {
+        const card = document.getElementById("orderPaymentRecovery");
+        return {
+          theme: document.querySelector('scalius-chrome[data-chrome="header"]') !== null,
+          marked: document.querySelector("[data-order-detail-page]")?.hasAttribute("data-payment-step") ?? null,
+          card: Boolean(card && !card.classList.contains("hidden") && card.getBoundingClientRect().height > 0),
+          methods: document.querySelectorAll("[data-recovery-gateway]").length,
+        };
+      });
+      const expected = kind === "paid" ? { theme: true, marked: false, card: false, methods: 0 } : { theme: false, marked: true, card: true };
+      for (const [key, value] of Object.entries(expected)) {
+        if (seen[key] !== value) problems.push(`order: the ${kind} order's page draws ${JSON.stringify(seen)}`);
+      }
+    } catch (error) {
+      problems.push(`order: could not be checked (${String(error?.message ?? error).split("\n")[0]})`);
+    }
+    problems.push(...errors.map((error) => `request: ${error}`));
+    await context.close();
+    fail(label, [...new Set(problems)]);
     if (problems.length === 0) console.log(`✓ ${label}`);
   }
 }

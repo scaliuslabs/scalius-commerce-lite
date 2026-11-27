@@ -90,8 +90,15 @@ export async function requestPostDeployProjectionRebuild(env: Env): Promise<bool
     }
   } else if (tries > PRIVATE_PAGES_COMPILE_TRIES) {
     // No run finished the compile in its tries (it threw, raced, or was stopped): its pages keep the default
-    // look until the merchant saves, and this run, with no heavy work done, checks the sheets.
-    console.warn("[scheduled] Private pages compile did not finish; settled for this version");
+    // look until the merchant publishes, recorded as refused with why, which the theme page shows; this run,
+    // with no heavy work done, checks the sheets.
+    try {
+      const { refuseUnfinishedPrivatePages } = await import("@scalius/core/modules/settings");
+      const pages = await refuseUnfinishedPrivatePages(db);
+      console.warn(`[scheduled] Private pages compile did not finish; settled for this version${pages.length > 0 ? ` (refused on ${pages.join(", ")})` : ""}`);
+    } catch (error) {
+      console.warn("[scheduled] Private pages compile did not finish; its refusal was not recorded", error instanceof Error ? error.name : "unknown");
+    }
     await putSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY, chrome);
     await recheckBuyerChromeStage(env, db, version);
     return false;

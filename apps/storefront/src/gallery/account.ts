@@ -10,6 +10,8 @@ import { buyerOrderDetailView } from "@scalius/shared/buyer-order-view";
 export const GALLERY_ACCOUNT_SESSION = "cs_tok=gallery-account-session";
 export const GALLERY_THREAD_ID = "cnv_gallerythread1";
 export const GALLERY_CLAIM = { orderId: "ord_gallery_1", claimId: "wcl_gallery12345678" } as const;
+/** A paid, delivered order: nothing to pay, so its page draws a theme's chrome (test-support/buyer-chrome.browser.mjs). */
+export const GALLERY_PAID_ORDER_ID = "ord_gallery_paid1";
 
 const SECONDS = Date.parse("2026-09-12T08:00:00.000Z") / 1000;
 const IMAGE = "/placeholder-product.svg";
@@ -61,6 +63,17 @@ const ORDER_DETAIL = {
     paidAmount: 0, checkoutOpen: false, onlinePayment: true, paidLater: false,
   } as never, "account", { refundInFlight: false, paymentRecoverable: true }),
 };
+/** The same order paid and delivered: no payment step. */
+const PAID_ORDER = { ...ORDER, id: GALLERY_PAID_ORDER_ID, status: "delivered", statusLabel: "Delivered", paidAmount: 2560, balanceDue: 0, paymentStatus: "paid" };
+const PAID_ORDER_DETAIL = {
+  ...ORDER_DETAIL,
+  order: PAID_ORDER,
+  paymentRecovery: { eligible: false, gateway: null, gateways: [], paymentType: null, amountDue: 0, refusal: "not_payable", requiresCardForm: false, hostedRedirect: false },
+  buyerView: buyerOrderDetailView({
+    status: PAID_ORDER.status, paymentStatus: PAID_ORDER.paymentStatus, paymentMethod: PAID_ORDER.paymentMethod, shippingMethodKind: null, requiresShipping: true,
+    paidAmount: 2560, checkoutOpen: false, onlinePayment: true, paidLater: false,
+  } as never, "account", { refundInFlight: false, paymentRecoverable: false }),
+};
 
 const ANSWERS: Record<string, unknown> = {
   "/customer-auth/account-summary": {
@@ -111,6 +124,7 @@ const ANSWERS: Record<string, unknown> = {
     licenceKeys: [{ keyId: "key_gallery1", last4: "7K2Q" }],
   }] },
   [`/customer-auth/orders/${GALLERY_CLAIM.orderId}`]: ORDER_DETAIL,
+  [`/customer-auth/orders/${GALLERY_PAID_ORDER_ID}`]: PAID_ORDER_DETAIL,
   [`/customer-auth/orders/${GALLERY_CLAIM.orderId}/conversation`]: { conversation: thread(GALLERY_THREAD_ID, "order") },
   "/customer-auth/warranties": { items: [{
     // A warranty a claim can still be made on (its form opens with `?claim=`).
