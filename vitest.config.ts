@@ -79,6 +79,12 @@ export default defineConfig({
     globals: true,
     // Lets the bundled loader's egress guard follow tests' fetch stubs.
     setupFiles: [fromRoot("./scripts/vitest-setup.mjs")],
+    // A console line a test file writes while its worker is closing is a race inside the runner
+    // ("Closing rpc while onUserConsoleLog was pending"), not a failure of the code under test: on a
+    // cold cache it failed a run in which every test passed. Every other unhandled error still fails the run.
+    onUnhandledError(error) {
+      if (error?.name === "EnvironmentTeardownError" && /"onUserConsoleLog" was pending/.test(String(error.message))) return false;
+    },
     maxWorkers: testWorkers,
     // One limit sized for a loaded host, instead of per-file overrides. A
     // test that is long by design (a property or race gate, a scale run)

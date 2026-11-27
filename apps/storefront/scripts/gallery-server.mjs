@@ -354,6 +354,8 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
           body.tabBar = nearFloorTabBarTokens({ ...shared.privatePagesContextOf(theme), themeApp: null });
         }
         if (body.tabBar) source.tokens = { ...source.tokens, tabBar: structuredClone(body.tabBar) };
+        // `tabBar: null`: the store's own bar, whatever look the reference release sets for it.
+        else if (body.tabBar === null && source.tokens) delete source.tokens.tabBar;
         const parsed = shared.storefrontPrivatePagesSchema.safeParse({ ...shared.storefrontPrivatePagesDefault(), ...source });
         if (!parsed.success) {
           const named = parsed.error.issues.find((issue) => typeof issue.params?.reason === "string") ?? parsed.error.issues[0];

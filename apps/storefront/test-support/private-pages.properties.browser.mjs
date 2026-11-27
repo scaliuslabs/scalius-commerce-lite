@@ -736,7 +736,7 @@ const TAB_BAR_CASES = {
   "the phone tab bar in a hostile look, on the account and a public page": { states: ["base"], tabBar: true, viewports: TAB_BAR_VIEWPORTS, request: { tabs: true, toggle: true, scheme: "system", page: "account-profile", tabBar: HOSTILE_BAR } },
   "the phone tab bar just above every floor": { states: ["base"], tabBar: true, viewports: TAB_BAR_VIEWPORTS, request: { tabs: true, toggle: true, scheme: "system", page: "account-profile", nearFloorTabBar: true } },
   // The store's own bar (no tokens) under the customer's tabs: a long label wraps, never ends in "…".
-  "the store's own phone tab bar with the customer's tabs, English and Bangla": { states: ["base", "bn"], tabBar: "store", viewports: TAB_BAR_VIEWPORTS, request: { ...REFERENCE, page: "home" } },
+  "the store's own phone tab bar with the customer's tabs, English and Bangla": { states: ["base", "bn"], tabBar: "store", viewports: TAB_BAR_VIEWPORTS, request: { ...REFERENCE, page: "home", tabBar: null } },
   // Every tab's weight alone: the current tab keeps the store's 700, 200 heavier (its rule is written beside the tabs').
   "the phone tab bar with only its labels' weight": { states: ["base"], tabBar: true, viewports: TAB_BAR_VIEWPORTS, request: { tabs: true, toggle: true, scheme: "system", page: "account-profile", tabBar: { label: { weight: "500" } } } },
   "a phone tab bar label under its floor": { refused: "token_value", refusedFor: /label size/, request: { tabs: true, page: "home", tabBar: { label: { size: 8 } } }, states: ["base"] },
