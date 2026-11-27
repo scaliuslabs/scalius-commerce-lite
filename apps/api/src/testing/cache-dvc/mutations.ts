@@ -331,7 +331,8 @@ export class RowMutator {
     const rows = current.length > 0 ? current : this.seeded.get(tableName) ?? [];
     if (rows.length === 0) return null;
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
-      const source = { ...this.rng.pick(rows) };
+      const picked = this.rng.pick(rows);
+      const source = { ...picked };
       this.counter += 1;
       const suffix = `x${this.counter}`;
       for (const column of table.columns) {
@@ -364,6 +365,10 @@ export class RowMutator {
         source.id = `oty_${source.namespace}.${source.type}`;
       }
       normalizeCompanions(table, source);
+      if (tableName === "gift_cards") {
+        // A card is born empty with its own code; its last four and currency keep their fixed shapes.
+        Object.assign(source, { balance_minor: 0, code_hash: `${String(picked.code_hash)}_${suffix}`, code_last4: picked.code_last4, currency_code: picked.currency_code });
+      }
       const columns = table.columns.map((column) => column.name).filter((name) => source[name] !== null || !table.columns.find((each) => each.name === name)!.pk);
       const values = columns.map((name) => source[name] ?? null) as SQLInputValue[];
       try {
