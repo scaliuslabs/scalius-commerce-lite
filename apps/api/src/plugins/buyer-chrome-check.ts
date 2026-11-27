@@ -10,9 +10,11 @@
 //   app's `styles.css` and the shipped sheet matched it, so the release is
 //   marked with no parse of its own.
 // - After a deploy (`recheckBuyerChromeAfterDeploy`, a stage of the version's
-//   post-deploy settle, scheduled/catalog-projections.ts): a release marked by
-//   an older checker, or never marked, is read again and must be this
-//   checker's writing of itself (`recheckedBuyerChromeSheet`). That parse costs
+//   post-deploy settle, scheduled/catalog-projections.ts): every installed
+//   release that asks for buyer pages, active and approved or not yet, marked
+//   by an older checker, or never marked, is read again and must be this
+//   checker's writing of itself (`recheckedBuyerChromeSheet`). So an app
+//   activated or approved after the version settled draws at once. That parse costs
 //   about 30 ms of CPU for the largest sheet an app may ship, so one run checks
 //   one release and the version stays unsettled until none is left; until then
 //   the release's buyer pages draw the store's own header and footer. A
@@ -43,16 +45,21 @@ export async function markBuyerChromeSheet(db: Database, pluginId: string, relea
   await putSystemKv(db, buyerChromeMarkKey(pluginId, release), JSON.stringify(mark));
 }
 
-/** An installation whose header or footer may draw on the buyer's own pages: its sheet needs a mark. */
-function drawsOnBuyerPages(installation: PluginInstallation): boolean {
-  const storefront = installation.manifest.storefront;
-  return installation.status === "active" && installation.source !== "bundled" && installation.grant?.storefrontBuyerPages === true
-    && storefront.stylesheet && storefront.skins.some((skin) => skin.buyerPages === true && (skin.target === "header" || skin.target === "footer"));
+/**
+ * An installed release whose header or footer asks to draw on the buyer's own pages: its sheet needs a mark,
+ * whatever the app's status or grant now. Those change without a deploy (an app activated, or approved for
+ * buyer pages, after the version settled) and the release's bytes do not, so a release is checked once per
+ * checker and draws from the moment it becomes eligible.
+ */
+function asksForBuyerPages(installation: PluginInstallation): boolean {
+  const storefront = installation.declaredManifest.storefront;
+  return installation.source !== "bundled" && storefront.stylesheet
+    && storefront.skins.some((skin) => skin.buyerPages === true && (skin.target === "header" || skin.target === "footer"));
 }
 
 /** The app log line a refused sheet writes: what the merchant's buyers see instead, and what fixes it. */
 function refusedLine(installation: PluginInstallation, problem: string) {
-  const skin = installation.manifest.storefront.skins.find((entry) => entry.buyerPages === true && (entry.target === "header" || entry.target === "footer"));
+  const skin = installation.declaredManifest.storefront.skins.find((entry) => entry.buyerPages === true && (entry.target === "header" || entry.target === "footer"));
   return {
     level: "error" as const,
     source: `${STOREFRONT_INCIDENT_SOURCE}skin:${skin?.id ?? "buyer-pages"}`.slice(0, 80),
@@ -80,7 +87,7 @@ export async function recheckBuyerChromeSheets(
   read: (pluginId: string, release: string) => Promise<{ bytes: Uint8Array } | null>,
   budget = BUYER_CHROME_CHECKS_PER_RUN,
 ): Promise<BuyerChromeRecheck> {
-  const wanted = installations.filter(drawsOnBuyerPages);
+  const wanted = installations.filter(asksForBuyerPages);
   const marks = new Map<string, string>();
   for (let at = 0; at < wanted.length; at += 90) {
     for (const [key, value] of await getSystemKvMany(db, wanted.slice(at, at + 90).map((installation) => buyerChromeMarkKey(installation.pluginId, installation.bundleSha256)))) marks.set(key, value);

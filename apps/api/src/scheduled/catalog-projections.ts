@@ -11,7 +11,7 @@
 //    public product is visited by the recommendation rotation.
 import type { Database } from "@scalius/database/client";
 import { getDb } from "@scalius/database/client";
-import { claimSystemKv, getSystemKv, putSystemKv } from "@scalius/core/utils/system-kv";
+import { claimSystemKv, deleteSystemKv, getSystemKv, putSystemKv } from "@scalius/core/utils/system-kv";
 import {
   recentlySoldPublicProducts,
   refreshProductRecommendations,
@@ -51,10 +51,15 @@ export const PROJECTION_DRIFT_CURSOR_KEY = "catalog:projections:drift-cursor";
  *    claimed in the database first (compare-and-set), so overlapping ticks
  *    request it once.
  * 2. The published theme's private pages compiled with this version's checker
- *    (`recompilePublishedPrivatePages`), independent of the rebuild (the
- *    version's value `<version>:theme`, then `<version>:theme:<failed runs>`).
+ *    (`recompilePublishedPrivatePages`), independent of the rebuild. Each try
+ *    is counted before it starts (`<version>:theme:<tries>`), so a run stopped
+ *    inside the compile (the CPU limit ends a run before any catch) still
+ *    counts: after `PRIVATE_PAGES_COMPILE_TRIES` the stage gives way, and the
+ *    stages after it are never starved.
  * 3. Every installed app's buyer-page sheet checked by this version's checker
  *    (`recheckBuyerChromeAfterDeploy`, one parse a run: `<version>:chrome`).
+ *    Once the theme stage is done the value says so first, so a sheets run
+ *    that fails is tried again alone.
  *
  * A run does at most one piece of heavy work: a run that compiled the pages
  * (or whose compile threw) leaves the sheets to the next run.
@@ -67,60 +72,68 @@ export async function requestPostDeployProjectionRebuild(env: Env): Promise<bool
   if (current === version) return false;
   const chrome = `${version}:chrome`;
   if (current === chrome) {
-    await recheckBuyerChromeStage(env, db, version, current);
+    await recheckBuyerChromeStage(env, db, version);
     return false;
   }
-  const pending = `${version}:theme`;
-  const failed = current === pending ? 0 : current?.startsWith(`${pending}:`) ? Number(current.slice(pending.length + 1)) || 0 : null;
+  const pending = `${version}:theme:`;
+  const begun = current?.startsWith(pending) ? Number(current.slice(pending.length)) || 0 : null;
+  const tries = (begun ?? 0) + 1;
   let requested = false;
-  let sheetsNow = false;
-  if (failed === null) {
-    // First tick of this version: claimed (compare-and-set) so overlapping ticks rebuild once.
-    if (!(await claimSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY, pending))) return false;
+  if (begun === null) {
+    // First tick of this version: claimed (compare-and-set) so overlapping ticks rebuild once, its compile counted.
+    if (!(await claimSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY, `${pending}1`))) return false;
     const { catalogProjectionDefinition } = await import("@scalius/core/modules/products");
     const definition = await sha256Hex(catalogProjectionDefinition(db));
     if (await claimSystemKv(db, PROJECTION_DEFINITION_KEY, definition)) {
       await requestCatalogProjectionRebuild(db);
       requested = true;
     }
+  } else if (tries > PRIVATE_PAGES_COMPILE_TRIES) {
+    // No run finished the compile in its tries (it threw, raced, or was stopped): its pages keep the default
+    // look until the merchant saves, and this run, with no heavy work done, checks the sheets.
+    console.warn("[scheduled] Private pages compile did not finish; settled for this version");
+    await putSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY, chrome);
+    await recheckBuyerChromeStage(env, db, version);
+    return false;
+  } else {
+    await putSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY, `${pending}${tries}`);
   }
-  // A transient failure is tried again next tick (the version stays pending); a theme that cannot be
-  // read moves on with one log line for this version. A page this checker refuses is recorded in the
-  // published document with why (`compiled.refused`), which the theme page shows the merchant; the log
-  // line names only the pages and reason codes.
+  // A transient failure is tried again next tick; a theme that cannot be read moves on with one log line for
+  // this version. A page this checker refuses is recorded in the published document with why
+  // (`compiled.refused`), which the theme page shows the merchant; the log line names only the pages and
+  // reason codes.
   try {
     const { recompilePublishedPrivatePages } = await import("@scalius/core/modules/settings");
     const result = await recompilePublishedPrivatePages(db);
     if (result.outcome === "refused") console.warn(`[scheduled] Private pages for this version: refused on ${result.pages.join(", ")} (${result.reasons.join(", ")}); each draws the store's default look until the merchant saves`);
     else if (result.outcome !== "none" && result.outcome !== "current") console.log(`[scheduled] Private pages for this version: ${result.outcome}`);
-    // A compile a publish raced wrote nothing: the version stays pending and the next run compiles again.
+    // A compile a publish raced wrote nothing: the next run compiles again (a counted try).
     if (result.outcome === "raced") return requested;
-    if (result.outcome === "recompiled" || result.outcome === "refused") await putSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY, chrome);
-    else sheetsNow = true;
+    await putSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY, chrome);
+    // Nothing compiled: this run checks the sheets too.
+    if (result.outcome !== "recompiled" && result.outcome !== "refused") await recheckBuyerChromeStage(env, db, version);
   } catch (error) {
-    // A compile that keeps throwing (a theme that costs more than a run) is tried a bounded number of times, then
-    // settled for the version: its pages keep serving the default look until the merchant saves.
-    const tries = (failed ?? 0) + 1;
-    const settle = tries >= PRIVATE_PAGES_COMPILE_TRIES;
-    console.warn(`[scheduled] Private pages compile failed; ${settle ? "settled for this version" : "retried next run"}`, error instanceof Error ? error.name : "unknown");
-    await putSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY, settle ? chrome : `${pending}:${tries}`);
+    console.warn(`[scheduled] Private pages compile failed; ${tries < PRIVATE_PAGES_COMPILE_TRIES ? "retried" : "settled"} next run`, error instanceof Error ? error.name : "unknown");
   }
-  if (sheetsNow) await recheckBuyerChromeStage(env, db, version, current);
   return requested;
 }
 
+/** `system_kv` row the buyer-page sheet sweep this stage replaced left behind (beta.8 to rc.1): removed once a version settles. */
+const RETIRED_BUYER_CHROME_SWEEP_KEY = "buyer-chrome-checked-for";
+
 /**
- * The sheets stage: the version settles once no release is left to check. A run that leaves the value as it
- * was writes nothing; one that fails leaves it too, and the next run tries again (each release counts its own
- * tries, `BUYER_CHROME_CHECK_TRIES`).
+ * The sheets stage: the version settles once no release is left to check. A run that leaves releases to check
+ * writes nothing here; one that fails leaves the value too, and the next run tries again (each release counts
+ * its own tries, `BUYER_CHROME_CHECK_TRIES`).
  */
-async function recheckBuyerChromeStage(env: Env, db: Database, version: string, current: string | null): Promise<void> {
+async function recheckBuyerChromeStage(env: Env, db: Database, version: string): Promise<void> {
   try {
     const { recheckBuyerChromeAfterDeploy } = await import("../plugins/buyer-chrome-check");
     const result = await recheckBuyerChromeAfterDeploy(env, db);
     if (result.checked > 0) console.log(`[scheduled] Buyer-page sheets checked: ${result.checked}, refused=${result.refused}, remaining=${result.remaining}`);
-    const next = result.remaining === 0 ? version : `${version}:chrome`;
-    if (next !== current) await putSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY, next);
+    if (result.remaining > 0) return;
+    await deleteSystemKv(db, RETIRED_BUYER_CHROME_SWEEP_KEY);
+    await putSystemKv(db, PROJECTIONS_REBUILT_FOR_VERSION_KEY, version);
   } catch (error) {
     console.warn("[scheduled] Buyer-page sheet check failed; retried next run", error instanceof Error ? error.name : "unknown");
   }
