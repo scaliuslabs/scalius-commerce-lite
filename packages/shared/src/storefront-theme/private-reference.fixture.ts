@@ -504,6 +504,32 @@ export const REFERENCE_PRIVATE_PAGES = {
         "weight": "400"
       }
     },
+    "tabBar": {
+      "bar": { "background": "background", "border": "border", "height": 86, "backdrop": "blur" },
+      "label": {
+        "text": "muted-foreground",
+        "size": 10,
+        "weight": "700",
+        "case": "uppercase",
+        "tracking": "wide",
+        "clamp": "2"
+      },
+      "icon": {
+        "size": 20,
+        "padding": 8,
+        "radius": 32,
+        "background": { "light": "#ffffff", "dark": "#211c31" },
+        "border": { "light": "#e2e2e2", "dark": "#2c2740" },
+        "border-width": 1
+      },
+      "current": {
+        "text": "foreground",
+        "padding": 14,
+        "background": { "light": "#ffffff", "dark": "#2b2346" },
+        "ring": { "light": "#fed700", "dark": "#4f5fae" },
+        "ring-width": 2
+      }
+    },
     "receipt": {
       "page": {
         "gradient": { "shape": "radial", "from": { "light": "background", "dark": "#2b2d6e" }, "to": "background" }
