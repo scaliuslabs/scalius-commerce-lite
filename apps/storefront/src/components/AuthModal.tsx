@@ -472,8 +472,10 @@ export default function AuthModal() {
                           const prefill = prefillRef.current;
                           setContact(option.method === "email" ? prefill.email ?? "" : prefill.phone ? fieldPhone(prefill.phone) : "");
                         }}
-                        className={`min-h-11 flex-1 rounded-md px-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${channel === option.channel ? "bg-background text-foreground shadow-sm ring-2 ring-primary" : "text-muted-foreground hover:text-foreground"}`}
+                        className={`min-h-11 flex-1 rounded-md px-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${channel === option.channel ? "inline-flex items-center justify-center gap-1.5 bg-background font-semibold text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                       >
+                        {/* The chosen channel is marked by more than colour: its weight and a tick (its focus ring stays the ring). */}
+                        {channel === option.channel && <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
                         {option.method === "email" ? copy.method.email : option.channel === "whatsapp" ? "WhatsApp" : copy.method.phone}
                       </button>
                     ))}

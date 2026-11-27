@@ -86,7 +86,7 @@ const tab = "relative inline-flex min-h-12 shrink-0 items-center gap-2 whitespac
             >
               {item.label}
               {item.badge && (
-                <span data-part="nav-badge" class="inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold tabular-nums text-primary-foreground">{item.badge}<span class="sr-only"> {item.badgeLabel}</span></span>
+                <span data-part="nav-badge" class="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-xs font-semibold tabular-nums text-primary-foreground">{item.badge}<span class="sr-only"> {item.badgeLabel}</span></span>
               )}
             </a>
           ))}

@@ -534,14 +534,8 @@ const REGRESSIONS = {
   "Place order the dock's colour behind a dark edge": { refused: "contrast", refusedFor: /submit/, request: { scheme: "light" }, privatePages: { tokens: { cart: { dock: { background: "#ffffff" }, submit: { ...EDGED_ACTION, background: "#ffffff" } } } } },
   "Pay brand fill with a 1px edge": { refused: "contrast", refusedFor: /submit/, request: { ...REFERENCE, scheme: "light", page: "sample-checkout" }, states: ["base"], privatePages: { tokens: { checkout: { ...CHECKOUT_TOKENS, "payment-details": { background: "#ffffff" }, submit: { ...EDGED_ACTION, "border-width": 1 } } } } },
   "Place order brand fill with a 1px edge": { refused: "contrast", refusedFor: /submit/, request: { scheme: "light" }, privatePages: { tokens: { cart: { dock: { background: "#ffffff" }, submit: { ...EDGED_ACTION, "border-width": 1 } } } } },
-  // The store's other filled buttons (sign in, Apply) take the same rule: the brand fill found by its drawn edge, and
-  // refused the colour of the form they stand on.
-  "the store's filled buttons in a brand fill with a drawn edge": { request: { scheme: "light" }, states: ["base", "lines"], privatePages: { tokens: { cart: { dock: { background: "#ffffff" }, "details-form": { background: "#ffffff" }, submit: EDGED_ACTION, action: EDGED_ACTION } } } },
-  // An app's button filled the colour of the offer row it stands in: refused, as the store's own.
-  "an app's filled button the colour of its offer row": { refused: "contrast", refusedFor: /^ui\.button\/cart\.line\.after.*: its fill #f2ebd9 on /, request: { scheme: "light" }, privatePages: { tokens: { cart: {
-    "ui.stack.warning/cart.line.after": { background: "#f2ebd9", text: "#000000" }, "ui.button/cart.line.after": { background: "#f2ebd9", text: "#000000" },
-  } } } },
-  "the store's filled buttons the colour of the form, with no edge": { refused: "contrast", refusedFor: /^action: its fill #fed700 on /, request: { scheme: "light" }, privatePages: { tokens: { cart: { "details-form": { background: "#fed700", text: "#111111", muted: "#111111", link: "#111111", error: "#111111" }, action: { background: "#fed700", text: "#111111" } } } } },
+  // The store's other filled buttons (sign in, Apply) in the brand's yellow on a white form: found by their words.
+  "the store's filled buttons in a brand fill on a white form": { request: { scheme: "light" }, states: ["base", "lines"], privatePages: { tokens: { cart: { dock: { background: "#ffffff" }, "details-form": { background: "#ffffff" }, submit: EDGED_ACTION, action: { background: "#fed700", text: "#111111", radius: 0 } } } } },
   // ─── The payment step (page `checkout`): drawn as the editor's sample checkout draws it, as buyers get it ───
   [CHECKOUT_LIST]: { request: { ...REFERENCE, page: "sample-checkout" }, privatePages: { tokens: { checkout: CHECKOUT_TOKENS } }, states: ["base"] },
   [CHECKOUT_TILES]: { request: { ...REFERENCE, page: "sample-checkout" }, privatePages: { pages: { checkout: { frame: "narrow", layout: CHECKOUT_TILES_LAYOUT } }, tokens: { checkout: CHECKOUT_TOKENS } }, states: ["base"] },
@@ -565,12 +559,20 @@ const AFTER_ORDER_PAGES = {
     mandatory: ['[data-part="navigation"]', '[data-part="sign-out"]', '[data-part="heading-title"]', '[data-part="card"]'],
   },
   // The account's own pages as a signed-in buyer gets them (src/gallery/account.ts), each under the account's look.
+  "account-inbox": { page: "account", root: '[data-private="account"]', mandatory: ['a[data-part="card"]', '[data-part="nav-badge"]'] },
+  // The order page (drawn in the browser): its payment methods to choose between, a reviewed line's stars, its conversation.
+  "account-order": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="payment-choices"] button', '[data-part="rating"]', '[data-part="conversation"]', '[data-summary-row="total"]'] },
+  "account-profile-remove-address": { page: "account", root: '[data-private="account"]', scope: "#removeAddress-adr_gallery1", open: "#removeAddress-adr_gallery1", mandatory: ["#removeAddress-adr_gallery1 .bg-destructive"] },
+  "account-profile-remove-card": { page: "account", root: '[data-private="account"]', scope: "#removePaymentMethod-cpm_gallery1", open: "#removePaymentMethod-cpm_gallery1", mandatory: ["#removePaymentMethod-cpm_gallery1 .bg-destructive"] },
+  "account-warranty-claim-form": { page: "account", root: '[data-private="account"]', mandatory: ["[data-warranty-claim][open] textarea, [data-warranty-claim][open] select, [data-warranty-claim][open] input:not([type=hidden])"] },
   "account-thread": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="conversation"]', '[data-part="message-own"]', '[data-part="message"]', '[data-part="heading-title"]'] },
   "account-profile": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="card"]', '[data-part="card-title"]', '[data-part="sign-out"]'] },
   // The profile with its edit dialog open (a card over the page, which its backdrop dims): the dialog is walked.
   "account-profile-dialog": { page: "account", root: '[data-private="account"]', scope: "#editDetails", open: "#editDetails", mandatory: ['#editDetails [data-part="card-title"]', "#fieldName"] },
-  "account-reviews": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="card"]', '[data-part="rating"]'] },
-  "account-gift-cards": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="card"]', '[data-part="status-badge"]'] },
+  // The reviews with the written review's edit and withdraw forms open.
+  "account-reviews": { page: "account", root: '[data-private="account"]', open: '[data-part="card"] details', mandatory: ['[data-part="card"]', '[data-part="rating"]'] },
+  // The gift cards with a card's history open.
+  "account-gift-cards": { page: "account", root: '[data-private="account"]', open: '[data-part="card"] details', mandatory: ['[data-part="card"]', '[data-part="status-badge"]'] },
   "account-downloads": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="card"]', '[data-part="card-title"]'] },
   "account-warranties": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="card"]', '[data-part="status-badge"]'] },
   "warranty-claim": { page: "account", root: '[data-private="account"]', mandatory: ['[data-part="conversation"]', '[data-part="message-own"]', '[data-part="heading-title"]'] },
@@ -610,10 +612,6 @@ const AFTER_ORDER_CASES = {
   // What the save must refuse: an arrangement of a page that keeps the store's order, and a total under its rows.
   "an arrangement of the receipt": { refused: "not_available", request: { page: "sample-receipt" }, privatePages: { pages: { receipt: { layout: [{ type: "part", part: "summary" }, { type: "part", part: "status" }] } } } },
   "a receipt total drawn smaller than its rows": { refused: "prominence", refusedFor: /summary-total/, request: { page: "sample-receipt" }, privatePages: { tokens: { receipt: { "summary-total": { size: 14 } } } } },
-  // Every filled button is found by its fill or its edge: the account's buttons the colour of its cards are refused.
-  "an account's filled buttons the colour of its cards": { refused: "contrast", refusedFor: /^action: its fill #1d4ed8 on #1d4ed8/, request: { page: "sample-account" }, privatePages: { tokens: { account: {
-    card: { background: "#1d4ed8", text: "#ffffff", muted: "#ffffff", link: "#ffffff", error: "#ffffff" }, action: { background: "#1d4ed8", text: "#ffffff" },
-  } } } },
 };
 // The review's probe: the buyer's message given only its surface and words, beside a dark filled action. Its muted
 // words (a photo that does not load) are its own row's, never the action's.
@@ -621,8 +619,10 @@ AFTER_ORDER_CASES["the account's buyer message in its own colours beside a dark 
   "message-own": { background: { light: "#eef2ff", dark: "#1e3a8a" }, text: { light: "#111111", dark: "#ffffff" } }, action: { background: { light: "#111111", dark: "#f5f5f5" }, text: { light: "#ffffff", dark: "#111111" } },
 } } } };
 // Every page of the account the routes table names, drawn under the hostile look in light and dark (review 3).
-for (const page of ["account-thread", "account-profile", "account-profile-dialog", "account-reviews", "account-gift-cards", "account-downloads", "account-warranties", "warranty-claim"]) {
+for (const page of Object.keys(AFTER_ORDER_PAGES).filter((name) => name !== "sample-receipt" && name !== "sample-account")) {
   AFTER_ORDER_CASES[`the account's ${page} in a hostile look`] = { request: { toggle: true, scheme: "system", page }, privatePages: { tokens: { account: ACCOUNT_HOSTILE } } };
+  // Every row's every colour just above its floor on its surface, boxes light and dark in turn (src/gallery/near-floor.ts).
+  AFTER_ORDER_CASES[`the account's ${page} just above every floor`] = { request: { toggle: true, scheme: "system", page, nearFloor: true } };
 }
 Object.assign(REGRESSIONS, AFTER_ORDER_CASES);
 
@@ -712,6 +712,17 @@ const EXEMPT = "script,style,template,noscript,#gallery-page-end,vite-error-over
  * the host draws, checks each against the colour table (or, with no tokens,
  * the anatomy's style targets) and returns them for the pixel checks.
  */
+/**
+ * `action` (the store's ordinary filled buttons) never reaches a main action, read by Chromium's own selector engine:
+ * Place order, Pay and Confirm are drawn by their own rows only (private-anatomy.ts `actionApart`).
+ */
+function actionKeepsOff(styleTargets) {
+  const action = styleTargets.find((each) => each.name === "action");
+  if (!action) return [];
+  return [...document.querySelectorAll('[data-part="details-submit"],[data-part="pay"],[data-part="dialog-confirm"]')]
+    .filter((element) => element.matches(action.selector)).map((element) => `action reaches the main action ${element.dataset.part}`);
+}
+
 function walk({ rows, anatomy, uiKinds, mandatory, scope, exempt, styleTargets }) {
   const problems = [];
   const width = innerWidth;
@@ -843,6 +854,10 @@ function walk({ rows, anatomy, uiKinds, mandatory, scope, exempt, styleTargets }
       if (!cells.includes(style.color) && !element.closest(":disabled,[aria-disabled=true]")) problems.push(`text "${node.textContent.trim().slice(0, 30)}" ${name(element)}: ${style.color} is none of its row's colours (${rowOf.get(row).key}: ${cells.join(" ")})`);
     }
     if (element.closest(":disabled,[aria-disabled=true]")) continue;
+    // Words a sideways-scrolling strip holds out of its view (a phone's account tabs): read where they scroll into view,
+    // never against the page beside the strip they are clipped by.
+    const strip = element.closest("[data-account-nav]");
+    if (strip && rects.some((rect) => { const view = strip.getBoundingClientRect(); return rect.left < view.left - 0.5 || rect.right > view.right + 0.5; })) continue;
     const id = texts.length;
     const size = Number.parseFloat(style.fontSize);
     texts.push({ id, label: `"${node.textContent.trim().slice(0, 30)}" ${name(element)}`, color: style.color, large: size >= 24 || (size >= 18.6 && Number(style.fontWeight) >= 700) });
@@ -1180,8 +1195,7 @@ function installActionFound() {
 /**
  * How a buyer finds the page's actions and fields (WCAG 1.4.11), measured under a theme's tokens (the colour
  * table's look): Place order's fill reads at 3:1 on what is behind it and it is never smaller or lighter than another
- * filled button on the page; every other filled button the store draws (`action`, the account's `action-critical`) is
- * found where it stands, by its fill or its drawn edge; in a dialog Go back paints no fill of its own, Confirm's fill reads at 3:1 on the
+ * filled button on the page; in a dialog Go back paints no fill of its own, Confirm's fill reads at 3:1 on the
  * dialog and it is never smaller or lighter than Go back; a field, the stepper, the fold's bar and Go back show their
  * border at 3:1 on what is behind them or, drawing none, their own fill.
  */
@@ -1214,15 +1228,7 @@ function boundaries(scope) {
     filled(submit, "Place order");
     for (const other of document.querySelectorAll('[data-private="cart"] .bg-primary')) if (other !== submit && shown(other)) outranks(submit, other, "Place order", `the filled button "${other.textContent.trim().slice(0, 24)}"`);
   }
-  // The store's other filled buttons, each where it stands (an app's buttons are its own rows; the store's own look's
-  // parts keep their colours).
-  const others = [...root.querySelectorAll(':is(button,a).bg-primary, :is(button,a).bg-destructive')]
-    .filter((element) => !element.matches('[data-part="details-submit"],[data-part="dialog-confirm"],[data-part="pay"]') && !element.closest('[data-buyer-ui-target],[data-part="gateway"],[data-part="recommendations"]'));
-  for (const other of others) if (shown(other)) filled(other, `the filled button "${other.textContent.trim().slice(0, 24)}"`);
-  // An app's button the theme fills (an opaque surface of its own; unfilled it paints none) is a filled button too.
-  for (const button of root.querySelectorAll('[data-buyer-ui-target] :is(a[data-ui="button"],[data-ui="button"]>button)')) {
-    if (own(button) && shown(button)) filled(button, `the app's button "${button.textContent.trim().slice(0, 24)}"`);
-  }
+  // The store's ordinary buttons and the apps' are found by their words (checked as words), never by their fill.
   for (const dialog of scope ? [root] : document.querySelectorAll('[data-private="dialog"]')) {
     const [back, confirm] = ['[data-part="dialog-back"]', '[data-part="dialog-confirm"]'].map((selector) => [...dialog.querySelectorAll(selector)].find(shown));
     if (back) {
@@ -1853,6 +1859,7 @@ async function draw({ context, id, state, width, height, focus, hover, interact,
   const check = async (label, scope, list, { controls: wantControls = true } = {}) => {
     await timed("settle", () => settle(page));
     const walked = await timed("walk", () => page.evaluate(walk, { rows, anatomy: ANATOMY, uiKinds: UI_KINDS, mandatory: list, scope, exempt: EXEMPT, styleTargets: STYLE_TARGETS }));
+    problems.push(...(await page.evaluate(actionKeepsOff, STYLE_TARGETS)).map((problem) => `${label}: ${problem}`));
     at(label, walked.problems);
     if (request?.forged) at(label, await page.evaluate(forgedAbsent, { words: FORGED_WORDS, mark: FORGED_MARK }));
     // Under a theme's tokens, the table's look: every action and field is found where it stands.
@@ -1997,11 +2004,13 @@ async function drawAfterOrder({ context, id, width, rows, request, drawn }) {
   }
   await openAddOns(page, spec.root);
   // A page drawn with a dialog open (the profile's edit dialog: a popover over the page).
-  if (spec.open) await page.evaluate((selector) => document.querySelector(selector)?.showPopover?.(), spec.open);
+  // A page drawn with something open: a popover dialog shown, a disclosure opened.
+  if (spec.open) await page.evaluate((selector) => { for (const element of document.querySelectorAll(selector)) { if (element instanceof HTMLDetailsElement) element.open = true; else element.showPopover?.(); } }, spec.open);
   await page.waitForTimeout(150);
   const targets = await afterOrderTargets(spec.page);
   const anatomy = targets.filter(({ name }) => name !== "page").concat([{ name: `the ${spec.page}`, selector: spec.root }]);
   const walked = await timed("walk", () => page.evaluate(walk, { rows, anatomy, uiKinds: UI_KINDS, mandatory: spec.mandatory, scope: spec.scope ?? spec.root, exempt: EXEMPT, styleTargets: targets }));
+  at(spec.page, await page.evaluate(actionKeepsOff, targets));
   at(spec.page, walked.problems);
   if (request?.forged) at(spec.page, await page.evaluate(forgedAbsent, { words: FORGED_WORDS, mark: FORGED_MARK }));
   if (rows.length > 0) at(spec.page, await page.evaluate(boundaries, spec.scope ?? spec.root));

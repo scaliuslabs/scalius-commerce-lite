@@ -162,9 +162,9 @@ export interface PrivateStyleSpec {
   readonly targets?: readonly string[];
   /**
    * How a buyer tells the control or field from what is around it (WCAG
-   * 1.4.11, 3:1 on what is around it): `fill`, a filled button (every one:
-   * Place order, Confirm, Pay and the store's other filled buttons, `action`),
-   * by its own surface, or by a drawn edge where the theme sets a
+   * 1.4.11, 3:1 on what is around it): `fill`, the page's main action (Place
+   * order, Confirm, Pay: a buyer who cannot find it cannot buy), by its own
+   * surface, or by a drawn edge where the theme sets a
    * solid border of at least 2px that reads 3:1 on what is around it over a
    * fill still clearly a colour of its own (CIE76 40 from every point around
    * it: an outlined button is Go back's look); `edge`, an outlined one (a stepper, the
@@ -342,9 +342,10 @@ export function privatePageStyles(root: string, options: { dialogs?: boolean; ch
     // The page's paint (F2: a gradient behind everything) and its frame's width.
     page: { selector: "body[data-private-body]", absolute: true, tokens: ["background", "gradient", "text", "muted", "link", "error"], kind: "box", surface: "background", ink: "foreground" },
     frame: { selector: "", tokens: ["max-width"], kind: "box", surface: "under", ink: "foreground", on: "page" },
-    // Every filled button the host draws without a target of its own (bg-primary), and every field, on the page and in its dialogs.
-    // A filled button is found by its fill (or a drawn edge), as Place order is: its fill reads 3:1 on every box it may stand on.
-    action: { selector: `${scope} .bg-primary:is(button,a,[role="button"])`, absolute: true, tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground", boundary: "fill", hostSize: 14, hostWeight: 600 },
+    // Every filled button or link the host draws without a target of its own (bg-primary, never another element filled with
+    // the action colour), and every field, on the page and in its dialogs. An ordinary button is found by its words (they
+    // read 4.5:1 on its fill); only the main action's fill is checked against what is around it (`boundary: "fill"`).
+    action: { selector: `${scope} .bg-primary:is(button,a,[role="button"])`, absolute: true, tokens: [...BUTTON_TOKENS], kind: "control", surface: "primary", ink: "primary-foreground", hostSize: 14, hostWeight: 600 },
     input: { selector: `${scope} ${FIELD_ELEMENTS}`, absolute: true, element: FIELD_ELEMENTS, tokens: [...FIELD_TOKENS], kind: "field", surface: "background", ink: "foreground" },
     // Every field's label (and a group of fields' legend), wherever fields are drawn: on the box that holds them.
     "field-label": { selector: `${scope} [data-part="field-label"]`, absolute: true, element: '[data-part="field-label"]', tokens: ["text", "size", "weight", "case", "tracking"], kind: "text", surface: "under", ink: "foreground" },
@@ -787,12 +788,14 @@ const RECEIPT_PAGE: PrivatePageSpec = {
  */
 const ACCOUNT_STYLES: Record<string, PrivateStyleSpec> = {
   ...withoutNotices(ACCOUNT_PAGE_STYLES.head),
-  // Every filled button that removes something (Remove address, Remove a saved card): found by its fill, as `action` is.
+  // Every filled button that removes something (Remove address, Remove a saved card): its words read on its fill, as `action`'s do.
   "action-critical": { ...ACCOUNT_PAGE_STYLES.head.action!, selector: ACCOUNT_PAGE_STYLES.head.action!.selector.replace(".bg-primary:is(", ".bg-destructive:is("), surface: "destructive", ink: "destructive-foreground", hostWeight: 500 },
   // The shell: the navigation (each page, the current one, Sign out) and the page's heading.
   navigation: { selector: '[data-part="navigation"]', tokens: [...BOX_TOKENS], kind: "box", surface: "under", ink: "foreground", part: "navigation" },
   "nav-item": { selector: '[data-part="nav-item"]:not([aria-current="page"])', tokens: ["text", "size", "weight", "radius", "ring"], kind: "control", surface: "under", ink: "muted-foreground", on: "navigation" },
   // The current page: its words, and its marker in the link colour.
+  // A tab's count (Inbox 2): a pill filled with the menu's link colour, its number readable on it.
+  "nav-badge": { selector: '[data-part="nav-badge"]', tokens: ["background", "text", "radius"], kind: "text", surface: "under-link", ink: "foreground", on: "navigation" },
   "nav-current": { selector: '[data-part="nav-item"][aria-current="page"]', tokens: ["text", "link", "size", "weight", "radius", "ring"], kind: "control", surface: "under", ink: "foreground", on: "navigation" },
   "sign-out": { selector: '[data-part="sign-out"]', tokens: ["background", "text", "border", "border-width", "radius", "ring", "inset", "weight", "size"], kind: "control", surface: "under", ink: "muted-foreground", on: "navigation", boundary: "edge" },
   "heading-title": { selector: '[data-part="heading-title"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", part: "heading" },
@@ -801,8 +804,10 @@ const ACCOUNT_STYLES: Record<string, PrivateStyleSpec> = {
   // The page's content, with the apps' account targets in it. It takes no tokens: most account pages draw no box of
   // their own around it (only the workspace layout does), so it never paints; what stands in it stands on the page.
   content: { selector: '[data-part="content"]', tokens: [], kind: "box", surface: "under", ink: "foreground", part: "content", targets: ["account.overview", "account.order", "account.profile"] },
-  // A card holds the account's choices (an order's payment methods): the chosen one's link-coloured edge apart from the others' border.
-  card: { selector: '[data-part="card"]', tokens: [...BOX_TOKENS, "gap"], kind: "box", surface: "card", ink: "foreground", on: "content", fields: true, chosen: true },
+  card: { selector: '[data-part="card"]', tokens: [...BOX_TOKENS, "gap"], kind: "box", surface: "card", ink: "foreground", on: "content", fields: true },
+  // An order's payment methods to choose between (its payment card): the chosen one's edge in the row's link colour, the
+  // others' in its border colour, clearly apart.
+  "payment-choices": { selector: '[data-part="payment-choices"]', tokens: ["link", "border"], kind: "box", surface: "under", ink: "foreground", on: "card", chosen: true },
   "card-title": { selector: '[data-part="card-title"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "card" },
   "status-badge": statusBadge("card"),
   // An order's totals inside its card, drawn at the card's 14px; what is left to pay (`due`) ranks with the total.
@@ -825,7 +830,7 @@ const ACCOUNT_PAGE: PrivatePageSpec = {
     // `tabs`: a strip over the page; `sidebar`: a list beside it on a wide screen (the strip on phones).
     navigation: part(true, ["navigation", "nav-item", "nav-badge", "sign-out"], null, ["tabs", "sidebar"]),
     heading: part(true, ["heading", "heading-title", "heading-intro", "heading-back"]),
-    content: part(true, ["content", "card", "card-title", "status-badge", "summary", "summary-total-label", "add-on-details", "add-on-detail", "line", "line-image", "line-title", "line-details", "line-price", "delivery-message", "delivery-reveal", "conversation", "message", "message-own", "rating"], "fields"),
+    content: part(true, ["content", "card", "card-title", "status-badge", "summary", "summary-total-label", "add-on-details", "add-on-detail", "line", "line-image", "line-title", "line-details", "line-price", "delivery-message", "delivery-reveal", "conversation", "message", "message-own", "rating", "payment-choices"], "fields"),
   },
   targets: [],
   lead: ["heading", "content"],
@@ -909,6 +914,6 @@ export function privatePageAnatomy(): string[] {
   lines.push(`buyer-ui attributes=${PRIVATE_BUYER_UI_HOOKS.join(",")}`);
   lines.push(`chrome roots ${PRIVATE_SCOPE_ATTRIBUTE}=core-header|core-footer controls=${PRIVATE_CONTROL_PLACES.join("|")}`);
   lines.push(`layout tokens=${PRIVATE_LAYOUT_TOKENS.join(",")}`);
-  for (const [kind, style] of Object.entries(PRIVATE_BUYER_UI_STYLES)) lines.push(`buyer-ui style ui.${kind}${style.tones ? `[.${style.tones.join("|")}]` : ""}[@<app>][/<target>] ${style.kind} tokens=${style.tokens.join(",")}${style.boundary ? ` boundary=${style.boundary}` : ""}`);
+  for (const [kind, style] of Object.entries(PRIVATE_BUYER_UI_STYLES)) lines.push(`buyer-ui style ui.${kind}${style.tones ? `[.${style.tones.join("|")}]` : ""}[@<app>][/<target>] ${style.kind} tokens=${style.tokens.join(",")}`);
   return lines;
 }

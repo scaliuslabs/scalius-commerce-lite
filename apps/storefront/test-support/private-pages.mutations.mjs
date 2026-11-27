@@ -142,7 +142,7 @@ export const MUTATIONS = {
     rewrites: [
       rewrite(TOKENS, "        ui([node.target], parent);\n", "\n"),
       rewrite(TOKENS, "{color:inherit;--focus-ring-color:var(--pt-r)}", "{--focus-ring-color:var(--pt-r)}"),
-      rewrite(TOKENS, '...["text-foreground", "text-card-foreground", "text-primary-foreground"].map(', '...["text-card-foreground", "text-primary-foreground"].map('),
+      rewrite(TOKENS, '...["text-foreground", "text-card-foreground", "text-primary-foreground", "text-destructive-foreground"].map(', '...["text-card-foreground", "text-primary-foreground", "text-destructive-foreground"].map('),
     ],
     cases: [B2],
     expect: /an app's node at cart\.line\.after has no row of its own/,
@@ -303,7 +303,7 @@ export const MUTATIONS = {
     why: "the summary's add-on bar (its <summary>) has no row, and the save's no_row guard is off: it reads the summary rows' row",
     rewrites: [
       rewrite(TOKENS, "      place(name, style, out ? beside! : key);\n", "      if (name === \"summary-add-on\") continue;\n      place(name, style, out ? beside! : key);\n"),
-      rewrite(TOKENS, "    if (keys.has(name) || (style.element", "    if (name === \"summary-add-on\" || keys.has(name) || (style.element"),
+      rewrite(TOKENS, "    if (keys.has(name) || ((style.element || style.within)", "    if (name === \"summary-add-on\" || keys.has(name) || ((style.element || style.within)"),
     ],
     cases: [PROTECTED],
     expect: /the style target summary-add-on names it and no row of the table is its/,
@@ -373,12 +373,6 @@ export const MUTATIONS = {
     rewrites: [rewrite("apps/storefront/src/components/CheckoutHeader.astro", "{controls && <PrivateSchemeSwitch />}", "<PrivateSchemeSwitch />")],
     cases: ["no store controls on the page, under dark tokens"],
     expect: /\[data-host="scheme"\] button: drawn in the checkout header where the theme places the controls nowhere/,
-  },
-  "F5 an app's filled button unchecked": {
-    why: "the save stops reading an app's filled button on what is around it: an Add Now the colour of its offer row is saved and drawn as plain words",
-    rewrites: [rewrite(TOKENS, 'const filled = place.boundary === "fill" && (!place.writes || Boolean(fill || values.background));', 'const filled = place.boundary === "fill" && !place.writes;')],
-    cases: ["an app's filled button the colour of its offer row"],
-    expect: /the app's button "[^"]*": its fill reads [\d.]+:1 on what is behind it/,
   },
   // ─── The receipt and the account (w-p2-after-pages): what a buyer must keep there, hidden ───
   "after-order: the receipt's total hidden": {

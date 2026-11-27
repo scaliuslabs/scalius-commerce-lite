@@ -162,7 +162,7 @@ const look = privateRouteLook(Astro, (await resolveRequestTheme(Astro, layoutDat
                   <h3 id="orderPaymentRecoveryTitle" class="text-sm font-semibold text-foreground"></h3>
                   <p id="orderPaymentRecoveryDescription" class="mt-1 text-sm text-muted-foreground"></p>
                 </div>
-                <div id="orderPaymentRecoveryMethods" class="grid gap-2" role="radiogroup" aria-label={orderWords.paymentMethod}></div>
+                <div id="orderPaymentRecoveryMethods" data-part="payment-choices" class="grid gap-2" role="radiogroup" aria-label={orderWords.paymentMethod}></div>
                 <div id="accountStripeSection" class="hidden space-y-2">
                   <div id="accountStripeCardElement" data-part="gateway" class="rounded-lg border border-input bg-background p-3"></div>
                   <p id="accountStripeError" class="hidden text-sm text-destructive"></p>

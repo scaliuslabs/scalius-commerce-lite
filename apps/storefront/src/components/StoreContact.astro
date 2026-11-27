@@ -34,7 +34,7 @@ const links = storeContactLinks(layoutData?.business);
         <a
           href={link.href}
           data-store-contact-link={link.kind}
-          class={`font-medium text-primary hover:underline${link.kind === "email" ? " break-all" : ""}`}
+          class={`font-medium text-primary hover:underline${link.kind === "email" ? " [overflow-wrap:anywhere]" : ""}`}
           {...(link.kind === "whatsapp" ? { target: "_blank", rel: "noopener noreferrer" } : {})}
         >{link.label}</a>
       </>

@@ -73,7 +73,7 @@ const look = privateRouteLook(Astro, (await resolveRequestTheme(Astro, layoutDat
     {stats && (
       <section aria-label={words.summary} class="mb-6 grid grid-cols-2 gap-3 sm:mb-8 sm:grid-cols-3 sm:gap-4" data-account-summary>
         {stats.map((stat) => (
-          <a href={stat.href} data-astro-prefetch="false" data-account-stat={stat.key} data-part="card" class:list={[ui.card, "block p-4 transition-colors hover:border-foreground/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", stat.key === "spent" && "col-span-2 sm:col-span-1"]}>
+          <a href={stat.href} data-astro-prefetch="false" data-account-stat={stat.key} data-part="card" class:list={[ui.card, "block p-4 transition-colors hover:border-foreground/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring", stat.key === "spent" && "col-span-2 sm:col-span-1"]}>
             <span class="block text-sm text-muted-foreground">{stat.label}</span>
             {stat.values.map((value) => <span class="mt-1 block break-words text-xl font-semibold tabular-nums text-foreground">{value}</span>)}
             {stat.note && <span class="mt-1 block text-sm font-medium text-primary">{stat.note}</span>}

@@ -335,6 +335,11 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         const theme = { ...base, tokens, ...(body.tabs === true ? { blocks: { ...base.blocks, mobileNav: { variant: "bottom-tabs", settings: { tabs: [{ kind: "home" }, { kind: "categories" }, { kind: "offers" }, { kind: "account" }], drawer: "accordion" } } } } : {}) };
         // Saved as the store saves it (site-settings.service.ts): read by the document's schema (a refusal naming its
         // reason, as `not_available`, answers it), then compiled.
+        // `nearFloor`: the account's look generated just above every floor against this palette (src/gallery/near-floor.ts).
+        if (body.nearFloor === true) {
+          const { nearFloorAccountTokens } = await vite.ssrLoadModule("/src/gallery/near-floor.ts");
+          body.privatePages = { tokens: { account: nearFloorAccountTokens({ ...shared.privatePagesContextOf(theme), themeApp: null }) } };
+        }
         const parsed = shared.storefrontPrivatePagesSchema.safeParse({ ...shared.storefrontPrivatePagesDefault(), ...structuredClone(body.privatePages ?? reference?.REFERENCE_PRIVATE_PAGES ?? {}) });
         if (!parsed.success) {
           const named = parsed.error.issues.find((issue) => typeof issue.params?.reason === "string") ?? parsed.error.issues[0];

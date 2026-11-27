@@ -59,7 +59,10 @@ export type GalleryPage =
   | GalleryAccountPage;
 
 /** The account's pages the rendered gate draws under a theme's look (every page `PRIVATE_PAGE_ROUTES.account` names but its orders and an order, which the sample account and its own tests draw). */
-export const GALLERY_ACCOUNT_PAGES = ["account-thread", "account-profile", "account-profile-dialog", "account-reviews", "account-gift-cards", "account-downloads", "account-warranties", "warranty-claim"] as const;
+export const GALLERY_ACCOUNT_PAGES = [
+  "account-inbox", "account-thread", "account-order", "account-profile", "account-profile-dialog", "account-profile-remove-address", "account-profile-remove-card",
+  "account-reviews", "account-gift-cards", "account-downloads", "account-warranties", "account-warranty-claim-form", "warranty-claim",
+] as const;
 export type GalleryAccountPage = (typeof GALLERY_ACCOUNT_PAGES)[number];
 
 /** The part of the page an entry is about: axe and the harness checks look only here. */

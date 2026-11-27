@@ -5,6 +5,8 @@
 // store's reply; a gift card with its history; downloads; warranties with a claim; a guest's claim thread.
 
 /** The session cookie a signed-in buyer's request carries (its value is the fixture's). */
+import { buyerOrderDetailView } from "@scalius/shared/buyer-order-view";
+
 export const GALLERY_ACCOUNT_SESSION = "cs_tok=gallery-account-session";
 export const GALLERY_THREAD_ID = "cnv_gallerythread1";
 export const GALLERY_CLAIM = { orderId: "ord_gallery_1", claimId: "wcl_gallery12345678" } as const;
@@ -28,6 +30,37 @@ const thread = (id: string, subjectType: string) => ({
   id, subjectType, subject: subjectType === "warranty_claim" ? "Screen flickers" : null, topic: null, orderNumber: 1042, orderId: GALLERY_CLAIM.orderId,
   status: "pending", lastSeq: 5, readSeq: 2, hasMore: false, messages: THREAD_MESSAGES,
 });
+
+/** An order the buyer can still pay online (two methods to choose between), a reviewed line and its conversation. */
+const ORDER = {
+  id: GALLERY_CLAIM.orderId, orderNumber: 1042, invoiceNumber: null, status: "pending", statusLabel: "Pending",
+  totalAmount: 2560, paidAmount: 0, balanceDue: 2560, shippingCharge: 60, discountAmount: 0,
+  currencyCode: "BDT", currencyDecimalPlaces: 2, subtotalAmountMinor: 250_000, shippingAmountMinor: 6_000,
+  discountAmountMinor: 0, taxAmountMinor: 0, totalAmountMinor: 256_000, taxLabel: "VAT", pricesIncludeTax: false,
+  shippingMethodId: "ship_1", shippingMethodName: "Inside Dhaka", shippingMethodDescription: null, shippingMethodBaseAmountMinor: 6_000, shippingFeeWaived: false,
+  paymentStatus: "unpaid", paymentMethod: "sslcommerz", fulfillmentStatus: "fulfilled", expectedDelivery: "1-2 days",
+  customerName: "Rahim Uddin", customerPhone: "+8801712345678", shippingAddress: "House 12, Road 5", city: "dhaka", zone: "mirpur", area: null,
+  cityName: "Dhaka", zoneName: "Mirpur", areaName: null, notes: null, createdAt: "2026-09-12T08:00:00.000Z", updatedAt: null,
+};
+const RECOVERY = { eligible: true, gateway: "sslcommerz", gateways: ["sslcommerz", "bkash"], paymentType: "full", amountDue: 2560, refusal: null, requiresCardForm: false, hostedRedirect: true };
+const ORDER_DETAIL = {
+  order: ORDER,
+  items: [{
+    id: "oi_gallery_1", productId: "prod_gallery_1", variantId: "sku_gallery_1", quantity: 1, price: 2500, productName: "Silk saree", productSlug: "silk-saree",
+    productImage: IMAGE, variantLabel: null, unitPrice: 2500, lineTotal: 2500, unitPriceMinor: 250_000, lineSubtotalMinor: 250_000, discountAmountMinor: 0,
+    taxableAmountMinor: 250_000, taxAmountMinor: 0, createdAt: null,
+    extras: { review: { eligible: true, review: { id: "rev_gallery_1", rating: 4, status: "published" } } },
+  }],
+  shipments: [], payments: [], refundAttempts: [], activeRefundOperation: null, supportRequests: [], supportRequestActions: [], supportRequestIntro: "Need help with this order?",
+  paymentPlan: null, cod: null, paymentRecovery: RECOVERY,
+  progress: { steps: [{ key: "placed", label: "Order placed", done: true, happenedAt: "2026-09-12T08:00:00.000Z" }, { key: "delivered", label: "Delivered", done: false, happenedAt: null }], outcome: null },
+  timeline: [{ id: "t1", type: "order", status: "placed", label: "Order placed", happenedAt: "2026-09-12T08:00:00.000Z", details: "We received your order." }],
+  buyerUi: [], appAnswers: {}, attributeApps: [], giftCardTenders: [], discounts: [],
+  buyerView: buyerOrderDetailView({
+    status: ORDER.status, paymentStatus: ORDER.paymentStatus, paymentMethod: ORDER.paymentMethod, shippingMethodKind: null, requiresShipping: true,
+    paidAmount: 0, checkoutOpen: false, onlinePayment: true, paidLater: false,
+  } as never, "account", { refundInFlight: false, paymentRecoverable: true }),
+};
 
 const ANSWERS: Record<string, unknown> = {
   "/customer-auth/account-summary": {
@@ -77,7 +110,15 @@ const ANSWERS: Record<string, unknown> = {
     ],
     licenceKeys: [{ keyId: "key_gallery1", last4: "7K2Q" }],
   }] },
+  [`/customer-auth/orders/${GALLERY_CLAIM.orderId}`]: ORDER_DETAIL,
+  [`/customer-auth/orders/${GALLERY_CLAIM.orderId}/conversation`]: { conversation: thread(GALLERY_THREAD_ID, "order") },
   "/customer-auth/warranties": { items: [{
+    // A warranty a claim can still be made on (its form opens with `?claim=`).
+    warrantyId: "wty_gallery_open01", policyName: "6 months store warranty", provider: "store", durationValue: 6, durationUnit: "months", replacementDays: null,
+    terms: "Covers faults found in normal use.", quantity: 1, startsAt: "2026-09-20T06:00:00.000Z", expiresAt: "2099-03-20T06:00:00.000Z",
+    replacementUntil: null, voided: false, openClaimId: null, orderId: GALLERY_CLAIM.orderId, orderNumber: 1042,
+    orderItemId: "oi_gallery_5", productId: "prod_gallery_5", productName: "Headphones", variantLabel: null, imageUrl: IMAGE, state: "active", claim: null,
+  }, {
     warrantyId: "wty_gallery123456", policyName: "1 year official warranty", provider: "brand", durationValue: 1, durationUnit: "years", replacementDays: 7,
     terms: "Covers manufacturing faults. Not physical damage.", quantity: 1, startsAt: "2026-09-20T06:00:00.000Z", expiresAt: "2099-09-20T06:00:00.000Z",
     replacementUntil: "2026-09-27T06:00:00.000Z", voided: false, openClaimId: GALLERY_CLAIM.claimId, orderId: GALLERY_CLAIM.orderId, orderNumber: 1042,

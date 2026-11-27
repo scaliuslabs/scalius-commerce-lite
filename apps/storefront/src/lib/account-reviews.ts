@@ -421,7 +421,7 @@ const CLASS = {
   starInput: "peer sr-only",
   // Its colours are the rating's (rating-stars.css `.sc-rating`, a private page's `rating` row), each 3:1 on the surface;
   // a chosen star differs by more than colour: it is filled, an unchosen one only outlined.
-  starLabel: "peer inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-[var(--sc-star-off)] transition-colors hover:text-[var(--sc-star-on)] hover:[&>svg]:fill-current peer-hover:text-[var(--sc-star-on)] peer-hover:[&>svg]:fill-current peer-checked:text-[var(--sc-star-on)] peer-checked:[&>svg]:fill-current [input:focus-visible+&]:ring-2 [input:focus-visible+&]:ring-primary",
+  starLabel: "peer inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-md text-[var(--sc-star-off)] transition-colors hover:text-[var(--sc-star-on)] hover:[&>svg]:fill-current peer-hover:text-[var(--sc-star-on)] peer-hover:[&>svg]:fill-current peer-checked:text-[var(--sc-star-on)] peer-checked:[&>svg]:fill-current [input:focus-visible+&]:ring-2 [input:focus-visible+&]:ring-inset [input:focus-visible+&]:ring-ring",
   badge: "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
 } as const;
 
