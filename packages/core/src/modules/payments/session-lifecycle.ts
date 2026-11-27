@@ -252,7 +252,7 @@ export function openProviderSessionCondition(orderId: SQL): SQL {
 /**
  * How long a hosted session on a placed order (an invoice's payment page, a
  * receipt's pay-now link) stays open after the buyer last acted on it: past
- * it, the drain cancels the session at its provider (`expireIdleSessions`)
+ * it, the drain cancels the session at its provider (`cancelDueSessions`)
  * and it no longer counts as open. An unpaid checkout's own hold is shorter
  * (`PAYMENT_HOLD_MAX_SECONDS`, the stale-checkout sweep).
  */
@@ -307,17 +307,20 @@ export async function readOpenPaymentAttempt(db: Database, orderId: string): Pro
 }
 
 /**
- * The drain's first step, bounded per tick: a hosted page on a placed order
- * (an unpaid checkout's are the stale-checkout sweep's) that the buyer left
- * untouched past `PLACED_ORDER_SESSION_IDLE_SECONDS` ends.
+ * Idle pages, the session drain's first statements (`cancelDueSessions`,
+ * bounded per tick): a hosted page on a placed order (an unpaid checkout's
+ * are the stale-checkout sweep's) that the buyer left untouched past
+ * `PLACED_ORDER_SESSION_IDLE_SECONDS` ends.
  * - On an order that still owes money and is not closed, it becomes a cancel
- *   command (`hold_ended`) that `cancelDueSessions` closes at its provider.
+ *   command (`hold_ended`), which the drain's read in the same batch takes
+ *   and closes at its provider.
  * - On an order that owes nothing (paid, cancelled, returned, refunded), it
  *   is marked final locally (`order_settled`); no provider is called.
- * At most `limit` of each per tick, oldest first, in one D1 call. A provider
- * declares no expiry of its own pages to the platform: a page that must live
- * longer (a voucher, a bank reference) reports `processing`, which keeps its
- * own 14-day bound and is never expired here.
+ * At most `limit` of each per tick, oldest first, in the batch that reads the
+ * due commands (no D1 call of its own). A provider declares no expiry of its
+ * own pages to the platform: a page that must live longer (a voucher, a bank
+ * reference) reports `processing`, which keeps its own 14-day bound and is
+ * never expired here.
  */
 const OWES = sql.raw(`o.status NOT IN ('incomplete', 'cancelled', 'returned', 'refunded') AND o.deleted_at IS NULL AND o.balance_due_minor > 0`);
 const OWES_NOTHING = sql.raw(`o.status <> 'incomplete' AND NOT (o.status NOT IN ('cancelled', 'returned', 'refunded') AND o.deleted_at IS NULL AND o.balance_due_minor > 0)`);
@@ -333,22 +336,19 @@ function idleSessionsSql(orderCondition: SQL, rows: number): SQL {
         ORDER BY s.updated_at, s.id LIMIT ${rows}`;
 }
 
-/** Whether the drain has idle pages to end (`expireIdleSessions`): one row at most. */
+/** Whether the drain has idle pages to end (`cancelDueSessions`): one row at most. */
 export function dueIdleSessionProbes(db: Database) {
     return [db.select({ id: paymentSessionAttempts.id }).from(paymentSessionAttempts)
         .where(sql`${paymentSessionAttempts.id} IN (${idleSessionsSql(PLACED, 1)})`).limit(1)];
 }
 
-export async function expireIdleSessions(db: Database, limit: number): Promise<number> {
-    const rows = Math.max(1, Math.min(limit, 100));
+/** The idle pages' two transitions, at most `rows` of each: on an order that owes (`hold_ended`), on one that owes nothing (`order_settled`). */
+function expireIdleSessionStatements(db: Database, rows: number) {
     const idle = (orderCondition: SQL) => sql`${paymentSessionAttempts.id} IN (${idleSessionsSql(orderCondition, rows)})`;
-    const owes = OWES;
-    const settled = OWES_NOTHING;
-    const [cancelling, closed] = await safeBatch(db, [
-        sessionTransition(db, "hold_ended", idle(owes)).returning({ id: paymentSessionAttempts.id }),
-        sessionTransition(db, "order_settled", idle(settled)).returning({ id: paymentSessionAttempts.id }),
-    ] as const) as unknown as [Array<{ id: string }>, Array<{ id: string }>];
-    return cancelling.length + closed.length;
+    return [
+        sessionTransition(db, "hold_ended", idle(OWES)).returning({ id: paymentSessionAttempts.id }),
+        sessionTransition(db, "order_settled", idle(OWES_NOTHING)).returning({ id: paymentSessionAttempts.id }),
+    ] as const;
 }
 
 /**
@@ -514,13 +514,20 @@ async function applyPaidSession(
     }
 }
 
-/** The drain: due cancel commands, oldest first, each closed at its provider. */
-export async function cancelDueSessions(db: Database, deps: SessionCloseDeps, limit: number): Promise<{ scanned: number; closed: number }> {
-    const due = await db.select(CANCEL_COMMAND_COLUMNS).from(paymentSessionAttempts)
-        .where(dueCancelCondition())
-        .orderBy(asc(paymentSessionAttempts.updatedAt))
-        .limit(Math.max(1, Math.min(limit, 100)))
-        .all();
+/**
+ * The session drain, one read batch: idle pages end first (`expireIdleSessionStatements`), then the due
+ * cancel commands (those just made included) are read, oldest first, and each is closed at its provider.
+ * `expired` counts the idle pages ended.
+ */
+export async function cancelDueSessions(db: Database, deps: SessionCloseDeps, limit: number): Promise<{ scanned: number; closed: number; expired: number }> {
+    const rows = Math.max(1, Math.min(limit, 100));
+    const [cancelling, settled, due] = await safeBatch(db, [
+        ...expireIdleSessionStatements(db, rows),
+        db.select(CANCEL_COMMAND_COLUMNS).from(paymentSessionAttempts)
+            .where(dueCancelCondition())
+            .orderBy(asc(paymentSessionAttempts.updatedAt))
+            .limit(rows),
+    ] as const) as unknown as [Array<{ id: string }>, Array<{ id: string }>, CancelCommand[]];
     let closed = 0;
     for (const command of due) {
         try {
@@ -529,7 +536,7 @@ export async function cancelDueSessions(db: Database, deps: SessionCloseDeps, li
             console.warn("[payments] A payment session could not be closed; the next tick retries:", error instanceof Error ? error.name : "error");
         }
     }
-    return { scanned: due.length, closed };
+    return { scanned: due.length, closed, expired: cancelling.length + settled.length };
 }
 
 /**

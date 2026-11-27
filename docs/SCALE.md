@@ -69,7 +69,7 @@ Free profile. The table is generated from `apps/api/src/testing/free-plan-budget
 | `cron-idle` | 10 | 14 | 92 | 7,020 | 7 | 0 / 1.6 |
 | `cron-nightly` | 26 | 61 | 194 | 20,323 | 61 | - |
 | `drain-busy` | 8 | 18 | 13 | 629 | 14 | - |
-| `drain-idle-pages` | 11 | 12 | 3 | 5 | 0 | - |
+| `drain-idle-pages` | 10 | 12 | 3 | 5 | 0 | - |
 | `order-3-line-commit` | 14 | 68 | 54 | 57 | 16 | - |
 | `order-lifecycle` | 14 | 68 | 54 | 57 | 16 | - |
 | `bulk-run-chunk` | 7 | 195 | 1,086 | 275 | 2 | - |
