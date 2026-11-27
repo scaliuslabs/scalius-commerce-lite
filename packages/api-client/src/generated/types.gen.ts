@@ -1755,7 +1755,26 @@ export type PluginUiNode = {
     level?: 2 | 3 | 4;
 } | {
     type: 'text';
-    text: string;
+    text: string | Array<{
+        text: string;
+        to?: {
+            kind: 'app-page';
+            page: string;
+            query?: {
+                [key: string]: string;
+            };
+        } | {
+            kind: 'resource';
+            resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+            id: string;
+        } | {
+            kind: 'external';
+            href: string;
+        } | {
+            kind: 'store';
+            path: string;
+        };
+    }>;
     tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
     size?: 'sm' | 'md';
     emphasis?: 'strong' | 'mono';
@@ -2601,7 +2620,26 @@ export type CustomerAccountSummary = {
             level?: 2 | 3 | 4;
         } | {
             type: 'text';
-            text: string;
+            text: string | Array<{
+                text: string;
+                to?: {
+                    kind: 'app-page';
+                    page: string;
+                    query?: {
+                        [key: string]: string;
+                    };
+                } | {
+                    kind: 'resource';
+                    resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                    id: string;
+                } | {
+                    kind: 'external';
+                    href: string;
+                } | {
+                    kind: 'store';
+                    path: string;
+                };
+            }>;
             tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
             size?: 'sm' | 'md';
             emphasis?: 'strong' | 'mono';
@@ -15493,7 +15531,26 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                     level?: 2 | 3 | 4;
                 } | {
                     type: 'text';
-                    text: string;
+                    text: string | Array<{
+                        text: string;
+                        to?: {
+                            kind: 'app-page';
+                            page: string;
+                            query?: {
+                                [key: string]: string;
+                            };
+                        } | {
+                            kind: 'resource';
+                            resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                            id: string;
+                        } | {
+                            kind: 'external';
+                            href: string;
+                        } | {
+                            kind: 'store';
+                            path: string;
+                        };
+                    }>;
                     tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     size?: 'sm' | 'md';
                     emphasis?: 'strong' | 'mono';
@@ -24581,7 +24638,26 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                         level?: 2 | 3 | 4;
                     } | {
                         type: 'text';
-                        text: string;
+                        text: string | Array<{
+                            text: string;
+                            to?: {
+                                kind: 'app-page';
+                                page: string;
+                                query?: {
+                                    [key: string]: string;
+                                };
+                            } | {
+                                kind: 'resource';
+                                resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                                id: string;
+                            } | {
+                                kind: 'external';
+                                href: string;
+                            } | {
+                                kind: 'store';
+                                path: string;
+                            };
+                        }>;
                         tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                         size?: 'sm' | 'md';
                         emphasis?: 'strong' | 'mono';
@@ -25737,7 +25813,26 @@ export type PostApiV1OrdersCartValidationResponses = {
                     level?: 2 | 3 | 4;
                 } | {
                     type: 'text';
-                    text: string;
+                    text: string | Array<{
+                        text: string;
+                        to?: {
+                            kind: 'app-page';
+                            page: string;
+                            query?: {
+                                [key: string]: string;
+                            };
+                        } | {
+                            kind: 'resource';
+                            resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                            id: string;
+                        } | {
+                            kind: 'external';
+                            href: string;
+                        } | {
+                            kind: 'store';
+                            path: string;
+                        };
+                    }>;
                     tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     size?: 'sm' | 'md';
                     emphasis?: 'strong' | 'mono';
@@ -26782,7 +26877,26 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     level?: 2 | 3 | 4;
                 } | {
                     type: 'text';
-                    text: string;
+                    text: string | Array<{
+                        text: string;
+                        to?: {
+                            kind: 'app-page';
+                            page: string;
+                            query?: {
+                                [key: string]: string;
+                            };
+                        } | {
+                            kind: 'resource';
+                            resource: 'product' | 'order' | 'customer' | 'category' | 'collection' | 'brand' | 'page';
+                            id: string;
+                        } | {
+                            kind: 'external';
+                            href: string;
+                        } | {
+                            kind: 'store';
+                            path: string;
+                        };
+                    }>;
                     tone?: 'neutral' | 'info' | 'success' | 'warning' | 'critical';
                     size?: 'sm' | 'md';
                     emphasis?: 'strong' | 'mono';
