@@ -537,6 +537,10 @@ const REGRESSIONS = {
   // The store's other filled buttons (sign in, Apply) take the same rule: the brand fill found by its drawn edge, and
   // refused the colour of the form they stand on.
   "the store's filled buttons in a brand fill with a drawn edge": { request: { scheme: "light" }, states: ["base", "lines"], privatePages: { tokens: { cart: { dock: { background: "#ffffff" }, "details-form": { background: "#ffffff" }, submit: EDGED_ACTION, action: EDGED_ACTION } } } },
+  // An app's button filled the colour of the offer row it stands in: refused, as the store's own.
+  "an app's filled button the colour of its offer row": { refused: "contrast", refusedFor: /^ui\.button\/cart\.line\.after.*: its fill #f2ebd9 on /, request: { scheme: "light" }, privatePages: { tokens: { cart: {
+    "ui.stack.warning/cart.line.after": { background: "#f2ebd9", text: "#000000" }, "ui.button/cart.line.after": { background: "#f2ebd9", text: "#000000" },
+  } } } },
   "the store's filled buttons the colour of the form, with no edge": { refused: "contrast", refusedFor: /^action: its fill #fed700 on /, request: { scheme: "light" }, privatePages: { tokens: { cart: { "details-form": { background: "#fed700", text: "#111111", muted: "#111111", link: "#111111", error: "#111111" }, action: { background: "#fed700", text: "#111111" } } } } },
   // ─── The payment step (page `checkout`): drawn as the editor's sample checkout draws it, as buyers get it ───
   [CHECKOUT_LIST]: { request: { ...REFERENCE, page: "sample-checkout" }, privatePages: { tokens: { checkout: CHECKOUT_TOKENS } }, states: ["base"] },
@@ -1178,6 +1182,10 @@ function boundaries(scope) {
   const others = [...root.querySelectorAll(':is(button,a).bg-primary, :is(button,a).bg-destructive')]
     .filter((element) => !element.matches('[data-part="details-submit"],[data-part="dialog-confirm"],[data-part="pay"]') && !element.closest('[data-buyer-ui-target],[data-part="gateway"],[data-part="recommendations"]'));
   for (const other of others) if (shown(other)) filled(other, `the filled button "${other.textContent.trim().slice(0, 24)}"`);
+  // An app's button the theme fills (an opaque surface of its own; unfilled it paints none) is a filled button too.
+  for (const button of root.querySelectorAll('[data-buyer-ui-target] :is(a[data-ui="button"],[data-ui="button"]>button)')) {
+    if (own(button) && shown(button)) filled(button, `the app's button "${button.textContent.trim().slice(0, 24)}"`);
+  }
   for (const dialog of scope ? [root] : document.querySelectorAll('[data-private="dialog"]')) {
     const [back, confirm] = ['[data-part="dialog-back"]', '[data-part="dialog-confirm"]'].map((selector) => [...dialog.querySelectorAll(selector)].find(shown));
     if (back) {

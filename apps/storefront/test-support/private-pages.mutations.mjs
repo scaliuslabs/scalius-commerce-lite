@@ -374,6 +374,12 @@ export const MUTATIONS = {
     cases: ["no store controls on the page, under dark tokens"],
     expect: /\[data-host="scheme"\] button: drawn in the checkout header where the theme places the controls nowhere/,
   },
+  "F5 an app's filled button unchecked": {
+    why: "the save stops reading an app's filled button on what is around it: an Add Now the colour of its offer row is saved and drawn as plain words",
+    rewrites: [rewrite(TOKENS, 'const filled = place.boundary === "fill" && (!place.writes || Boolean(fill || values.background));', 'const filled = place.boundary === "fill" && !place.writes;')],
+    cases: ["an app's filled button the colour of its offer row"],
+    expect: /the app's button "[^"]*": its fill reads [\d.]+:1 on what is behind it/,
+  },
   // ─── The receipt and the account (w-p2-after-pages): what a buyer must keep there, hidden ───
   "after-order: the receipt's total hidden": {
     why: "the receipt's total row drawn hidden: a buyer must always read what the order costs",

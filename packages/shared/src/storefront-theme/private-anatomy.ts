@@ -879,6 +879,6 @@ export function privatePageAnatomy(): string[] {
   lines.push(`buyer-ui attributes=${PRIVATE_BUYER_UI_HOOKS.join(",")}`);
   lines.push(`chrome roots ${PRIVATE_SCOPE_ATTRIBUTE}=core-header|core-footer controls=${PRIVATE_CONTROL_PLACES.join("|")}`);
   lines.push(`layout tokens=${PRIVATE_LAYOUT_TOKENS.join(",")}`);
-  for (const [kind, style] of Object.entries(PRIVATE_BUYER_UI_STYLES)) lines.push(`buyer-ui style ui.${kind}${style.tones ? `[.${style.tones.join("|")}]` : ""}[@<app>][/<target>] ${style.kind} tokens=${style.tokens.join(",")}`);
+  for (const [kind, style] of Object.entries(PRIVATE_BUYER_UI_STYLES)) lines.push(`buyer-ui style ui.${kind}${style.tones ? `[.${style.tones.join("|")}]` : ""}[@<app>][/<target>] ${style.kind} tokens=${style.tokens.join(",")}${style.boundary ? ` boundary=${style.boundary}` : ""}`);
   return lines;
 }

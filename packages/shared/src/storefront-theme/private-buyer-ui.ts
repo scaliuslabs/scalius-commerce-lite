@@ -32,6 +32,12 @@ export interface PrivateBuyerUiStyle {
   readonly container?: true;
   /** A container's children by kind (`button`: a banner holds only its actions); absent: every kind. */
   readonly holds?: readonly string[];
+  /**
+   * `fill`: where the theme fills it (`background`, `gradient`), a filled button, found on each surface around it as
+   * the store's filled buttons are (private-anatomy.ts `boundary`): by its fill, or by a solid edge of at least 2px.
+   * Left unfilled it draws the store's outlined button, named by its words.
+   */
+  readonly boundary?: "fill";
 }
 
 const CRITICAL_INK = { critical: "destructive" } as const;
@@ -49,7 +55,7 @@ export const PRIVATE_BUYER_UI_STYLES: Readonly<Record<string, PrivateBuyerUiStyl
   // A toned stack (an offer row, a status box): a surface whose pieces sit in a row where it is wide enough.
   stack: { kind: '[data-ui="stack"][data-tone]', tones: PRIVATE_UI_TONES, tokens: ["background", "text", "border", "border-width", "radius", "shadow", "padding", "gap"], style: "box", ink: "foreground", toneInk: CRITICAL_INK, container: true },
   // Toned by the button's own tone (on the element itself), so a theme fills "Add" and leaves "Remove" outlined.
-  button: { kind: ':is(a[data-ui="button"],[data-ui="button"]>button)', tones: PRIVATE_UI_BUTTON_TONES, tokens: ["background", "text", "border", "border-width", "radius", "ring", "inset", "weight", "size", "case"], style: "control", ink: "foreground" },
+  button: { kind: ':is(a[data-ui="button"],[data-ui="button"]>button)', tones: PRIVATE_UI_BUTTON_TONES, tokens: ["background", "text", "border", "border-width", "radius", "ring", "inset", "weight", "size", "case"], style: "control", ink: "foreground", boundary: "fill" },
   badge: { kind: '[data-ui="badge"]', tones: PRIVATE_UI_TONES, tokens: ["background", "text", "border", "radius", "padding", "inset", "weight", "size"], style: "text", ink: "foreground", toneInk: CRITICAL_INK },
   // A tone's glyph in a circle: its words' colour, the circle's border and its size (the circle is twice it).
   mark: { kind: '[data-ui="mark"]', tones: PRIVATE_UI_TONES, tokens: ["text", "border", "size"], style: "text", ink: "foreground", toneInk: CRITICAL_INK },

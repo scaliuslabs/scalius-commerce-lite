@@ -684,6 +684,7 @@ function placesOf(spec: PrivatePageSpec, tokens: Record<string, Values>, context
             kind: style.style, surface: "under", ink: (tone && style.toneInk?.[tone]) || style.ink || "foreground", parent, nested: true,
             // A tone row adds nothing where it writes what its kind's row (always written just before) writes.
             base: tone ? `ui.${kind}${app ? `@${app}` : ""}/${target}` : null, sources, writes: style.container ? "box" : "leaf",
+            ...(style.boundary ? { boundary: style.boundary } : {}),
           };
           places.push(row);
           made.push({ place: row, name: kind, style, tone, app });
@@ -884,12 +885,14 @@ function resolveRows(places: readonly Place[], tokens: Record<string, Values>, p
     // clearly a colour of its own there. Found by its edge everywhere, it is an edge; on some surfaces only, its fill
     // is read on the rest (`edgeOn`).
     const width = values["border-width"];
-    const solidEdge = place.boundary === "fill" && typeof width === "number" && width >= PRIVATE_EDGE_MIN_WIDTH && (values["border-style"] ?? "solid") === "solid";
+    // An app's button is a filled button only where the theme fills it; unfilled it is the store's outlined button.
+    const filled = place.boundary === "fill" && (!place.writes || Boolean(fill || values.background));
+    const solidEdge = filled && typeof width === "number" && width >= PRIVATE_EDGE_MIN_WIDTH && (values["border-style"] ?? "solid") === "solid";
     const drawnEdge = solidEdge ? edgeBorder() : null;
     const edgeOn = drawnEdge === null ? [] : [...new Set(around)].filter((back) => !surface.every((point) => storefrontThemeContrast(point, back) >= PRIVATE_MARK_CONTRAST_FLOOR)
       && storefrontThemeContrast(drawnEdge, back) >= PRIVATE_MARK_CONTRAST_FLOOR && surface.every((point) => storefrontThemeColorDistance(point, back) >= PRIVATE_EDGE_FILL_DISTANCE));
     const edged = edgeOn.length > 0 && edgeOn.length === new Set(around).size;
-    const boundary = place.kind === "field" || edged ? "edge" : place.boundary ?? null;
+    const boundary = place.kind === "field" || edged ? "edge" : place.boundary === "fill" ? (filled ? "fill" : null) : place.boundary ?? null;
     const border = boundary === "edge" ? edgeBorder() : drawnEdge ?? take("border", "border", [under?.border ?? colors.border], surface, 1);
     const field = place.kind === "field" || place.parent === null;
     const placeholder = field ? take("placeholder", "placeholder", [colors["muted-foreground"], muted, text], surface, PRIVATE_CONTRAST_FLOOR) : null;

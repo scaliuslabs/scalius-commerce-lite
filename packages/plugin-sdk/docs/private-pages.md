@@ -257,7 +257,7 @@ The store draws an app's block from typed nodes ([commerce hooks](commerce-hooks
 
 The tones are `neutral`, `info`, `success`, `warning` and `critical`; critical words default to the error colour.
 
-A button's tones are its own: fill `ui.button.primary` ("Add Now") and a protected line's `critical` "Remove" keeps its own look. Each tone reads on the surface it sits on, and no `ui.button` key, in any tone, is drawn larger or heavier than the store's own action on the page (Place order on the cart): `prominence` otherwise. The cart drawer's buttons carry the same `data-tone` for your public stylesheet.
+A button's tones are its own: fill `ui.button.primary` ("Add Now") and a protected line's `critical` "Remove" keeps its own look. Each tone reads on the surface it sits on, and a button you fill (`background`) is a filled button: found on each surface around it (the target's, and inside a painted app box that box's) by its fill at 3:1, or by a solid edge of at least 2px at 3:1 over a fill clearly a colour of its own, as the store's filled buttons are (`contrast` otherwise); one you leave unfilled draws the store's outlined button, named by its words; and no `ui.button` key, in any tone, is drawn larger or heavier than the store's own action on the page (Place order on the cart): `prominence` otherwise. The cart drawer's buttons carry the same `data-tone` for your public stylesheet.
 
 **What a box holds.** A banner, a toned stack and a disclosure draw their children on their own surface. When you give one a surface (`background` or `gradient`), every kind and tone it can hold gets a row inside it (a banner: its buttons only; an app's box: that app's nodes only), checked on that box in each scheme: a link or a price inside an amber offer row is checked on amber, not on the line. A box that paints nothing adds no rows. A node writes only the colours you set for it and reads the rest from the row it stands on, so its rule is the same in every box at any depth. A field or a field label drawn in an app's painted box is checked on it too.
 
@@ -573,8 +573,8 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
       "ui.button@arcade.protection/cart.line.after": {
         "background": { "light": "#fed700", "dark": "primary" },
         "text": { "light": "#333e48", "dark": "primary-foreground" },
-        "border": { "light": "#fed700", "dark": "primary" },
-        "border-width": 0,
+        "border": { "light": "#000000", "dark": "primary" },
+        "border-width": 2,
         "radius": 0,
         "weight": "600",
         "size": 12,
@@ -618,8 +618,8 @@ The customer's prototype (a dark purple game store with a light scheme) expresse
       "ui.text@arcade.protection/cart.page.summary": { "text": { "light": "#000000", "dark": "#ffffff" }, "size": 14, "weight": "600" },
       "ui.link@arcade.protection/cart.page.summary": { "text": { "light": "#000000", "dark": "#5ee9b5" }, "size": 12, "weight": "500" },
       "ui.button@arcade.protection/cart.page.summary": {
-        "background": { "light": "#fed700", "dark": "muted" },
-        "text": { "light": "#000000", "dark": "#a4f4cf" },
+        "background": { "light": "#111111", "dark": "#a4f4cf" },
+        "text": { "light": "#ffffff", "dark": "#06110d" },
         "border-width": 0,
         "radius": 0,
         "weight": "600",
@@ -660,7 +660,7 @@ What the save proves is checked again by drawing. `pnpm test:private-pages` (in 
 - a stored document forged past the save (a stylesheet, the theme's chrome and search, content blocks in the page and a line): the store reads it with all of them dropped and its private pages' compile refused, so the theme stays (its light or dark switch is drawn) and its cart draws the default look with none of them;
 - the payment step, drawn as the editor's sample checkout draws it for buyers: a look in palette roles with its methods as a list, the same with a narrow frame and tiles, and a forged stylesheet, at 320, 390 and 1280 px, light and dark. It fails when Pay or the total is not drawn, is off screen when scrolled to or is covered; when Pay is smaller, lighter or fainter than the gift card's Apply, its words read under 4.5:1 on its fill, or it is not found on its card (its fill under 3:1 on what is behind it, with no edge that finds it, as Place order below); when the total is smaller than another money row or reads under 4.5:1; or when the payment provider's surface is painted other than the store paints it. Four mutations prove these fail: Pay hidden, the total hidden, Pay weaker than Apply, token mode reaching into the provider's surface;
 - a yellow Place order, Confirm and Pay, and the store's other filled buttons, whose fill reads under 3:1, framed by a 2px #111111 edge, on a white dock, form, dialog and card;
-- named breaks the save must refuse, each with its reason (a stylesheet or blocks, `not_available`; words that do not read, in either scheme; a total smaller, lighter or fainter than its rows, or under its label, `prominence`; Place order, Confirm or the store's other filled buttons (on the cart and the account) with no fill that shows, or Place order or Confirm smaller and lighter than its neighbour; Go back filled; a borderless field or stepper the colour of its box; Place order framed by a dark edge around the dock's own colour, or Place order or Pay framed by a 1px edge): a refused document is not drawn.
+- named breaks the save must refuse, each with its reason (a stylesheet or blocks, `not_available`; words that do not read, in either scheme; a total smaller, lighter or fainter than its rows, or under its label, `prominence`; Place order, Confirm or the store's other filled buttons (on the cart and the account), or an app's button filled the colour of its offer row, with no fill that shows, or Place order or Confirm smaller and lighter than its neighbour; Go back filled; a borderless field or stepper the colour of its box; Place order framed by a dark edge around the dock's own colour, or Place order or Pay framed by a 1px edge): a refused document is not drawn.
 
 **Where each state is drawn** (by cost: each draw loads the page and photographs it screen by screen):
 
@@ -707,7 +707,7 @@ In every draw: the first screen, the store's controls, prominence, apps and add-
 | The gate (named cases and the fast seed set) | `pnpm test:private-pages` |
 | A longer run | `pnpm test:private-pages --seeds 30 --from 100` (`--no-named` for seeds only, `--all-states` for every state of each) |
 | One seed or case | `--seed 7`, `--case "B4"` (a failing seed prints its document) |
-| The gate's own test | `pnpm test:private-pages --mutations`: the cases the mutations name draw clean unmutated first, in the same run; then every known-bad change of the store's code, as the test gallery serves it, must fail the check it names (52 today: among them a colour checked in one scheme only, rows inside an app's box checked on the target, the add-on bar without its row, prominence off, the total ranked by size only, a filled button's fill unchecked, an edge read by a border it does not draw, Go back filled, and the switch drawn under `controls: none`) |
+| The gate's own test | `pnpm test:private-pages --mutations`: the cases the mutations name draw clean unmutated first, in the same run; then every known-bad change of the store's code, as the test gallery serves it, must fail the check it names (52 today: among them a colour checked in one scheme only, rows inside an app's box checked on the target, the add-on bar without its row, prominence off, the total ranked by size only, a filled button's fill unchecked, an app's filled button unchecked, an edge read by a border it does not draw, Go back filled, and the switch drawn under `controls: none`) |
 
 The gate checks the cart page with the fixture store's data, not every store's data.
 
@@ -979,7 +979,7 @@ chrome roots data-private=core-header|core-footer controls=header|footer|none
 layout tokens=background,gradient,border,border-width,border-style,radius,shadow,padding,gap,columns,columns-wide
 buyer-ui style ui.banner[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="banner"] tokens=background,text,border,border-width,radius,shadow,padding
 buyer-ui style ui.stack[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="stack"][data-tone] tokens=background,text,border,border-width,radius,shadow,padding,gap
-buyer-ui style ui.button[.primary|secondary|critical][@<app>][/<target>] :is(a[data-ui="button"],[data-ui="button"]>button) tokens=background,text,border,border-width,radius,ring,inset,weight,size,case
+buyer-ui style ui.button[.primary|secondary|critical][@<app>][/<target>] :is(a[data-ui="button"],[data-ui="button"]>button) tokens=background,text,border,border-width,radius,ring,inset,weight,size,case boundary=fill
 buyer-ui style ui.badge[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="badge"] tokens=background,text,border,radius,padding,inset,weight,size
 buyer-ui style ui.mark[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="mark"] tokens=text,border,size
 buyer-ui style ui.text[.neutral|info|success|warning|critical][@<app>][/<target>] [data-ui="text"] tokens=text,font,size,weight,leading
