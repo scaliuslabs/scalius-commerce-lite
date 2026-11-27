@@ -22,20 +22,35 @@
 // uppercase `END` cut is checked for every file by `splitD1MigrationLikeRemote`
 // (migration-plan.test.ts).
 
+import { splitD1MigrationLikeRemote } from "../src/d1-remote-split.ts";
+
 export const FIRST_WRITE_GATED_MIGRATION = 227;
 export const MIN_ESTIMATE_BASIS_LENGTH = 20;
 
 const STATEMENT_BREAKPOINT = "--> statement-breakpoint";
-const IDENTIFIER = String.raw`[\`"\[]?([A-Za-z_][\w]*)[\`"\]]?`;
-const DECLARATION = /^--\s*rewrites\s+([A-Za-z_]\w*)\s*:\s*(.*?)\s*$/gim;
+// A name, bare or quoted (a quoted one may hold spaces), optionally schema-qualified (`main.orders`).
+const NAME = String.raw`(?:[A-Za-z_]\w*|"[^"]+"|\`[^\`]+\`|\[[^\]]+\])`;
+const IDENTIFIER = String.raw`(?:${NAME}\s*\.\s*)?(${NAME})`;
+const DECLARATION = new RegExp(String.raw`^--\s*rewrites\s+(${NAME})\s*:\s*(.*?)\s*$`, "gim");
+
+/** A table name without its quotes, as SQLite resolves it (case-insensitively). */
+function unquoted(name) {
+  return /^["`[]/.test(name) ? name.slice(1, -1) : name;
+}
+const sameTable = (name) => unquoted(name).toLowerCase();
 
 /** The statement without its leading comments, as SQLite reads it. */
 function executable(statement) {
   return statement.replace(/^\s*(?:--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/\s*)*/g, "").trim();
 }
 
+/**
+ * Every statement, as remote D1 cuts the file: on the breakpoints, then inside
+ * each chunk with the server's own splitter (two statements on one line, or a
+ * trigger followed by an UPDATE without a breakpoint, are two statements there).
+ */
 function statementsOf(sql) {
-  return sql.split(STATEMENT_BREAKPOINT).map((statement) => statement.trim()).filter(Boolean);
+  return sql.split(STATEMENT_BREAKPOINT).flatMap((chunk) => (chunk.trim() ? splitD1MigrationLikeRemote(chunk) : []));
 }
 
 /** The text after a balanced parenthesised group that starts at `text[0]`, or null. */
@@ -54,7 +69,7 @@ function afterParentheses(text) {
 
 /** The `-- rewrites <table>: <basis>` lines of a migration. */
 export function parseRewriteDeclarations(sql) {
-  return [...sql.matchAll(DECLARATION)].map((match) => ({ table: match[1], basis: match[2] }));
+  return [...sql.matchAll(DECLARATION)].map((match) => ({ table: unquoted(match[1]), basis: match[2] }));
 }
 
 function insertRewrites(rest) {
@@ -63,7 +78,7 @@ function insertRewrites(rest) {
   if (!match) return null;
   const tail = afterParentheses(rest.slice(match[0].length));
   if (tail === null || !/^(?:SELECT|WITH)\b/i.test(tail)) return null;
-  return { table: match[1], kind: "insert-select" };
+  return { table: unquoted(match[1]), kind: "insert-select" };
 }
 
 /**
@@ -80,15 +95,15 @@ export function rowRewritingStatements(sql) {
     const createTable = new RegExp(String.raw`^CREATE\s+(?:TEMP(?:ORARY)?\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?${IDENTIFIER}`, "i").exec(statement);
     if (createTable) {
       if (/\bAS\s+(?:SELECT|WITH)\b/i.test(statement.slice(createTable[0].length, createTable[0].length + 40))) {
-        found.push({ table: createTable[1], kind: "create-table-as", statement });
+        found.push({ table: unquoted(createTable[1]), kind: "create-table-as", statement });
       }
-      created.add(createTable[1].toLowerCase());
+      created.add(sameTable(createTable[1]));
       continue;
     }
     if (/^CREATE\s+(?:TEMP(?:ORARY)?\s+)?TRIGGER\b/i.test(statement)) continue;
     const index = new RegExp(String.raw`^CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?${IDENTIFIER}\s+ON\s+${IDENTIFIER}`, "i").exec(statement);
     if (index) {
-      if (!created.has(index[2].toLowerCase())) found.push({ table: index[2], kind: "index-on-existing-table", statement });
+      if (!created.has(sameTable(index[2]))) found.push({ table: unquoted(index[2]), kind: "index-on-existing-table", statement });
       continue;
     }
     // A leading WITH: the main statement is the first write keyword after the CTEs (their bodies are SELECTs).
@@ -99,18 +114,18 @@ export function rowRewritingStatements(sql) {
       rest = main[1];
       if (/^(?:INSERT|REPLACE)\b/i.test(rest)) {
         const into = new RegExp(String.raw`^(?:INSERT(?:\s+OR\s+\w+)?|REPLACE)\s+INTO\s+${IDENTIFIER}`, "i").exec(rest);
-        if (into) found.push({ table: into[1], kind: "insert-select", statement });
+        if (into) found.push({ table: unquoted(into[1]), kind: "insert-select", statement });
         continue;
       }
     }
     const update = new RegExp(String.raw`^UPDATE(?:\s+OR\s+\w+)?\s+${IDENTIFIER}`, "i").exec(rest);
     if (update) {
-      found.push({ table: update[1], kind: "update", statement });
+      found.push({ table: unquoted(update[1]), kind: "update", statement });
       continue;
     }
     const remove = new RegExp(String.raw`^DELETE\s+FROM\s+${IDENTIFIER}`, "i").exec(rest);
     if (remove) {
-      found.push({ table: remove[1], kind: "delete", statement });
+      found.push({ table: unquoted(remove[1]), kind: "delete", statement });
       continue;
     }
     const insert = insertRewrites(rest);
@@ -128,7 +143,7 @@ export function remoteD1TriggerFindings(sql) {
     if (!trigger) continue;
     const body = statement.slice(statement.search(/\bBEGIN\b/i));
     if (/\bSELECT\s+CASE\s+WHEN\b/i.test(body)) {
-      findings.push(`trigger ${trigger[1]} embeds SELECT CASE WHEN in its body, which remote D1 rejects: put the guard in the trigger's WHEN clause`);
+      findings.push(`trigger ${unquoted(trigger[1])} embeds SELECT CASE WHEN in its body, which remote D1 rejects: put the guard in the trigger's WHEN clause`);
     }
   }
   return findings;
