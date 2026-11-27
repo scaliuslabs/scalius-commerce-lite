@@ -22,7 +22,7 @@ import {
   type WebhookSubscriptionView,
 } from "@scalius/core/modules/events";
 import { WEBHOOK_DELIVERY_STATUSES } from "@scalius/database/schema";
-import { EVENTS_API_VERSION, EVENT_TOPIC_FILTERS } from "@scalius/shared/events";
+import { EVENTS_API_VERSION, EVENT_TOPIC_FILTERS, WEBHOOK_TOPICS_MAX } from "@scalius/shared/events";
 import { OUTBOUND_URL_MAX_LENGTH } from "@scalius/shared/outbound-url";
 import { PROTECTED_CUSTOMER_DATA } from "@scalius/shared/plugins/protected-data";
 import { created, ok } from "../../utils/api-response";
@@ -115,7 +115,7 @@ const idParams = z.object({ id: z.string().min(1).max(64) });
 const urlSchema = z.string().trim().min(1).max(OUTBOUND_URL_MAX_LENGTH).openapi({
   description: "HTTPS endpoint on a public host. Private, loopback, link-local and reserved addresses are refused.",
 });
-const topicsSchema = z.array(topicFilterSchema).min(1).max(EVENT_TOPIC_FILTERS.length);
+const topicsSchema = z.array(topicFilterSchema).min(1).max(WEBHOOK_TOPICS_MAX);
 const descriptionSchema = z.string().max(WEBHOOK_DESCRIPTION_MAX_LENGTH).nullable();
 
 const mutationErrors = {

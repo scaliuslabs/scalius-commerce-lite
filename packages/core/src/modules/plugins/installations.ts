@@ -24,6 +24,7 @@ import {
   type PluginInstallationSource,
   type PluginInstallationStatus,
 } from "@scalius/database/schema";
+import { isEventTopicFilter } from "@scalius/shared/events";
 import { looksLikePlaceholderCredential } from "@scalius/shared/plugins/placeholder-credentials";
 import { currentProviderKind } from "@scalius/shared/plugins/providers/kinds";
 import { isPluginLinkValue } from "@scalius/shared/plugins/settings-schema";
@@ -219,9 +220,15 @@ export function parseStoredPluginGrant(value: string | null): PluginGrantRequest
  * 4. Before `themeVersion` was required: a template or page preset that does
  *    not state it was written for theme document version 10, as it was read
  *    when it was installed.
+ * 5. A topic the platform removed from the event catalogue (the reserved
+ *    privacy-request names, rc.1) leaves `events` and each feature's
+ *    `events`: an installed app keeps running and loses only a topic nothing
+ *    ever sent. An install or update naming one is still refused.
+ * 6. A `link` setting default the link rule now refuses (it once took any
+ *    `/` path) is left out (`readableLinkDefaults`).
  */
 export function upgradeStoredPluginManifest(manifest: Record<string, unknown>): Record<string, unknown> {
-  return readableLinkDefaults(statedThemeVersions(nestAdminParts(buyerUiAsExtensions(permissionsAsScopes(manifest)))));
+  return readableLinkDefaults(withoutRemovedEventTopics(statedThemeVersions(nestAdminParts(buyerUiAsExtensions(permissionsAsScopes(manifest))))));
 }
 
 /**
@@ -267,6 +274,22 @@ function statedThemeVersions(manifest: Record<string, unknown>): Record<string, 
       ...(Array.isArray(storefront.pagePresets) ? { pagePresets: stated(storefront.pagePresets) } : {}),
     },
   };
+}
+
+function withoutRemovedEventTopics(manifest: Record<string, unknown>): Record<string, unknown> {
+  let changed = false;
+  const prune = (list: unknown[]) => {
+    const kept = list.filter((topic) => typeof topic !== "string" || isEventTopicFilter(topic));
+    if (kept.length !== list.length) changed = true;
+    return kept;
+  };
+  const upgraded: Record<string, unknown> = { ...manifest };
+  if (Array.isArray(manifest.events)) upgraded.events = prune(manifest.events);
+  if (Array.isArray(manifest.features)) {
+    upgraded.features = manifest.features.map((feature) =>
+      (isObject(feature) && Array.isArray(feature.events) ? { ...feature, events: prune(feature.events) } : feature));
+  }
+  return changed ? upgraded : manifest;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

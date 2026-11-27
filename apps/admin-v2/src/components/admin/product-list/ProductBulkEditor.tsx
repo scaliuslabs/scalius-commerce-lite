@@ -354,12 +354,12 @@ function BulkEditorGrid({ ids }: { ids: string[] }) {
           saved.add(result.id);
           continue;
         }
-        if (result.code === "stock_changed") {
+        if (result.code === "stock_version_conflict") {
           const skuId = /^skus\.(.+)\.onHand$/.exec(result.field ?? "")?.[1];
           if (skuId) recount.push([result.id, skuId]);
         }
         problems[result.id] = result.code === "product_revision_conflict" ? t("bulkEditRowChanged")
-          : result.code === "stock_changed" ? t("bulkEditStockChanged")
+          : result.code === "stock_version_conflict" ? t("bulkEditStockChanged")
             // A count on a bundle: the dashboard's sentence, in its language, not the server's.
             : kitLineRefusalMessage(result.code) ?? (result.message || t("bulkEditRowFailed"));
       }

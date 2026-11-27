@@ -285,7 +285,7 @@ The plan sets each app's ceilings. Your manifest's `limits` apply inside them.
 | Job steps per drain | 3 | 12 |
 | Held events while not running | 7 days, 2,000 | 30 days, 50,000 |
 
-- A run over a limit fails and the app's log records a breach.
+- A run over a limit fails and the app's log records a breach. A function the merchant approved as blocking (`onError: "block"`) is the exception: its run over a limit, like its throw, refuses that checkout and is logged, but never counts as a breach, so a failing blocking app is never stopped for it; staff get a notice about it at most once an hour per app and function point.
 - Storage is measured once a day. Above the limit, writes that add data fail with `quota_storage`; deletes still work.
 - Checkout functions, provider operations and storefront output are paced by the platform and do not count against runs per minute.
 - `ctx.api.call` allows 60 calls a minute. `ctx.http.fetch` allows 60 requests a minute; a provider operation's calls to its own provider do not count.
@@ -451,7 +451,7 @@ A schedule has five fields and runs in the store's time zone. The platform check
 SQL triggers write event facts in the same transaction as the change, so a committed change is never lost. A store writes no event rows for topics nobody subscribes to.
 
 - An event is `{ id, topic, apiVersion, occurredAt, resource: { type, id }, facts }`. Facts carry ids, states and quantities, never contact data, credentials or money. Read the resource with `ctx.api`.
-- The catalogue (`EVENT_TOPICS` in `@scalius/plugin-sdk/manifest`; every topic's facts in [the event reference](events.md)) is versioned and grows only by addition. It covers orders, returns, products and publications, variant inventory, purchase orders, transfers, customers and consent, fulfillments, refunds, shipments, payments, abandoned checkouts, discounts and redemptions, reviews, gift cards and their transactions, object events, buyer messages in the inbox (`conversation.message_received`) and payouts (`payout.created`, `payout.updated`, delivered only to the app that sent the payout). `customer.redact_requested` and `customer.data_requested` are reserved and have no emitter yet.
+- The catalogue (`EVENT_TOPICS` in `@scalius/plugin-sdk/manifest`; every topic's facts in [the event reference](events.md)) is versioned and grows only by addition. It covers orders, returns, products and publications, variant inventory, purchase orders, transfers, customers and consent, fulfillments, refunds, shipments, payments, abandoned checkouts, discounts and redemptions, reviews, gift cards and their transactions, object events, buyer messages in the inbox (`conversation.message_received`) and payouts (`payout.created`, `payout.updated`, delivered only to the app that sent the payout). Every topic has an emitter: the catalogue names nothing the platform does not send.
 - Fulfilment and refund events list the order lines they cover (see [Line facts and refunds](commerce-hooks.md#5-line-facts-and-refunds)).
 
 ### Abandoned checkouts
@@ -495,7 +495,7 @@ With the Sensitive `write_webhooks` scope, an app keeps up to 5 webhook endpoint
 | Storage over quota | Adding writes fail with `quota_storage`; deletes work |
 | Theme draws with an inactive app's parts | Publishing is refused with `theme_apps_unavailable` |
 
-A refusal of a `ctx.*` call throws an error with a stable `code` from `APP_ERROR_CODES` (`object_conflict`, `http_not_allowed`, `rate_limited`). A refused `ctx.api.call` answers `{ ok: false, status, data: null, error: { code, message, details? } }`. `details` is there only for a code that declares it (`APP_ERROR_CODES[code].details`, a JSON Schema: `payout_request_mismatch` carries `payoutId`, `validation_error` the first 20 `issues` as `path` and `message`), with exactly the declared fields; every other code carries none.
+A refusal of a `ctx.*` call throws an error with a stable `code` from `APP_ERROR_CODES` (`object_conflict`, `http_not_allowed`, `rate_limited`). A refused `ctx.api.call` answers `{ ok: false, status, data: null, error: { code, message, details? } }`. `details` is there only for a code that declares it (`APP_ERROR_CODES[code].details`, a JSON Schema: `payout_outcome_unknown` carries `payoutId`, `validation_error` the first 20 `issues` as `path` and `message`), with exactly the declared fields; every other code carries none.
 
 ## Testing
 
