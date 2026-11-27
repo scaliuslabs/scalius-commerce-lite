@@ -77,6 +77,9 @@ export function describeRejectedCode(
       return rejection.conflictsWith
         ? text(copy.discountOneDeliveryText, { other: rejection.conflictsWith })
         : copy.discountLowerSavingsText;
+    case "later":
+      // A reason a newer API added: the storefront's own words, never the API's text (it is not in the store's language).
+      return text(copy.discountUnavailableText, { code });
     default:
       return rejection.message;
   }

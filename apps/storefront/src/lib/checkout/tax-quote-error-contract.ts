@@ -1,6 +1,6 @@
 import { MAX_LINE_QUANTITY } from "@scalius/shared/order-limits";
 import type { CartRuleError, CartValidationIssue } from "../api/orders";
-import { parseQuotedShippingRate, type QuotedShippingRate } from "./quote-facts";
+import { parseQuotedShippingRate, withoutLaterShippingRates, type QuotedShippingRate } from "./quote-facts";
 import { parseCartRuleErrors } from "../cart/rule-errors";
 
 // Every code and action the API answers with (a Record, so a new one fails to
@@ -171,7 +171,7 @@ export function refusedDeliveryRates(payload: unknown): QuotedShippingRate[] | n
   if (details.shippingRates.length > 100) return null;
   try {
     // An error carries no currency scale: amounts are only checked as amounts.
-    const rates = details.shippingRates.map((rate) => parseQuotedShippingRate(rate, null));
+    const rates = withoutLaterShippingRates(details.shippingRates).map((rate) => parseQuotedShippingRate(rate, null));
     return new Set(rates.map(({ id }) => id)).size === rates.length ? rates : null;
   } catch {
     return null;

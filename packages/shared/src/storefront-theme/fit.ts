@@ -84,6 +84,30 @@ export const EMPTY_STORE_SHAPE: StoreShape = Object.freeze({
 });
 
 /**
+ * The store shape another build of this platform sent, fact by fact: a fact
+ * this build does not know is left out, and one that is missing or out of
+ * its bound (an older or a newer API) reads as an empty store's, so only the
+ * fit conditions over that fact fall back to their always-fitting variant.
+ * `repaired` names the facts read that way (and `unknown` the count of facts
+ * left out); a value that is not an object reads as the empty store.
+ */
+export function readSentStoreShape(value: unknown): { shape: StoreShape; repaired: string[]; unknown: number } {
+  const strict = storeShapeSchema.safeParse(value);
+  if (strict.success) return { shape: strict.data, repaired: [], unknown: 0 };
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return { shape: EMPTY_STORE_SHAPE, repaired: [], unknown: 0 };
+  const sent = value as Record<string, unknown>;
+  const facts = storeShapeSchema.shape;
+  const shape: Record<string, unknown> = {};
+  const repaired: string[] = [];
+  for (const key of Object.keys(facts) as Array<keyof StoreShape>) {
+    const fact = facts[key].safeParse(sent[key]);
+    shape[key] = fact.success ? fact.data : EMPTY_STORE_SHAPE[key];
+    if (!fact.success) repaired.push(key);
+  }
+  return { shape: shape as StoreShape, repaired, unknown: Object.keys(sent).filter((key) => !Object.hasOwn(facts, key)).length };
+}
+
+/**
  * Where the header menus take their links from (`blocks.navigation.source`):
  * the merchant's header menu, the published category tree, or the tree's
  * roots followed by the menu's other items. Declared here because the
