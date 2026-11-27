@@ -28,12 +28,16 @@
 // belong to each version, so `wrangler rollback <version>` deploys that
 // version with its own secrets (after confirming the changed ones, code
 // 10220): rolling back to the version from before the freeze is itself the
-// release, and a `secret delete` after it would act on the latest version,
-// which no longer serves.
+// release. The rollback leaves the failed version, freeze included, as the
+// latest one, and `wrangler deploy` keeps the latest version's secrets, so the
+// recipe ends with `wrangler versions secret delete`, which patches the
+// latest version without the secret and deploys nothing (PATCH
+// .../versions/latest). Until the latest version is the one serving again,
+// `secret put` answers 10215: the pre-flight compares the two.
 //
 // Every side effect is an injected function: deploy.mjs passes Wrangler and
 // fetch, the tests pass fakes.
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -195,9 +199,10 @@ const refuse = (code, message) => ({ ok: false, code, message });
  * `previous` is the newest receipt for the database; `resumeFrozen` is the
  * operator's `--resume-frozen`, for a failed deploy's freeze whose receipt is
  * on another machine. `freezes` is false for `--migrate-only`, which never
- * freezes and so needs no API to watch.
+ * freezes and so needs no API to watch. `seenServingAt` is the last time a
+ * deploy here saw the store serve (`readSeenServing`).
  */
-export function decideUpgrade({ tree, remote = null, meta = null, frozen = null, previous = null, resumeFrozen = false, treeRelease = null, freezes = true }) {
+export function decideUpgrade({ tree, remote = null, meta = null, frozen = null, previous = null, resumeFrozen = false, treeRelease = null, freezes = true, seenServingAt = null }) {
   const latest = tree.at(-1);
   if (!latest) return refuse("no_migrations", "This tree has no migrations to compare with the database.");
 
@@ -231,7 +236,9 @@ export function decideUpgrade({ tree, remote = null, meta = null, frozen = null,
   // Frozen is what the API answers, never what a receipt says: a receipt stays
   // "held" after an operator released by hand, or a kill between its save and
   // the Wrangler call.
-  const receiptHolds = receiptHoldsFreeze(previous);
+  // A receipt older than the last time the store was seen serving holds nothing: that freeze ended
+  // (a rollback, a release by hand), and its bookmark is from before writes this deploy cannot see.
+  const receiptHolds = receiptHoldsFreeze(previous) && !(seenServingAt && previous.startedAt < seenServingAt);
   if (frozen === true && !receiptHolds && !resumeFrozen) {
     return refuse("frozen_by_someone_else", "The store is frozen (its API answers database_migration_in_progress) and no deploy receipt here says a deploy froze it: "
       + "a database cutover or another operator may hold the freeze. Finish that work first. If a failed deploy on another machine left it, "
@@ -381,16 +388,18 @@ export function releaseCommand({ wranglerPrefix = WRANGLER, workerConfigFlag = "
 
 /**
  * The way back to a receipt's recovery point, in the order that loses
- * nothing: restore the database while the store is still frozen, then roll
- * the API Worker back to the version that served before the freeze. That
- * version has no freeze secret, so the rollback also releases the store; no
- * `secret delete` follows it (it would edit the latest version, which no
- * longer serves). Without the version id, the step says how to find it: in
- * `wrangler deployments list` the deployment just before this deploy is the
- * freeze (`secret put`: the old code with the freeze), and the one before
- * that is the version to roll back to.
+ * nothing: restore the database while the store is still frozen; roll the API
+ * Worker back to the version that served before the freeze (that version has
+ * no freeze secret, so the rollback also releases the store); clear the freeze
+ * from the latest version, the failed one, which the rollback leaves as the
+ * latest (`versions secret delete` patches it and deploys nothing, so the next
+ * `wrangler deploy` cannot inherit the freeze); then let a pre-flight see the
+ * store serve, which closes the receipt. Without the version id, the step
+ * says how to find it: in `wrangler deployments list` the deployment just
+ * before this deploy is the freeze (`secret put`: the old code with the
+ * freeze), and the one before that is the version to roll back to.
  */
-export function rollbackCommands(receipt, { wranglerPrefix = WRANGLER, d1ConfigFlag = "", workerConfigFlag = "" } = {}) {
+export function rollbackCommands(receipt, { wranglerPrefix = WRANGLER, d1ConfigFlag = "", workerConfigFlag = "", apiUrl = null } = {}) {
   const commands = [];
   if (receipt.recoveryPoint?.bookmark) {
     commands.push(`${wranglerPrefix} d1 time-travel restore ${receipt.database} --bookmark=${receipt.recoveryPoint.bookmark}${d1ConfigFlag}`);
@@ -398,13 +407,46 @@ export function rollbackCommands(receipt, { wranglerPrefix = WRANGLER, d1ConfigF
   commands.push(receipt.apiVersionBefore
     ? `${wranglerPrefix} rollback ${receipt.apiVersionBefore} --message "Back to before the ${receipt.startedAt} upgrade"${workerConfigFlag}`
     : `# The version from before the freeze is not recorded: run ${wranglerPrefix} deployments list${workerConfigFlag}, skip the freeze deployment (created by secret put just before this deploy), and run ${wranglerPrefix} rollback <the version before it>${workerConfigFlag}`);
+  commands.push(`${wranglerPrefix} versions secret delete ${FREEZE_SECRET} --message "Clear the freeze from the rolled-back version"${workerConfigFlag}`);
+  commands.push(`node scripts/deploy.mjs --check-upgrade --api-url ${apiUrl ?? "<the API origin>"}`);
   return commands;
 }
 
-/** Where receipts live: `SCALIUS_DEPLOY_RECEIPTS`, else ~/.scalius/deploy-receipts (outside every checkout). */
+/**
+ * Whether the API Worker's versions let this deploy go on: `serving` is the
+ * version at 100%, `latest` the newest uploaded one, `latestHoldsFreeze`
+ * whether that one carries the freeze secret. A deploy that sets a freeze, or
+ * finishes one, needs them equal (`secret put` edits the latest version and
+ * answers 10215 otherwise; `wrangler deploy` keeps its secrets). A code-only
+ * deploy can go on, its upload becoming the latest, but a freeze on the latest
+ * version is cleared first so the release never ships frozen.
+ */
+export function decideWorkerVersions({ serving, latest, latestHoldsFreeze, setsFreeze, wranglerPrefix = WRANGLER, workerConfigFlag = "" }) {
+  if (!serving && setsFreeze) {
+    return refuse("no_version_at_full_traffic", "Wrangler did not name one API Worker version serving 100% of traffic, so a rollback after the migration would have no version to return to. "
+      + `Run ${wranglerPrefix} deployments list${workerConfigFlag}, finish any gradual deployment so one version serves 100%, then deploy again. Nothing was changed.`);
+  }
+  if (!latest || latest === serving) return { ok: true, clearLatestFreeze: false };
+  if (setsFreeze) {
+    return refuse("worker_versions_diverged", `The API Worker's latest uploaded version (${latest}) is not the one serving (${serving ?? "none at 100%"}), as after a rollback: `
+      + "the freeze (secret put) would be refused with error 10215, and a deploy would inherit that version's secrets. Bring them in line, then deploy again:\n"
+      + (latestHoldsFreeze ? `  ${wranglerPrefix} versions secret delete ${FREEZE_SECRET} --message "Clear the freeze from the rolled-back version"${workerConfigFlag}\n` : "")
+      + "  from a checkout of the release that serves now: node scripts/deploy.mjs --only api --api-url <the API origin>  (uploads and serves that same code, so it is the latest version again)\n"
+      + "Nothing was changed.");
+  }
+  return { ok: true, clearLatestFreeze: latestHoldsFreeze === true };
+}
+
+/**
+ * Where receipts live: `SCALIUS_DEPLOY_RECEIPTS`, else ~/.scalius/deploy-receipts
+ * (outside every checkout). Under a test runner the operator's real folder is
+ * refused: a test names its own.
+ */
 export function receiptsDirectory(env = process.env, home = homedir()) {
   const configured = String(env.SCALIUS_DEPLOY_RECEIPTS ?? "").trim();
-  return configured ? resolve(configured) : join(home, ".scalius", "deploy-receipts");
+  if (configured) return resolve(configured);
+  if (env.VITEST) throw new Error("Under a test runner, set SCALIUS_DEPLOY_RECEIPTS: deploy receipts never go to the operator's ~/.scalius/deploy-receipts from a test.");
+  return join(home, ".scalius", "deploy-receipts");
 }
 
 export function receiptPath(directory, receipt) {
@@ -412,10 +454,23 @@ export function receiptPath(directory, receipt) {
   return join(directory, receipt.database, `${stamp}.json`);
 }
 
+/** The database's receipt folder, readable by the operator alone (0700; a receipt names the store and its bookmark). */
+function receiptFolder(directory, database) {
+  const folder = join(directory, database);
+  mkdirSync(folder, { recursive: true, mode: 0o700 });
+  chmodSync(folder, 0o700);
+  return folder;
+}
+
+function writePrivate(path, value) {
+  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
+  chmodSync(path, 0o600);
+}
+
 export function writeReceipt(directory, receipt) {
+  receiptFolder(directory, receipt.database);
   const path = receiptPath(directory, receipt);
-  mkdirSync(join(directory, receipt.database), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(receipt, null, 2)}\n`);
+  writePrivate(path, receipt);
   return path;
 }
 
@@ -423,7 +478,7 @@ export function writeReceipt(directory, receipt) {
 export function latestReceipt(directory, database) {
   let files;
   try {
-    files = readdirSync(join(directory, database)).filter((file) => file.endsWith(".json")).sort();
+    files = readdirSync(join(directory, database)).filter((file) => file.endsWith(".json") && file !== SEEN_SERVING_FILE).sort();
   } catch {
     return null;
   }
@@ -436,6 +491,34 @@ export function latestReceipt(directory, database) {
     }
   }
   return null;
+}
+
+const SEEN_SERVING_FILE = "seen-serving.json";
+
+/** When a deploy here last saw the store serve ordinary requests (ISO), or null. */
+export function readSeenServing(directory, database) {
+  try {
+    const value = JSON.parse(readFileSync(join(directory, database, SEEN_SERVING_FILE), "utf8"));
+    return typeof value?.at === "string" ? value.at : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The store was seen serving at `at`: record it, and close the newest receipt
+ * if it still says its freeze is held (that freeze ended outside the deploy:
+ * a rollback, a release by hand). Returns the receipt closed, or null.
+ */
+export function recordSeenServing(directory, database, at) {
+  receiptFolder(directory, database);
+  writePrivate(join(directory, database, SEEN_SERVING_FILE), { at });
+  const newest = latestReceipt(directory, database);
+  if (!receiptHoldsFreeze(newest) || newest.startedAt >= at) return null;
+  newest.freeze.released = true;
+  newest.closed = { at, reason: "the API was seen serving after this deploy; its freeze ended outside it" };
+  writePrivate(receiptPath(directory, newest), newest);
+  return newest;
 }
 
 /** Whether a receipt says its deploy left the store frozen (evidence of who froze it, never of whether it still is). */
@@ -453,7 +536,10 @@ export function receiptHoldsFreeze(receipt) {
  */
 export async function awaitObservedFreeze({ probe, sleep, now, firstWithinMs = 90_000, holdMs = 60_000, totalMs = 240_000, intervalMs = 3_000, log = () => {} }) {
   const started = now();
+  const seconds = (ms) => Math.round(ms / 1000);
   let since = null;
+  let firstSeen = null;
+  let lastServed = null;
   let observations = 0;
   for (;;) {
     const state = await probe();
@@ -461,18 +547,25 @@ export async function awaitObservedFreeze({ probe, sleep, now, firstWithinMs = 9
     if (state === true) {
       if (since === null) {
         since = at;
-        log("✓ The API refuses ordinary requests; holding while old invocations drain.");
+        if (firstSeen === null) {
+          firstSeen = at;
+          log("✓ The API refuses ordinary requests; holding while old invocations drain.");
+        }
       }
       observations += 1;
       if (at - since >= holdMs && observations >= 3) return { observations, heldMs: at - since };
     } else {
       since = null;
       observations = 0;
-      if (at - started >= firstWithinMs && state !== true) {
-        throw new Error(`The API did not start refusing requests within ${Math.round(firstWithinMs / 1000)}s of the freeze being set.`);
+      lastServed = at;
+      if (firstSeen === null && at - started >= firstWithinMs) {
+        throw new Error(`The API did not start refusing requests within ${seconds(firstWithinMs)}s of the freeze being set.`);
       }
     }
-    if (at - started >= totalMs) throw new Error(`The API's refusals did not hold for ${Math.round(holdMs / 1000)}s within ${Math.round(totalMs / 1000)}s.`);
+    if (at - started >= totalMs) {
+      throw new Error(`The API began refusing requests ${seconds(firstSeen - started)}s after the freeze was set, but an answer still came back ${state === null ? "unreadable" : "served"} at ${seconds(lastServed - started)}s, `
+        + `so the refusals never held for ${seconds(holdMs)}s within ${seconds(totalMs)}s.`);
+    }
     await sleep(intervalMs);
   }
 }
@@ -506,6 +599,7 @@ const errorText = (error) => (error instanceof Error ? error.message : String(er
  *   setFreeze(), awaitFreeze() (throws unless the freeze is observed holding),
  *   freezeState() -> true | false | null (what the API answers now),
  *   bookmark() -> { bookmark, takenAt }, migrate(), appliedCount() -> number,
+ *   clearLatestFreeze() (when the decision says the latest version carries a freeze),
  *   deployApi(), verifyApi(), releaseFreeze() (throws unless the release is observed),
  *   saveReceipt(receipt), now() -> ISO string,
  * }
@@ -661,6 +755,18 @@ export async function runGuardedUpgrade({ decision, receipt, steps, log = consol
   if (migrateOnly) {
     await finish("migrated");
     return receipt;
+  }
+
+  // A freeze a rollback left on the latest version would ride into this deploy (wrangler deploy keeps its secrets).
+  if (decision.clearLatestFreeze && !frozen) {
+    try {
+      await steps.clearLatestFreeze();
+      await record("clear-latest-freeze", true);
+    } catch (error) {
+      await record("clear-latest-freeze", false, errorText(error));
+      return stop("clear-latest-freeze", schemaChanged ? "failed-frozen" : "failed-unchanged", `clear-latest-freeze failed: ${errorText(error)}\n`
+        + `Nothing that serves changed. Clear it by hand, then deploy again:\n  pnpm --dir apps/api exec wrangler versions secret delete ${FREEZE_SECRET}`);
+    }
   }
 
   try {

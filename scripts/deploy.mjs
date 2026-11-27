@@ -57,12 +57,15 @@ import {
   awaitObservedRelease,
   createReceipt,
   decideUpgrade,
+  decideWorkerVersions,
   describeUpgradeDecision,
   latestReceipt,
   parseD1ExecuteRows,
   readFreezeState,
   readMeta,
   readRemoteLedgers,
+  readSeenServing,
+  recordSeenServing,
   releaseCommand,
   readTreeMigrations,
   receiptPath,
@@ -86,18 +89,25 @@ const DEPLOY_VALUE_FLAGS = new Set([
 /**
  * The script's one argument parser. A deploy is the default action, so every
  * spelling it accepts is honoured and every other is refused: `--only=api`
- * and `--only api` are the same, `--hlep` or `--dry-run=1` refuse rather than
- * deploy. `args` is the canonical form every later read uses (each value flag
+ * and `--only api` are the same; `--hlep`, `--dry-run=1` or a flag given twice
+ * (`--only api --only storefront`) refuse rather than deploy. `args` is the canonical form every later read uses (each value flag
  * followed by its value; pnpm's `--` separator dropped).
  */
 export function parseDeployArgs(inputArgs) {
   const parsed = [];
   const errors = [];
+  const seen = new Set();
   for (let index = 0; index < inputArgs.length; index += 1) {
     const arg = inputArgs[index];
     if (arg === "--") continue;
     const equals = arg.indexOf("=");
     const name = arg.startsWith("--") && equals !== -1 ? arg.slice(0, equals) : arg;
+    if ((DEPLOY_VALUE_FLAGS.has(name) || DEPLOY_FLAGS.has(name)) && seen.has(name)) {
+      errors.push(`${name} given more than once`);
+      if (DEPLOY_VALUE_FLAGS.has(name) && name === arg) index += 1;
+      continue;
+    }
+    seen.add(name);
     if (DEPLOY_VALUE_FLAGS.has(name)) {
       const value = equals !== -1 && name !== arg ? arg.slice(equals + 1) : inputArgs[++index];
       if (value === undefined || value === "" || (name === arg && value.startsWith("--"))) {
@@ -1581,9 +1591,10 @@ export async function main() {
     `${pnpm} exec wrangler d1 execute ${d1Target} --remote --json --command ${shellQuote(sql)}${d1ConfigFlag}`,
     { cwd: apiDir, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] },
   ));
-  const receipts = receiptsDirectory();
+  // Only a guarded D1 upgrade keeps receipts (and resolving the folder refuses under a test runner without one named).
+  const receipts = guardsRemoteD1 && !dryRun ? receiptsDirectory() : null;
   const upgradeCommands = {
-    rollback: (receipt) => rollbackCommands(receipt, { d1ConfigFlag, workerConfigFlag: apiConfigFlag }),
+    rollback: (receipt) => rollbackCommands(receipt, { d1ConfigFlag, workerConfigFlag: apiConfigFlag, apiUrl }),
     release: () => releaseCommand({ workerConfigFlag: apiConfigFlag }),
   };
   const probeFreeze = () => (apiUrl ? readFreezeState(apiUrl) : Promise.resolve(null));
@@ -1618,6 +1629,7 @@ export async function main() {
     const decision = decideUpgrade({
       tree, remote, meta, frozen, treeRelease,
       previous: latestReceipt(receipts, receiptDatabase),
+      seenServingAt: readSeenServing(receipts, receiptDatabase),
       resumeFrozen: args.includes("--resume-frozen"),
       freezes: !migrateOnly,
     });
@@ -1626,7 +1638,49 @@ export async function main() {
       console.error("  Nothing was changed.");
       process.exit(1);
     }
-    return decision;
+    // Seen serving: a held receipt from before now is closed, and a later resume cannot reuse its bookmark.
+    if (frozen === false) {
+      const closed = recordSeenServing(receipts, receiptDatabase, new Date().toISOString());
+      if (closed) console.log(`  Closed the receipt of ${closed.startedAt}: the store serves, so its freeze ended outside that deploy.`);
+    }
+    if (migrateOnly) return decision;
+    // The Worker's versions: the one serving 100% is the way back; the latest uploaded one is what secret put edits and wrangler deploy inherits.
+    const versions = readWorkerVersions();
+    const verdict = decideWorkerVersions({ ...versions, setsFreeze: decision.freeze, workerConfigFlag: apiConfigFlag });
+    if (!verdict.ok) {
+      console.error(`✗ Upgrade pre-flight refused (${verdict.code}): ${verdict.message}`);
+      process.exit(1);
+    }
+    console.log(`  API Worker: ${versions.serving ?? "no version"} serves 100%; the latest uploaded version is ${versions.latest === versions.serving ? "the same" : versions.latest ?? "unknown"}.`);
+    if (verdict.clearLatestFreeze) console.log(`  The latest version carries ${FREEZE_SECRET} (a rollback left it): it is cleared before the deploy.`);
+    return { ...decision, apiVersionBefore: versions.serving, clearLatestFreeze: verdict.clearLatestFreeze };
+  };
+
+  /** The version serving 100%, the newest uploaded one, and whether that one carries the freeze (read-only). */
+  const readWorkerVersions = () => {
+    const serving = readApiVersion();
+    let latest = null;
+    try {
+      const list = JSON.parse(execSync(`${pnpm} exec wrangler versions list --json${apiConfigFlag}`, {
+        cwd: apiDir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
+      }));
+      latest = [...list].sort((left, right) => String(left?.metadata?.created_on).localeCompare(String(right?.metadata?.created_on))).at(-1)?.id ?? null;
+    } catch {
+      latest = null;
+    }
+    let latestHoldsFreeze = false;
+    if (latest && latest !== serving) {
+      try {
+        const version = JSON.parse(execSync(`${pnpm} exec wrangler versions view ${latest} --json${apiConfigFlag}`, {
+          cwd: apiDir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
+        }));
+        latestHoldsFreeze = (version?.resources?.bindings ?? []).some((binding) => binding?.type === "secret_text" && binding?.name === FREEZE_SECRET);
+      } catch {
+        // Unreadable: clear it anyway (clearing a secret the version lacks changes nothing that serves).
+        latestHoldsFreeze = true;
+      }
+    }
+    return { serving, latest, latestHoldsFreeze };
   };
 
   /** The version serving 100% of the API Worker's traffic, or null when Wrangler cannot say (one is never guessed). */
@@ -1651,15 +1705,7 @@ export async function main() {
     const decision = await preflightUpgrade({ readRemote: true });
     const effective = migrateOnlyRun ? { ...decision, freeze: false, resume: false } : decision;
     const migrationsApplied = (decision.pending?.length ?? 0) > 0 || decision.resume === true;
-    const apiVersionBefore = migrateOnlyRun ? null : readApiVersion();
-    // A freeze is set only with the way back known: the version to roll back to is the release.
-    if (effective.freeze && !effective.resume && !apiVersionBefore) {
-      console.error(
-        "✗ Wrangler did not name one API Worker version serving 100% of traffic, so a rollback after the migration would have no version to return to. "
-        + `Run ${pnpm} --dir apps/api exec wrangler deployments list${apiConfigFlag}, finish any gradual deployment so one version serves 100%, then deploy again. Nothing was changed.`,
-      );
-      process.exit(1);
-    }
+    const apiVersionBefore = migrateOnlyRun ? null : decision.apiVersionBefore ?? null;
     const receipt = createReceipt({
       database: receiptDatabase,
       worker: config.name ?? null,
@@ -1703,6 +1749,11 @@ export async function main() {
             apiDir,
           ),
           appliedCount: () => Number(queryRemoteD1("SELECT count(*) AS n FROM d1_migrations")[0]?.n),
+          clearLatestFreeze: () => run(
+            `${pnpm} exec wrangler versions secret delete ${FREEZE_SECRET} --message "Clear a freeze a rollback left on the latest version"${apiConfigFlag}`,
+            "Clear the freeze from the latest (not serving) API Worker version; nothing is deployed",
+            apiDir,
+          ),
           deployApi: () => deployTarget("api", apiDeployConfigPath, plan, pluginSandbox),
           verifyApi: () => verifyPostDeployTarget("api", config, apiDeployConfigPath, {
             healthOnly, deploymentUrls, migrationsApplied, databaseProvider,

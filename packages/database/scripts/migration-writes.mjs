@@ -22,7 +22,16 @@
 // uppercase `END` cut is checked for every file by `splitD1MigrationLikeRemote`
 // (migration-plan.test.ts).
 
-import { splitD1MigrationLikeRemote } from "../src/d1-remote-split.ts";
+// A TypeScript file under plain Node: type stripping, on by default from Node 24.21 (the repo's engine).
+let splitD1MigrationLikeRemote;
+try {
+  ({ splitD1MigrationLikeRemote } = await import("../src/d1-remote-split.ts"));
+} catch (error) {
+  throw new Error(
+    `The migration write gate loads packages/database/src/d1-remote-split.ts with Node's TypeScript type stripping, `
+    + `which needs Node 24.21 or later (this is ${process.version}; the repository's engines field and .nvmrc name 24.21): ${error instanceof Error ? error.message : String(error)}`,
+  );
+}
 
 export const FIRST_WRITE_GATED_MIGRATION = 227;
 export const MIN_ESTIMATE_BASIS_LENGTH = 20;
@@ -134,13 +143,28 @@ export function rowRewritingStatements(sql) {
   return found;
 }
 
-/** Trigger bodies remote D1 refuses: an embedded `SELECT CASE WHEN`. */
+/**
+ * Trigger bodies remote D1 refuses or cuts differently from SQLite: an
+ * embedded `SELECT CASE WHEN`, or a body not closed the way the server's
+ * splitter closes it (the trigger's own final `END`, uppercase, and no other
+ * uppercase `END` followed by whitespace inside: write `END)` there, as
+ * AGENTS.md says). A body closed `end;` swallows the statements after it on
+ * the server, so its statements could not be read reliably here either.
+ */
 export function remoteD1TriggerFindings(sql) {
   const findings = [];
   for (const raw of statementsOf(sql)) {
     const statement = executable(raw);
+    if (/^END\b/i.test(statement)) {
+      findings.push("a trigger body was cut short by an uppercase END followed by a space or ; inside it (remote D1 closes the trigger there): write END) inside a body");
+      continue;
+    }
     const trigger = new RegExp(String.raw`^CREATE\s+(?:TEMP(?:ORARY)?\s+)?TRIGGER\s+(?:IF\s+NOT\s+EXISTS\s+)?${IDENTIFIER}`, "i").exec(statement);
     if (!trigger) continue;
+    if (!/\sEND$/.test(statement)) {
+      findings.push(`trigger ${unquoted(trigger[1])} is not closed the way remote D1 cuts it: end its body with an uppercase END; and write END) (not END followed by a space) inside it`);
+      continue;
+    }
     const body = statement.slice(statement.search(/\bBEGIN\b/i));
     if (/\bSELECT\s+CASE\s+WHEN\b/i.test(body)) {
       findings.push(`trigger ${unquoted(trigger[1])} embeds SELECT CASE WHEN in its body, which remote D1 rejects: put the guard in the trigger's WHEN clause`);
