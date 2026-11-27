@@ -428,30 +428,73 @@ export function readStoredStorefrontThemeDocument(value: unknown): StoredStorefr
       return { ok: false, reason: "The stored theme is not JSON." };
     }
   }
-  let upgraded: Json;
-  try {
-    upgraded = upgradeStorefrontThemeDocument(parsed);
-  } catch (error) {
-    return { ok: false, reason: error instanceof StorefrontThemeUpgradeError ? error.message : "The stored theme did not upgrade." };
-  }
-  upgraded = withoutPrivatePageTemplates(upgraded);
-  const released = readStoredPrivatePages(upgraded.privatePages);
-  let candidate: Json = "privatePages" in upgraded ? { ...upgraded, privatePages: released.value } : upgraded;
+  const upgraded = upgradedForRead(parsed);
+  if (!upgraded.ok) return upgraded;
+  const released = readStoredPrivatePages(upgraded.document.privatePages);
   // The stored input a compile's fingerprint covers: before any repair, so it matches every later read.
-  const stored = candidate;
+  const stored: Json = "privatePages" in upgraded.document ? { ...upgraded.document, privatePages: released.value } : upgraded.document;
+  const read = repairedRead(stored);
+  if (!read.ok) return read;
+  // A compile is served only while it belongs to this source (its fingerprint) and this build made it; a
+  // stored document holding what a theme cannot set is compiled by maintenance, its held pages refused there.
+  const privatePages = read.document.privatePages;
+  const document = privatePagesCompiledCurrent(privatePages) && !privatePagesCompiledIntact(stored, privatePages)
+    ? { ...read.document, privatePages: uncompiledPrivatePages(privatePages) }
+    : read.document;
+  return {
+    ok: true,
+    document,
+    storedVersion: (parsed as Json).version as number,
+    ...(read.repairs.length > 0 ? { repairs: read.repairs } : {}),
+    ...(released.held.length > 0 ? { held: released.held } : {}),
+  };
+}
+
+/** A sent document read: the current document and what the read repaired, or why it does not read. */
+export type SentStorefrontThemeRead =
+  | { ok: true; document: StorefrontThemeDocument; repairs?: StorefrontThemeReadRepair[] }
+  | { ok: false; reason: string };
+
+/**
+ * Reads a theme document another build of this platform sent (the storefront
+ * reading the API's layout or preview answer, either Worker deployed first):
+ * the strict parse first, the request path's one cost for a valid document;
+ * otherwise the stored read's own steps without what only a stored row needs
+ * (the held fields, the compile's fingerprint): upgraded from an older
+ * version, then parsed for its structure with the same repairs (a key this
+ * build does not know is left out, a member of a closed list it does not know
+ * reads as the default for that one value, a refused link as none), each
+ * listed in `repairs`. A document of a newer version than this build reads,
+ * one that is not an object or states no version, and one a repair does not
+ * reach do not read.
+ */
+export function readSentStorefrontThemeDocument(value: unknown): SentStorefrontThemeRead {
+  const strict = storefrontThemeDocumentSchema.safeParse(value);
+  if (strict.success) return { ok: true, document: strict.data };
+  const upgraded = upgradedForRead(value);
+  if (!upgraded.ok) return upgraded;
+  const read = repairedRead(upgraded.document);
+  if (!read.ok) return read;
+  return { ok: true, document: read.document, ...(read.repairs.length > 0 ? { repairs: read.repairs } : {}) };
+}
+
+/** A document of any readable version at the current one, without what no document holds now (both reads). */
+function upgradedForRead(value: unknown): { ok: true; document: Json } | { ok: false; reason: string } {
+  try {
+    return { ok: true, document: withoutPrivatePageTemplates(upgradeStorefrontThemeDocument(value)) };
+  } catch (error) {
+    return { ok: false, reason: error instanceof StorefrontThemeUpgradeError ? error.message : "The theme did not upgrade." };
+  }
+}
+
+/** The current-version document parsed for its structure, repairing what a read repairs (read-repair.ts); both reads. */
+function repairedRead(document: Json): { ok: true; document: StorefrontThemeDocument; repairs: StorefrontThemeReadRepair[] } | { ok: false; reason: string } {
+  let candidate = document;
   const repairs: StorefrontThemeReadRepair[] = [];
   // A repair can let a check that waited on the shape run (a list's own checks): a few rounds settle it.
   for (let round = 0; ; round += 1) {
     const result = storefrontThemeDocumentSchema.safeParse(candidate);
-    if (result.success) {
-      // A compile is served only while it belongs to this source (its fingerprint) and this build made it; a
-      // stored document holding what a theme cannot set is compiled by maintenance, its held pages refused there.
-      const privatePages = result.data.privatePages;
-      const document = privatePagesCompiledCurrent(privatePages) && !privatePagesCompiledIntact(stored, privatePages)
-        ? { ...result.data, privatePages: uncompiledPrivatePages(privatePages) }
-        : result.data;
-      return { ok: true, document, storedVersion: (parsed as Json).version as number, ...(repairs.length > 0 ? { repairs } : {}), ...(released.held.length > 0 ? { held: released.held } : {}) };
-    }
+    if (result.success) return { ok: true, document: result.data, repairs };
     const repaired = round < READ_REPAIR_ROUNDS ? repairStoredStorefrontTheme(candidate, result.error.issues, repairs) : null;
     if (!repaired) {
       const issue = result.error.issues[0];

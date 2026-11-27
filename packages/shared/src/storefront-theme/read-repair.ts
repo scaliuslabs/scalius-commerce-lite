@@ -26,6 +26,7 @@
 import { STOREFRONT_MOBILE_DEFAULT_TABS, STOREFRONT_MOBILE_TAB_LIMITS } from "./blocks";
 import { PRIVATE_PAGE_KEYS } from "./private-keys";
 import { DEFAULT_STOREFRONT_THEME } from "./templates";
+import { unionKeyIssues } from "../unknown-keys";
 
 type Json = Record<string, unknown>;
 
@@ -40,8 +41,11 @@ export interface StorefrontThemeReadRepair {
  * The theme document's closed lists (label keys and variants, icon keys, the
  * controls' places, layout kinds and part names, token values such as fonts,
  * block variants and their choices, section types, tab destinations and
- * icons) only grow: a member is never removed or renamed once released. This
- * repair is the guard against a removal by mistake, never a licence for one.
+ * icons, the template id, the homepage's kind) only grow: a member is never
+ * removed or renamed once released. This repair is how a build reads a
+ * member a later release added (a storefront a release behind its API, or
+ * rolled back alone), and the guard against a removal by mistake, never a
+ * licence for one.
  */
 export const STOREFRONT_READ_UNKNOWN_MEMBER = "unknown_member";
 
@@ -86,21 +90,6 @@ function sectionEntry(path: readonly PropertyKey[]): { list: readonly PropertyKe
 }
 
 const SAVE_REASON_TAB = /^tab_/;
-
-/**
- * The issues as a repair reads them: a union (dark colours or none, an app's
- * value) refused only for a key a branch does not know is that branch's
- * unknown keys, at their place, so a later release's key there is left out too.
- */
-function unionKeyIssues(issues: readonly StorefrontThemeReadIssue[]): StorefrontThemeReadIssue[] {
-  return issues.flatMap((issue) => {
-    const branches = (issue as { errors?: unknown }).errors;
-    if (issue.code !== "invalid_union" || !Array.isArray(branches)) return [issue];
-    const keysOnly = branches.find((branch): branch is StorefrontThemeReadIssue[] => Array.isArray(branch) && branch.length > 0
-      && branch.every((nested) => (nested as StorefrontThemeReadIssue).code === "unrecognized_keys"));
-    return keysOnly ? keysOnly.map((nested) => ({ ...nested, path: [...issue.path, ...nested.path] })) : [issue];
-  });
-}
 
 /**
  * The document with every refused value repaired, and what was repaired; null
@@ -193,6 +182,11 @@ export function repairStoredStorefrontTheme(
       // A destination this build does not know: the tab is left out; a store icon it does not know: the link icon.
       unknown = true;
       done = path.at(-1) === "name" && path.at(-2) === "icon" ? set(path, "link") : drop(tab);
+    } else if ((issue.code === "invalid_union" || issue.code === "invalid_value") && (path[0] === "template" || (path[0] === "pages" && path[1] === "homeMode"))) {
+      // A template id or a homepage kind this build does not know: the default theme's.
+      unknown = true;
+      const place = path[0] === "template" ? path.slice(0, 1) : path.slice(0, 2);
+      done = set(place, structuredClone(defaultAt(place)));
     } else if ((issue.code === "invalid_union" || issue.code === "invalid_value") && path[0] === "blocks" && typeof path[1] === "string" && defaultAt(path.slice(0, 2)) !== undefined) {
       // A block variant (or one of its choices) this build does not know: the default theme's block there.
       unknown = true;

@@ -34,6 +34,7 @@ import {
   type PluginSettingsSchema,
 } from "./settings-schema";
 import { isStorefrontSkinTarget } from "../storefront-theme/skins";
+import { safeParseLeavingOutUnknownKeys } from "../unknown-keys";
 import { STOREFRONT_THEME_DOCUMENT_VERSION } from "../storefront-theme/version";
 
 /** The zod-free part (constants, data shapes, render messages): ./storefront-protocol.ts. */
@@ -406,7 +407,11 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
-/** The layout payload's `appExtensions`, shape-checked; anything malformed is left out. The list is frozen and shared. */
+/**
+ * The layout payload's `appExtensions`, shape-checked; anything malformed is
+ * left out, and a key a later release added to a settings field is left out
+ * of that field (the API may be a release ahead). The list is frozen and shared.
+ */
 export function readStorefrontExtensions(value: unknown): readonly StorefrontExtension[] {
   if (!Array.isArray(value)) return [];
   const known = extensionsByValue.get(value);
@@ -442,7 +447,7 @@ function parseStorefrontExtensions(value: readonly unknown[]): StorefrontExtensi
       if (typeof skin !== "object" || skin === null) return [];
       const record = skin as Record<string, unknown>;
       if (typeof record.id !== "string" || !PLUGIN_KEY_PATTERN.test(record.id) || !isStorefrontSkinTarget(record.target)) return [];
-      const settings = pluginSettingsSchemaSchema.safeParse(record.settings ?? []);
+      const settings = safeParseLeavingOutUnknownKeys(pluginSettingsSchemaSchema, record.settings ?? []);
       return settings.success ? [{ id: record.id, target: record.target, settings: settings.data }] : [];
     }) : [];
     const components = Array.isArray(item.components) ? item.components.flatMap((component) => {
@@ -450,14 +455,14 @@ function parseStorefrontExtensions(value: readonly unknown[]): StorefrontExtensi
       const record = component as Record<string, unknown>;
       if (typeof record.type !== "string" || !PLUGIN_KEY_PATTERN.test(record.type) || !Array.isArray(record.targets)) return [];
       const targets = record.targets.filter((target): target is StorefrontComponentTarget => (STOREFRONT_COMPONENT_TARGETS as readonly unknown[]).includes(target));
-      const settings = pluginSettingsSchemaSchema.safeParse(record.settings ?? []);
+      const settings = safeParseLeavingOutUnknownKeys(pluginSettingsSchemaSchema, record.settings ?? []);
       return settings.success && targets.length > 0 ? [{ type: record.type, targets, settings: settings.data, ...(record.reads === true ? { reads: true as const } : {}) }] : [];
     }) : [];
     const sectionSettings: Record<string, PluginSettingsSchema> = {};
     if (typeof item.sectionSettings === "object" && item.sectionSettings !== null) {
       for (const [type, schema] of Object.entries(item.sectionSettings as Record<string, unknown>)) {
         if (!PLUGIN_KEY_PATTERN.test(type)) continue;
-        const parsed = pluginSettingsSchemaSchema.safeParse(schema);
+        const parsed = safeParseLeavingOutUnknownKeys(pluginSettingsSchemaSchema, schema);
         if (parsed.success) sectionSettings[type] = parsed.data;
       }
     }

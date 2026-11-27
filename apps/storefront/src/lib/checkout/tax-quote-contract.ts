@@ -28,6 +28,7 @@ import {
   parseQuotedShippingRate,
   positiveQuantity,
   requiredString,
+  withoutLaterShippingRates,
   type CheckoutDiscountFacts,
   type CheckoutDiscountLine,
   type QuotedShippingRate,
@@ -656,7 +657,7 @@ export function parseQuotedShippingRates(
 ): QuotedShippingRate[] | null {
   if (value === undefined || value === null) return null;
   if (!Array.isArray(value) || value.length > MAX_QUOTED_SHIPPING_RATES) fail();
-  const rates = value.map((rate) => parseQuotedShippingRate(rate, decimalPlaces));
+  const rates = withoutLaterShippingRates(value).map((rate) => parseQuotedShippingRate(rate, decimalPlaces));
   if (new Set(rates.map(({ id }) => id)).size !== rates.length) fail();
   return rates;
 }

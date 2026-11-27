@@ -198,6 +198,15 @@ function parseQuotedRateKind(value: unknown): QuotedShippingRate["kind"] {
   return value === "delivery" || value === "pickup" ? value : fail();
 }
 
+/**
+ * The quoted delivery options this build can offer: one of a kind a later
+ * release added is left out (an older storefront meets it first), never the
+ * quote or the refusal that lists it. Anything else malformed still fails.
+ */
+export function withoutLaterShippingRates(rates: readonly unknown[]): unknown[] {
+  return rates.filter((rate) => !(isRecord(rate) && typeof rate.kind === "string" && rate.kind !== "delivery" && rate.kind !== "pickup"));
+}
+
 /** One quoted delivery option; amounts are checked against their minor units when the scale is known. */
 export function parseQuotedShippingRate(
   value: unknown,
@@ -214,6 +223,11 @@ export function parseQuotedShippingRate(
     amount,
     amountMinor,
   };
+}
+
+/** An offer of a kind a later release added: no offer this build can describe (left out). */
+function isLaterOffer(value: unknown): boolean {
+  return isRecord(value) && typeof value.kind === "string" && value.kind !== "get" && value.kind !== "buy";
 }
 
 function parseOffer(value: unknown): CheckoutDiscountOffer {
@@ -299,17 +313,19 @@ export function parseDiscountFacts(data: Record<string, unknown>): CheckoutDisco
         ...(line.replaces === undefined ? {} : { replaces: requiredString(line.replaces, 160) }),
       };
     }),
-    offers: offers.map(parseOffer),
+    // A newer API's offer kind or rejection reason never fails the quote: the offer is left out, and the
+    // reason reads as `unavailable`, the API's own message shown (an older storefront meets them first).
+    offers: offers.filter((offer) => !isLaterOffer(offer)).map(parseOffer),
     rejectedCodes: rejectedCodes.map((rejection) => {
-      if (!isRecord(rejection) || !REJECTED_CODE_REASONS.has(rejection.reason as CheckoutRejectedCodeReason)) fail();
+      if (!isRecord(rejection) || typeof rejection.reason !== "string") fail();
       return {
         code: requiredString(rejection.code, MAX_CODE_LENGTH),
-        reason: rejection.reason as CheckoutRejectedCodeReason,
+        reason: REJECTED_CODE_REASONS.has(rejection.reason as CheckoutRejectedCodeReason) ? rejection.reason as CheckoutRejectedCodeReason : "unavailable",
         message: requiredString(rejection.message, 300),
         ...(typeof rejection.shortfallAmount === "number" ? { shortfallAmount: nonNegativeAmount(rejection.shortfallAmount) } : {}),
         ...(typeof rejection.shortfallQuantity === "number" ? { shortfallQuantity: positiveQuantity(Math.min(rejection.shortfallQuantity, MAX_QUANTITY)) } : {}),
         ...(typeof rejection.conflictsWith === "string" ? { conflictsWith: requiredString(rejection.conflictsWith, 160) } : {}),
-        ...(rejection.offer !== undefined ? { offer: parseOffer(rejection.offer) } : {}),
+        ...(rejection.offer !== undefined && !isLaterOffer(rejection.offer) ? { offer: parseOffer(rejection.offer) } : {}),
         ...(rejection.requiresCustomerPhone === true ? { requiresCustomerPhone: true } : {}),
         ...(rejection.bundleSavesMore === true ? { bundleSavesMore: true as const } : {}),
       };

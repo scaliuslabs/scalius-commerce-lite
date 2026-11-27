@@ -58,18 +58,21 @@ function readComponentObjects(value: unknown): ComponentObjects | null {
     if (!parseObjectTypeHandle(type) || !isRecord(data) || !isRecord(data.fields) || !Array.isArray(data.records)) return null;
     if (Object.keys(data.fields).length > OBJECT_FIELDS_MAX || data.records.length > OBJECT_SECTION_RECORDS_MAX) return null;
     const fields: Record<string, string> = {};
+    // A field of a type this build does not know (a later release's custom-field type) is left out with its values.
+    const later = new Set<string>();
     for (const [key, field] of Object.entries(data.fields)) {
-      if (!OBJECT_FIELD_KEY_PATTERN.test(key) || typeof field !== "string" || !(OBJECT_FIELD_TYPES as readonly string[]).includes(field)
-        || field === "customer_reference" || field === "order_reference") return null;
-      fields[key] = field;
+      if (!OBJECT_FIELD_KEY_PATTERN.test(key) || typeof field !== "string" || field === "customer_reference" || field === "order_reference") return null;
+      if ((OBJECT_FIELD_TYPES as readonly string[]).includes(field)) fields[key] = field;
+      else later.add(key);
     }
     const records: ComponentObjects[string]["records"] = [];
     for (const record of data.records) {
       if (!isRecord(record) || typeof record.id !== "string" || record.id.length < 1 || record.id.length > 128
         || !(record.handle === null || typeof record.handle === "string" && OBJECT_HANDLE_PATTERN.test(record.handle)) || !isRecord(record.data)) return null;
-      if (Object.keys(record.data).some((key) => !Object.hasOwn(fields, key))) return null;
+      if (Object.keys(record.data).some((key) => !Object.hasOwn(fields, key) && !later.has(key))) return null;
       try { if (new TextEncoder().encode(JSON.stringify(record.data)).length > OBJECT_RECORD_MAX_BYTES) return null; } catch { return null; }
-      records.push({ id: record.id, handle: record.handle, data: record.data });
+      const known = later.size === 0 ? record.data : Object.fromEntries(Object.entries(record.data).filter(([key]) => !later.has(key)));
+      records.push({ id: record.id, handle: record.handle, data: known });
     }
     result[type] = { fields, records };
   }
