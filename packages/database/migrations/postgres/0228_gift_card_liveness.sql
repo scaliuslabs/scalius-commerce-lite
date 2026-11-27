@@ -1,4 +1,4 @@
--- See ../0227_gift_card_liveness.sql.
+-- See ../0228_gift_card_liveness.sql.
 CREATE OR REPLACE FUNCTION scalius_compat."cdep_gift_cards_ins_fn"()
 RETURNS trigger
 LANGUAGE plpgsql
