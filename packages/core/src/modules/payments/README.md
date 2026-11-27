@@ -273,7 +273,11 @@ count, list and App API read; `overdueOrderCondition` repeats its WHERE and
   Mark as paid, a point-of-sale sale: `orders.payment_method` `manual`, no
   terms, never an invoice): an `order_payments` row with `payment_method`
   `manual` (`RECORDED_PAYMENT_METHOD`) and the order's new paid amount in one
-  guarded batch, idempotent by the caller's key. Its insert emits
+  guarded batch, idempotent by the caller's key. An open payment attempt
+  (`openPaymentAttemptCondition`: a claim running, or a hosted session the
+  buyer could still pay) refuses it (409 `payment_in_progress`) unless the
+  caller records anyway (`allowOpenAttempt`), which turns those sessions into
+  cancel commands in the same batch. Its insert emits
   `payment.updated`, a full payment `order.paid`; a refund of it is a manual
   settlement (`isManualSettlementMethod`). An app deferred method's own
   provider events still credit the order through the kernel as for any

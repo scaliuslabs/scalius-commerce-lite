@@ -29,7 +29,7 @@
 // - Money a session still takes for a closed order is recorded and refunded
 //   automatically (late-payment.ts).
 import { and, asc, eq, inArray, isNotNull, ne, or, sql, type SQL } from "drizzle-orm";
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
 import { orders, paymentSessionAttempts } from "@scalius/database/schema";
 import { defineMachine } from "@scalius/shared/machine";
 import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
@@ -112,6 +112,8 @@ export const SESSION_TRANSITIONS = {
     close_in_flight: { from: ["cancelling"], to: "provider_processing" },
     /** No cancel at the provider, its bound passed, or it kept failing: closed locally; late money is refunded. */
     close_given_up: { from: ["cancelling"], to: "cancelled" },
+    /** An idle page on an order that owes nothing any more (paid, closed): closed locally, the provider not asked. */
+    order_settled: { from: ["created", "failed"], to: "cancelled" },
 } as const satisfies Record<string, { from: readonly SessionStatus[]; to: SessionStatus }>;
 export type SessionEvent = keyof typeof SESSION_TRANSITIONS;
 
@@ -245,6 +247,108 @@ export function openProviderSessionCondition(orderId: SQL): SQL {
           AND ${paymentSessionAttempts.status} IN (${statusList(PAYABLE_STATUSES)})
           AND ${paymentSessionAttempts.providerSessionId} IS NOT NULL
     )`;
+}
+
+/**
+ * How long a hosted session on a placed order (an invoice's payment page, a
+ * receipt's pay-now link) stays open after the buyer last acted on it: past
+ * it, the drain cancels the session at its provider (`expireIdleSessions`)
+ * and it no longer counts as open. An unpaid checkout's own hold is shorter
+ * (`PAYMENT_HOLD_MAX_SECONDS`, the stale-checkout sweep).
+ */
+export const PLACED_ORDER_SESSION_IDLE_SECONDS = 24 * 60 * 60;
+
+/**
+ * A hosted session the buyer could still pay, within its bound: `created`
+ * or `failed` (a declined card can be paid again on the same session) last
+ * touched within `PLACED_ORDER_SESSION_IDLE_SECONDS`, `provider_processing`
+ * within `PROVIDER_PROCESSING_HOLD_SECONDS` of its opening, or `cancelling`
+ * (being closed: the drain ends it within `SESSION_CANCEL_MAX_TRIES` ticks).
+ */
+const payableWithinBound = sql`(${hostedSession}
+    AND ${paymentSessionAttempts.providerSessionId} IS NOT NULL
+    AND (
+      (${paymentSessionAttempts.status} IN ('created', 'failed')
+        AND ${paymentSessionAttempts.updatedAt} > unixepoch() - ${PLACED_ORDER_SESSION_IDLE_SECONDS})
+      OR (${paymentSessionAttempts.status} = 'provider_processing'
+        AND ${paymentSessionAttempts.createdAt} > unixepoch() - ${PROVIDER_PROCESSING_HOLD_SECONDS})
+      OR ${paymentSessionAttempts.status} = 'cancelling'
+    ))`;
+const runningClaim = sql`(${paymentSessionAttempts.status} = 'processing'
+    AND ${paymentSessionAttempts.claimExpiresAt} IS NOT NULL
+    AND ${paymentSessionAttempts.claimExpiresAt} > unixepoch())`;
+
+/**
+ * A payment attempt of the order that may still take money or is being set
+ * up right now: a claim under a live lease (a hosted session being opened, an
+ * off-session charge running), or a hosted session the buyer could still pay
+ * within its bound (`payableWithinBound`). A payment recorded by hand beside
+ * one could be counted twice. "Open" always ends: an idle page is closed by
+ * the drain, a provider's processing is bounded, a close is bounded.
+ */
+export function openPaymentAttemptCondition(orderId: SQL): SQL {
+    return sql`EXISTS (
+        SELECT 1 FROM ${paymentSessionAttempts}
+        WHERE ${paymentSessionAttempts.orderId} = ${orderId}
+          AND (${runningClaim} OR ${payableWithinBound})
+    )`;
+}
+
+/** The order's open payment attempt (`openPaymentAttemptCondition`), a running claim first; null when none. */
+export async function readOpenPaymentAttempt(db: Database, orderId: string): Promise<{ id: string; status: string; running: boolean } | null> {
+    const running = sql<number>`CASE WHEN ${paymentSessionAttempts.status} = 'processing' THEN 1 ELSE 0 END`.mapWith(Number);
+    const row = await db.select({ id: paymentSessionAttempts.id, status: paymentSessionAttempts.status, running })
+        .from(paymentSessionAttempts)
+        .where(and(eq(paymentSessionAttempts.orderId, orderId), sql`(${runningClaim} OR ${payableWithinBound})`))
+        .orderBy(sql`${running} DESC`, sql`${paymentSessionAttempts.createdAt} DESC`)
+        .limit(1)
+        .get();
+    return row ? { id: row.id, status: row.status, running: row.running === 1 } : null;
+}
+
+/**
+ * The drain's first step, bounded per tick: a hosted page on a placed order
+ * (an unpaid checkout's are the stale-checkout sweep's) that the buyer left
+ * untouched past `PLACED_ORDER_SESSION_IDLE_SECONDS` ends.
+ * - On an order that still owes money and is not closed, it becomes a cancel
+ *   command (`hold_ended`) that `cancelDueSessions` closes at its provider.
+ * - On an order that owes nothing (paid, cancelled, returned, refunded), it
+ *   is marked final locally (`order_settled`); no provider is called.
+ * At most `limit` of each per tick, oldest first, in one D1 call. A provider
+ * declares no expiry of its own pages to the platform: a page that must live
+ * longer (a voucher, a bank reference) reports `processing`, which keeps its
+ * own 14-day bound and is never expired here.
+ */
+const OWES = sql.raw(`o.status NOT IN ('incomplete', 'cancelled', 'returned', 'refunded') AND o.deleted_at IS NULL AND o.balance_due_minor > 0`);
+const OWES_NOTHING = sql.raw(`o.status <> 'incomplete' AND NOT (o.status NOT IN ('cancelled', 'returned', 'refunded') AND o.deleted_at IS NULL AND o.balance_due_minor > 0)`);
+const PLACED = sql.raw(`o.status <> 'incomplete'`);
+
+/** Idle hosted pages (`created`/`failed`, untouched past the bound) of placed orders matching `orderCondition`, oldest first. */
+function idleSessionsSql(orderCondition: SQL, rows: number): SQL {
+    return sql`SELECT s.id FROM payment_session_attempts s JOIN orders o ON o.id = s.order_id
+        WHERE s.status IN ('created', 'failed') AND s.provider_session_id IS NOT NULL
+          AND substr(s.attempt_key, 1, 16) = 'payment_session:'
+          AND s.updated_at <= unixepoch() - ${PLACED_ORDER_SESSION_IDLE_SECONDS}
+          AND ${orderCondition}
+        ORDER BY s.updated_at, s.id LIMIT ${rows}`;
+}
+
+/** Whether the drain has idle pages to end (`expireIdleSessions`): one row at most. */
+export function dueIdleSessionProbes(db: Database) {
+    return [db.select({ id: paymentSessionAttempts.id }).from(paymentSessionAttempts)
+        .where(sql`${paymentSessionAttempts.id} IN (${idleSessionsSql(PLACED, 1)})`).limit(1)];
+}
+
+export async function expireIdleSessions(db: Database, limit: number): Promise<number> {
+    const rows = Math.max(1, Math.min(limit, 100));
+    const idle = (orderCondition: SQL) => sql`${paymentSessionAttempts.id} IN (${idleSessionsSql(orderCondition, rows)})`;
+    const owes = OWES;
+    const settled = OWES_NOTHING;
+    const [cancelling, closed] = await safeBatch(db, [
+        sessionTransition(db, "hold_ended", idle(owes)).returning({ id: paymentSessionAttempts.id }),
+        sessionTransition(db, "order_settled", idle(settled)).returning({ id: paymentSessionAttempts.id }),
+    ] as const) as unknown as [Array<{ id: string }>, Array<{ id: string }>];
+    return cancelling.length + closed.length;
 }
 
 /**

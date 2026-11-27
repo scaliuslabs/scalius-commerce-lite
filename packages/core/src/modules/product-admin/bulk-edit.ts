@@ -15,7 +15,7 @@
 // on its own; the others commit. A row that fails its checks at the read
 // fails alone before any write. Each count names the stock version it was
 // made against: a sale (or any stock move) since refuses that row
-// (`stock_changed`) instead of booking it back. A repeat of a committed
+// (`stock_version_conflict`) instead of booking it back. A repeat of a committed
 // request finds the revisions moved and applies nothing twice (and each
 // movement's id derives from the request's key, the product and the SKU).
 //
@@ -252,7 +252,7 @@ function stale(expected: number, current: number | null): Failure {
 }
 
 function stockChanged(field: string): Failure {
-    return { status: "failed", code: "stock_changed", message: "This SKU's stock changed since you opened it (a sale or another count). Its on hand was reloaded; count it again.", field };
+    return { status: "failed", code: "stock_version_conflict", message: "This SKU's stock changed since you opened it (a sale or another count). Its on hand was reloaded; count it again.", field };
 }
 
 function invalid(message: string, field?: string): Failure {

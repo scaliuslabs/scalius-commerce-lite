@@ -2,7 +2,7 @@
 
 # Event reference
 
-Every topic an app may subscribe to (`events` in the manifest), 45 in all. A handler gets `{ id, topic, apiVersion, occurredAt, resource: { type, id }, facts }`. Facts are ids, states and quantities, never contact data or money: read the resource with `ctx.api` for the rest. Delivery is at least once, so key your work by `event.id`. A fact a later release adds is additive: never refuse an event for a key you do not know.
+Every topic an app may subscribe to (`events` in the manifest), 43 in all. A handler gets `{ id, topic, apiVersion, occurredAt, resource: { type, id }, facts }`. Facts are ids, states and quantities, never contact data or money: read the resource with `ctx.api` for the rest. Delivery is at least once, so key your work by `event.id`. A fact a later release adds is additive: never refuse an event for a key you do not know.
 
 | Topic | Resource | Read it with |
 | --- | --- | --- |
@@ -42,8 +42,6 @@ Every topic an app may subscribe to (`events` in the manifest), 45 in all. A han
 | [`object.created`](#object-created) | `object` | `objects.get` |
 | [`object.updated`](#object-updated) | `object` | `objects.get` |
 | [`object.deleted`](#object-deleted) | `object` | `objects.get` |
-| [`customer.redact_requested`](#customer-redact-requested) | `customer` | `customers.get` |
-| [`customer.data_requested`](#customer-data-requested) | `customer` | `customers.get` |
 | [`customer.erased`](#customer-erased) | `customer` | `customers.get` |
 | [`conversation.message_received`](#conversation-message-received) | `conversation` | `conversations.get` |
 | [`payout.created`](#payout-created) | `payout` | `payouts.get` |
@@ -434,22 +432,6 @@ Resource: `object`.
 | `objectId` | string | yes | 1 to 128 characters |
 | `revision` | integer | yes | more than 0 to 9007199254740991 |
 | `status` | "deleted" \| string | yes |  |
-
-## customer.redact_requested
-
-Resource: `customer`.
-
-| Field | Type | Required | Notes |
-| --- | --- | --- | --- |
-| `customerId` | string | yes | 1 to 128 characters |
-
-## customer.data_requested
-
-Resource: `customer`.
-
-| Field | Type | Required | Notes |
-| --- | --- | --- | --- |
-| `customerId` | string | yes | 1 to 128 characters |
 
 ## customer.erased
 

@@ -11,7 +11,7 @@ The store writes every CSS rule from your values, checks every colour a buyer re
 
 This page covers the cart page, the payment step and the cart drawer, and the look of the receipt and the account. A private page takes no sections: `pages.templates` has no cart template (one with sections is refused with reason `private_page_template`), and no section of the homepage, a landing page or another template draws there. The drawer opens over public pages and is part of each of them: its arrangement, words and icons come from here, and its look comes from your public stylesheet through the same hooks. The receipt and the account take their look from tokens here too ([below](#the-receipt-and-the-account)); their parts keep the store's order, and their card order, receipt width and account menu are still the closed choices in [themes.md](themes.md#templates). Quick checkout (the page that places an order without scripts) takes the store's look and the closed choices there.
 
-Each page is compiled and served on its own: a page is in token mode only where you gave it tokens (or your theme has a page paint), and it serves only its own look.
+Each page is compiled, served and refused on its own: a page is in token mode only where you gave it tokens (or, with a page paint, where you name it), and it serves only its own look. A page takes your theme-wide choices (the page paint's token mode, where the controls sit) only when you **name** it: `pages.<page>` holds an arrangement other than the store's, or `tokens.<page>` is set (`{}` is enough). A page you do not name, a page that joins this model in a later release included, draws as the store does under your theme until you name it.
 
 ## What you set
 
@@ -19,13 +19,13 @@ A template sets them under `privatePages`. The merchant's theme document holds t
 
 | Field | What it is |
 | --- | --- |
-| `controls` | Where the store's controls sit: `header` (the store's checkout header; unset means this), `footer` (a strip at the page's end) or `none`. See [the store's controls](#the-stores-controls). |
+| `controls` | Where the store's controls sit on the pages you name: `header` (the store's checkout header; unset means this), `footer` (a strip at the page's end) or `none`. See [the store's controls](#the-stores-controls). |
 | `pages.cart`, `pages.checkout`, `pages.cartDrawer` | An arrangement per page (`checkout` is the payment step). Leave a page out to keep the store's own. |
 | `tokens` | The look of the store's parts, per page and style target: `{ "cart": { "summary": { "background": "card", "radius": 0 } } }`. |
 | `labels` | The store's word you choose for an action or an amount (`{ "dialog.confirm": "continue-checkout" }`), your own words per language for a heading or an empty state (`{ "cart.heading": { "en": "Your Cart", "bn": "আপনার কার্ট" } }`). |
 | `icons` | Your image for a store icon: `{ "cart.empty": { "app": "acme.studio", "file": "icons/bag.svg" } }`, a file in your `public/`. `app` is the app your template comes from (`foreign_asset` otherwise). Applying a template that sets `privatePages` replaces the store's whole object; one that sets none drops any icon of another app. |
 
-The store checks all of it when the theme is saved or published, and stores the result in `compiled` (never set it yourself). A refusal names its `reason` ([below](#refusals)). A buyer's request never compiles anything. After a store update with a newer checker, a page shows the store's default look (its arrangement, words, icons, controls and colours) until the next save, or, for the published theme, until the first maintenance run after the update compiles it again (a draft waits for its save).
+The store checks all of it when the theme is saved or published, and stores the result in `compiled` (never set it yourself). A refusal names its `reason` ([below](#refusals)). A buyer's request never compiles anything. A page serves your look only while this store's compiler made it and the compile still belongs to your source and the colours it was checked on (a fingerprint, `compiled.digest`). The compile has two versions. A store update with a newer compiler (what CSS is written) shows every private page in the store's default look, whole (arrangement, words, icons, controls and colours, never half of yours), until the maintenance run after the update compiles the published theme again (within one maintenance rotation: about 15 minutes on Workers Paid, about 35 on Free; a draft waits for its save); the merchant's theme page says the store is checking the theme. A store update with stricter checks (what a save refuses) keeps serving your look until that run replaces it. If that checker refuses a page, only that page keeps the store's default look, and the others serve yours: the page records why (`compiled.refused`, the same path, reason and words a save gives), and the merchant's theme page names it, says why and how to fix it. Publishing again is refused only for what the publish changes: a page already refused stays refused on its own, and the rest of the theme publishes.
 
 ## Not available yet
 
@@ -137,7 +137,7 @@ Example: the heading above the lines, an Items row in the summary, the summary b
 
 Each page names its **style targets**, the elements of its parts that take a look, and the tokens each one takes. You set values; the store writes every CSS rule from them. The [anatomy reference](#anatomy-reference) lists each target as `style <name> <selector> tokens=…`.
 
-**Token mode.** A page with any token is drawn in token mode (`data-private-tokens` on `<html>`), and so is the cart page of a theme with a page paint (`tokens.pagePaint`, [themes](themes.md)), tokens or not. Every colour a buyer reads there comes from one **colour table** the store resolves when you save:
+**Token mode.** A page with any token is drawn in token mode (`data-private-tokens` on `<html>`), and so is a page of its own you name in a theme with a page paint (`tokens.pagePaint`, [themes](themes.md)), tokens or not: `tokens: { "cart": {} }` draws the cart on your paint. Every colour a buyer reads there comes from one **colour table** the store resolves when you save:
 
 - the table has a row for every style target at every place your arrangement puts it, for each palette a buyer can see (light, dark or both): each app node kind and tone at each of the page's targets, and again inside each app box that paints a surface; the store's dialogs; every filled button; a field and a field label in every box that holds fields; the store's chrome and its controls;
 - a row holds a solid surface (or a gradient's points), the colour of the target's own words, its muted, link and error words, its border and focus ring, its hover surface (a step from the surface that its words still read on), and for a field its placeholder and error border;
@@ -145,7 +145,7 @@ Each page names its **style targets**, the elements of its parts that take a loo
 - the page stands on the theme's page paint unless your `page` tokens give it a surface, so every row on the page, the store's defaults included, is checked along the whole paint;
 - the store writes exactly those rows as CSS and checks exactly those rows ([floors](#floors)). Inside the page, the store's own palette classes read the nearest row, so no translucent tint and no palette colour decides a colour there. The page is drawn from its arrangement (the store's default one if you set none), so the table's places are the page's.
 
-A page with no token, in a theme with no page paint, is drawn exactly as the store draws it. The drawer takes no tokens (`unknown_style`): it opens over public pages and takes their look.
+A page with no token that you do not name with a page paint is drawn exactly as the store draws it, on the page colour. The drawer takes no tokens (`unknown_style`): it opens over public pages and takes their look.
 
 **A colour per scheme.** Every colour token (`background`, `text`, `muted`, `link`, `error`, `border`, `ring`, `placeholder`, `invalid`, and a gradient's `from` and `to`) takes one colour for both schemes, or `{ "light": <colour>, "dark": <colour> }` with both keys. A colour is a palette role (`card`, `primary`, `muted-foreground`, …) or an opaque lowercase `#rrggbb`. Each palette buyers can see draws its own value and is checked on its own; a refusal names the scheme. A scheme your theme never shows is never drawn, so its value is not checked.
 
@@ -305,7 +305,7 @@ A refusal names the theme key and the pair that set it, and the scheme: `summary
 | `label_too_long`, `markup`, `label_figures` | Words over the label's bound, words with HTML, or a digit, a currency sign, a name of money or one of the store's amount words in a heading, title or empty state (only `cart.intro` and `cart.emptyText` may hold them). |
 | `foreign_asset` | An icon from an app other than your theme's. |
 
-A value that is not of the document's shape (a wrong type, an unknown field) is refused by the schema, naming its path.
+A value that is not of the document's shape (a wrong type, an unknown field) is refused by the schema, naming its path. Every reason a theme save can give, here and in [themes](themes.md), is one sealed list with the checker's version (`STOREFRONT_THEME_SAVE_REASONS`, `STOREFRONT_THEME_SAVE_REFUSALS`): a new reason or a stricter checker is a reviewed change to it.
 
 `validate` runs these same checks on every template you ship, through the store's own code, and prints each with its place and reason (`✗ Theme templates: storefront.templates[0] (studio).theme.privatePages.tokens.cart.summary-total: … [contrast]`), so a template that validates is one the store applies and saves. An icon names a file your release carries in `public/`; the install refuses a release without it, and `validate` names the missing file.
 
@@ -370,7 +370,7 @@ A row with no details is a plain row of its title and amount. On the cart page a
 
 ## The store's controls
 
-The cart page and the payment step draw only the store's chrome: its checkout header, no theme or app header or footer. The receipt and the account draw the store's public header and footer ([below](#the-receipt-and-the-account)). The phone tab bar never draws where the buyer is paying (the cart, the checkout and quick checkout, buy now, payment recovery); the receipt and the account pages keep it. `controls` places the store's controls:
+The cart page and the payment step draw only the store's chrome: its checkout header, no theme or app header or footer. The receipt and the account draw the store's public header and footer ([below](#the-receipt-and-the-account)). The phone tab bar never draws where the buyer is paying (the cart, the checkout and quick checkout, buy now, payment recovery); the receipt and the account pages keep it. `controls` places the store's controls on each page you name (a page you do not name keeps them in the store's header):
 
 | `controls` | Where |
 | --- | --- |

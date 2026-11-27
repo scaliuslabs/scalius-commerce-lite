@@ -43,7 +43,7 @@ import {
 import { sql, eq, and, inArray, ne, type SQL } from "drizzle-orm";
 import { shipmentMove } from "../../delivery";
 import { PAYMENT_HOLDING_STATUSES } from "@scalius/shared/payment-record-state";
-import { AppError, NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
+import { AppError, NotFoundError, ValidationError, ConflictError, OrderRevisionConflictError } from "@scalius/core/errors";
 import {
     canProcessOrderCodAction,
     normalizeOrderStatus,
@@ -501,7 +501,7 @@ async function attemptOrderStatusChange(
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!existingOrder) throw new NotFoundError("Order not found");
     if (data?.expectedVersion !== undefined && existingOrder.version !== data.expectedVersion) {
-        throw new ConflictError(ORDER_CHANGED_MESSAGE);
+        throw new OrderRevisionConflictError(ORDER_CHANGED_MESSAGE);
     }
     const currentStatus = normalizeOrderStatus(existingOrder.status);
     if (!currentStatus) {
@@ -688,10 +688,11 @@ async function attemptOrderStatusChange(
             db.select({ id: orders.id }).from(orders).where(casCondition),
         ] as const);
         if (!now[0]) throw new NotFoundError("Order not found");
-        if (before ? now[0].version !== existingOrder.version : changed && casHolds.length === 0) {
-            throw new ConflictError(ORDER_CHANGED_MESSAGE);
-        }
+        // A caller that named the revision it read hears that it is stale, whichever write moved it.
         if (data?.expectedVersion !== undefined && now[0].version !== data.expectedVersion) {
+            throw new OrderRevisionConflictError(ORDER_CHANGED_MESSAGE);
+        }
+        if (before ? now[0].version !== existingOrder.version : changed && casHolds.length === 0) {
             throw new ConflictError(ORDER_CHANGED_MESSAGE);
         }
         throw new StockMovedDuringStatusChange();

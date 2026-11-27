@@ -1276,7 +1276,8 @@ export function ThemeEditor({ workspace, refetch, staffId = null }: {
         open={confirmDiscard}
         onOpenChange={setConfirmDiscard}
         title={t("discardTitle")}
-        description={t("discardBody")}
+        // A live theme the store cannot read is the default theme here: discarding writes that into the draft.
+        description={t(workspace.published.unreadable ? "discardBodyUnreadable" : "discardBody")}
         confirmLabel={t("discard")}
         onConfirm={() => {
           setConfirmDiscard(false);

@@ -16,7 +16,7 @@
 
 import type { Database } from "@scalius/database/client";
 import type { DeliveryProviderRecord } from "@scalius/database/schema";
-import type { CourierShipmentInput, ProviderCountries, ProviderPort } from "@scalius/shared/plugins/providers";
+import type { CourierBookingOption, CourierShipmentInput, ProviderCountries, ProviderPort } from "@scalius/shared/plugins/providers";
 import type { DeliveryProviderReadinessSummary } from "../provider-readiness";
 
 /** The saved delivery provider row a courier reads its setup from. */
@@ -70,6 +70,8 @@ export interface Courier<S = unknown> extends ProviderPort<"courier", CourierCal
    * (Pathao: city and zone): the order page asks for them before booking.
    */
   readonly requiredLocations?: readonly ("city" | "zone" | "area")[];
+  /** The courier's own booking choices (its manifest's `bookingOptions`); a booking names no other. */
+  readonly bookingOptions?: readonly CourierBookingOption[];
   /**
    * Store setup a booking to this recipient needs before anything is written
    * (the courier's location ids on the store's places): a merchant-facing

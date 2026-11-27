@@ -41,7 +41,7 @@ Within a supported contract version, a release only adds to these:
 
 A check may be tightened only to close a security hole. Each one gets a dated note in the release notes that names the check, what it now refuses and what an affected app or theme must change.
 
-- A stored theme is never dropped. A page the tighter check refuses falls back to the store's own look, the rest of the theme keeps its design, and the merchant is told which page and why until a save fixes it.
+- A stored theme is never dropped. A value a tighter check refuses is left out of the read (a link reads as no link, a tab or a card is left out) and the rest of the theme keeps its design; a private page a tighter check refuses falls back to the store's own look on its own, the other pages keep theirs, and the merchant's theme page says which page or part and why until a save fixes it. A stricter check keeps serving a page's look until the store compiles it again; only a change to what the store writes shows the store's own look meanwhile.
 - For an app, an answer the tighter check refuses is treated like any invalid answer at that point (see [Failure policy and limits](commerce-hooks.md#failure-policy-and-limits)).
 
 ## Versions

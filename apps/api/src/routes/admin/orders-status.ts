@@ -33,7 +33,7 @@ import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/api-
 import { ok, created } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope, errorResponses, conflictResponse, serviceUnavailableResponse } from "../../schemas/responses";
-import { orderExpectedRevisionDescription, orderResourceSchema, readOrderResource } from "./order-resource";
+import { optionalOrderRevisionSchema, orderResourceSchema, readOrderResource } from "./order-resource";
 import { deliveryShipmentSchema } from "../../schemas/entities";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 
@@ -214,9 +214,7 @@ const updateStatusRoute = createRoute({
                         notifyCustomer: z.boolean().optional().openapi({
                             description: "False sends the customer no message about this change (a test or duplicate order). Default true.",
                         }),
-                        expectedRevision: z.number().int().min(1).optional().openapi({
-                            description: orderExpectedRevisionDescription("a change since is refused with 409 and nothing changes. Omit to change it whatever happened since."),
-                        }),
+                        expectedRevision: optionalOrderRevisionSchema,
                     }),
                 },
             },
@@ -300,9 +298,7 @@ const markDeliveredRoute = createRoute({
             content: {
                 "application/json": {
                     schema: z.object({
-                        expectedRevision: z.number().int().min(1).optional().openapi({
-                            description: orderExpectedRevisionDescription("a change since is refused with 409. Omit to mark it whatever happened since."),
-                        }),
+                        expectedRevision: optionalOrderRevisionSchema,
                     }).strict(),
                 },
             },

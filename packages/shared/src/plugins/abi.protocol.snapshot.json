@@ -19351,10 +19351,13 @@
  "errors": {
   "validation_error": {
    "status": 400,
-   "meaning": "A path, query or body value the operation refuses; the message names the first. When the operation's schema refused it, details.issues names the fields (the first 20: each its path, as keys and list indexes, and a message). A path is into the operation's input; for an address it names the field within that address, and where the operation checks a normalised form of its input (products.create, orders.create), it is into that form.",
+   "meaning": "A path, query or body value the operation refuses; the message names the first. When the operation's schema refused it, details.issues names the fields (the first 20: each its path, as keys and list indexes, and a message). A refusal with a machine-readable reason (a theme's, one of STOREFRONT_THEME_SAVE_REASONS) carries it as details.reason and on each issue it applies to. A path is into the operation's input; for an address it names the field within that address, and where the operation checks a normalised form of its input (products.create, orders.create), it is into that form.",
    "details": {
     "type": "object",
     "properties": {
+     "reason": {
+      "type": "string"
+     },
      "issues": {
       "type": "array",
       "maxItems": 20,
@@ -19375,6 +19378,9 @@
          }
         },
         "message": {
+         "type": "string"
+        },
+        "reason": {
          "type": "string"
         }
        },
@@ -19474,7 +19480,19 @@
   },
   "idempotency_key_reused": {
    "status": 422,
-   "meaning": "The key was used for a different request; use a new key."
+   "meaning": "The key was used for a different request; use a new key. The platform's key layer (within 24 hours) and the command's own record (after) answer it alike; only a payout's or reversal's own record also names the first one (details.payoutId, details.reversalId).",
+   "details": {
+    "type": "object",
+    "properties": {
+     "payoutId": {
+      "type": "string"
+     },
+     "reversalId": {
+      "type": "string"
+     }
+    },
+    "required": []
+   }
   },
   "idempotency_in_progress": {
    "status": 409,
@@ -19490,7 +19508,7 @@
   },
   "product_revision_conflict": {
    "status": 409,
-   "meaning": "The product changed since its revision was read."
+   "meaning": "The product changed since its revision was read (a bulk run lists the product in its failures with this code)."
   },
   "product_state_conflict": {
    "status": 409,
@@ -19562,7 +19580,20 @@
   },
   "order_revision_conflict": {
    "status": 409,
-   "meaning": "The order changed since its revision was read (a return request names the order's revision)."
+   "meaning": "The order changed since the revision the write named (`expectedRevision`) was read, or before the write committed."
+  },
+  "stock_version_conflict": {
+   "status": 409,
+   "meaning": "The SKU's stock changed since the stockVersion the write named (`expectedStockVersion`) was read (a stock write, a counted line of a stock command); a bulk run lists the SKU in its failures with this code.",
+   "details": {
+    "type": "object",
+    "properties": {
+     "variantId": {
+      "type": "string"
+     }
+    },
+    "required": []
+   }
   },
   "admin_order_create_request_mismatch": {
    "status": 409,
@@ -19728,7 +19759,19 @@
   },
   "payment_in_progress": {
    "status": 409,
-   "meaning": "Another charge of the order is still running."
+   "meaning": "Another payment of the order is still open: a charge or a payment page being set up right now (retry shortly), or a payment page the buyer could still pay (payments.create names it in details.paymentAttemptId and records anyway with allowOpenAttempt).",
+   "details": {
+    "type": "object",
+    "properties": {
+     "paymentAttemptId": {
+      "type": "string"
+     },
+     "status": {
+      "type": "string"
+     }
+    },
+    "required": []
+   }
   },
   "payment_not_possible": {
    "status": 409,
@@ -19749,21 +19792,6 @@
   "payout_provider_unavailable": {
    "status": 422,
    "meaning": "The payout provider is not an installed, active, set-up payout provider; nothing was recorded."
-  },
-  "payout_request_mismatch": {
-   "status": 409,
-   "meaning": "The Idempotency-Key already sent a different payout (details.payoutId); use a new key for a new payout.",
-   "details": {
-    "type": "object",
-    "properties": {
-     "payoutId": {
-      "type": "string"
-     }
-    },
-    "required": [
-     "payoutId"
-    ]
-   }
   },
   "payout_reversal_unsupported": {
    "status": 422,
@@ -19824,25 +19852,6 @@
     "required": [
      "payoutId",
      "currency"
-    ]
-   }
-  },
-  "payout_reversal_request_mismatch": {
-   "status": 409,
-   "meaning": "The Idempotency-Key already reversed another amount or payout (details.reversalId); use a new key for a new reversal.",
-   "details": {
-    "type": "object",
-    "properties": {
-     "reversalId": {
-      "type": "string"
-     },
-     "payoutId": {
-      "type": "string"
-     }
-    },
-    "required": [
-     "reversalId",
-     "payoutId"
     ]
    }
   },
@@ -20257,8 +20266,6 @@
    "object.created": "object",
    "object.updated": "object",
    "object.deleted": "object",
-   "customer.redact_requested": "customer",
-   "customer.data_requested": "customer",
    "customer.erased": "customer",
    "conversation.message_received": "conversation",
    "payout.created": "payout",
@@ -22150,36 +22157,6 @@
      "objectId",
      "revision",
      "status"
-    ],
-    "additionalProperties": false
-   },
-   "customer.redact_requested": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "type": "object",
-    "properties": {
-     "customerId": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 128
-     }
-    },
-    "required": [
-     "customerId"
-    ],
-    "additionalProperties": false
-   },
-   "customer.data_requested": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "type": "object",
-    "properties": {
-     "customerId": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 128
-     }
-    },
-    "required": [
-     "customerId"
     ],
     "additionalProperties": false
    },

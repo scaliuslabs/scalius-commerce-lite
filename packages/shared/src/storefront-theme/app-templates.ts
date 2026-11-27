@@ -2,8 +2,8 @@
 // ready-made look the template library applies in one step, like a built-in
 // template. A template may set the tokens, any blocks, the units app skins draw
 // and the homepage sections; the merchant's brand, landing pages, page
-// templates and other content stay. A declaration is written for one document
-// version (`themeVersion`); the API runs it through the stored documents'
+// templates and other content stay. A declaration states the one document
+// version it is written for (`themeVersion`, required); the API runs it through the stored documents'
 // upgrade chain and lists only what then parses against the live schema,
 // reporting the rest on the app's page. A block a template names may leave
 // required nested fields out: they take the default theme's, and the block is
@@ -19,12 +19,13 @@ import { parsePluginSurfaceKey } from "../plugins/storefront";
 import { storefrontThemeAppsSchema } from "./apps";
 import { storefrontThemeBlocksSchema } from "./blocks";
 import { storefrontPrivatePagesDefault, storefrontPrivatePagesTemplateSchema, type StorefrontPrivatePages } from "./private-schema";
-import { checkStorefrontThemeSave, type StorefrontThemeSaveIssue } from "./save";
+import { checkStorefrontThemeSave, storefrontThemeSaveReason, type StorefrontThemeSaveIssue } from "./save";
 import { storefrontSectionListSchema, type StorefrontSection } from "./sections";
 import { storefrontDarkColorsMissing, storefrontThemeShowsDarkColors, storefrontThemeTokensSchema, storefrontTokensKeepingColorScheme } from "./tokens";
 import { storefrontThemeWithReadableDarkColors, type StorefrontThemeDocument } from "./document";
 import { StorefrontThemeUpgradeError, upgradeStorefrontThemeDocument } from "./upgrade";
 import { DEFAULT_STOREFRONT_THEME } from "./templates";
+import { storefrontFingerprint } from "./fingerprint";
 import { carryStorefrontHome, storefrontTemplateHome, storefrontThemeTemplateKey, type StorefrontHomeCarry } from "./content";
 import type { StorefrontThemeSkins } from "./apps";
 import {
@@ -33,12 +34,6 @@ import {
   type StorefrontHandleLookup,
   type StorefrontHandleRef,
 } from "./handles";
-
-/**
- * The theme document version of a template or page preset that does not
- * state one (`themeVersion`): the version the field arrived with.
- */
-export const STOREFRONT_DECLARATION_THEME_VERSION = 10;
 
 export const storefrontAppTemplateThemeSchema = z.object({
   tokens: storefrontThemeTokensSchema.optional(),
@@ -85,7 +80,7 @@ function schemaUnfit(error: z.ZodError, prefix: string) {
   return unfit(issueText(error), error.issues.map((issue) => ({
     path: [prefix, ...issue.path.map(String)].filter(Boolean).join("."),
     message: issue.message,
-    reason: issue.code === "custom" && typeof issue.params?.reason === "string" ? issue.params.reason : null,
+    reason: issue.code === "custom" ? storefrontThemeSaveReason(issue.params?.reason) : null,
   })));
 }
 
@@ -247,7 +242,7 @@ function templateSaveIssues(template: StorefrontAppTemplateTheme, key: string): 
   // The verdict depends only on the key and the template, so an isolate checks each once:
   // the editor, the app page, the library and an apply read the same templates again and again.
   const json = JSON.stringify(template);
-  const cacheKey = `${key}|${json.length}|${fingerprint(json)}`;
+  const cacheKey = `${key}|${json.length}|${storefrontFingerprint(json)}`;
   const known = TEMPLATE_VERDICTS.get(cacheKey);
   if (known) return known;
   const issues = uncachedTemplateSaveIssues(template, key);
@@ -259,18 +254,6 @@ function templateSaveIssues(template: StorefrontAppTemplateTheme, key: string): 
 /** Templates' verdicts this isolate has reached, oldest first (bounded: five templates an app, a few apps a store). */
 const TEMPLATE_VERDICTS = new Map<string, StorefrontThemeSaveIssue[]>();
 const TEMPLATE_VERDICTS_MAX = 64;
-
-/** A 53-bit FNV-1a-style fingerprint of `text` (two 32-bit lanes): a cache key, not a security boundary. */
-function fingerprint(text: string): string {
-  let a = 0x811c9dc5;
-  let b = 0x01000193;
-  for (let index = 0; index < text.length; index += 1) {
-    const code = text.charCodeAt(index);
-    a = Math.imul(a ^ code, 0x01000193);
-    b = Math.imul(b ^ code, 0x5bd1e995);
-  }
-  return `${(a >>> 0).toString(36)}${(b >>> 0).toString(36)}`;
-}
 
 function uncachedTemplateSaveIssues(template: StorefrontAppTemplateTheme, key: string): StorefrontThemeSaveIssue[] {
   const applied = applyStorefrontAppTemplate(DEFAULT_STOREFRONT_THEME, key, template);
@@ -489,8 +472,8 @@ export function readStorefrontPagePresetSections(value: unknown, themeVersion: n
 
 /** An app's theme declarations as its manifest has them (`storefront.templates`, `storefront.pagePresets`). */
 export interface StorefrontAppThemeDeclarations {
-  templates: ReadonlyArray<{ id: string; name: string; themeVersion?: number; theme: unknown }>;
-  pagePresets: ReadonlyArray<{ id: string; name: string; themeVersion?: number; sections: unknown }>;
+  templates: ReadonlyArray<{ id: string; name: string; themeVersion: number; theme: unknown }>;
+  pagePresets: ReadonlyArray<{ id: string; name: string; themeVersion: number; sections: unknown }>;
 }
 
 /** A template or page preset this store's theme cannot use, with the first reason. */
@@ -511,11 +494,11 @@ export interface StorefrontAppThemeProblem {
 export function storefrontAppThemeProblems(storefront: StorefrontAppThemeDeclarations, pluginId: string): StorefrontAppThemeProblem[] {
   const problems: StorefrontAppThemeProblem[] = [];
   for (const template of storefront.templates) {
-    const read = checkStorefrontAppTemplateTheme(template.theme, template.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION, pluginId, template.id);
+    const read = checkStorefrontAppTemplateTheme(template.theme, template.themeVersion, pluginId, template.id);
     if (!read.ok) problems.push({ kind: "template", id: template.id, name: template.name, problem: read.problem, issues: read.issues });
   }
   for (const preset of storefront.pagePresets) {
-    const read = checkStorefrontPagePresetSections(preset.sections, preset.themeVersion ?? STOREFRONT_DECLARATION_THEME_VERSION);
+    const read = checkStorefrontPagePresetSections(preset.sections, preset.themeVersion);
     if (!read.ok) problems.push({ kind: "page-preset", id: preset.id, name: preset.name, problem: read.problem, issues: read.issues });
   }
   return problems;

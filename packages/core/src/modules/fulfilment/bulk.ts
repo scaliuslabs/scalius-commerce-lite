@@ -12,6 +12,7 @@ import {
   createShipment,
   getDeliveryProviderActionReadiness,
   markShipmentReconciliationRequired,
+  refusedBookingOptions,
   PROVIDER_OUTCOME_UNKNOWN,
   shipmentMove,
 } from "../delivery";
@@ -186,6 +187,13 @@ export async function bulkShipOrders(
             success: false,
             error: providerReadiness.message,
         }));
+    }
+    // Options the courier does not take refuse every order before any is claimed (a claim moves the order's revision).
+    const refusedOptions = validatedOptions.bookingOptions
+        ? refusedBookingOptions(providerReadiness.courier, validatedOptions.bookingOptions)
+        : null;
+    if (refusedOptions) {
+        return validatedOrderIds.map((orderId) => ({ orderId, success: false, error: refusedOptions }));
     }
 
     for (const orderId of validatedOrderIds) {

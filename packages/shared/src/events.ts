@@ -68,8 +68,6 @@ export const EVENT_TOPICS = [
   "object.created",
   "object.updated",
   "object.deleted",
-  "customer.redact_requested",
-  "customer.data_requested",
   "customer.erased",
   "conversation.message_received",
   "payout.created",
@@ -143,8 +141,6 @@ export const EVENT_TOPIC_RESOURCE: Readonly<Record<EventTopic, EventResourceType
   "object.created": "object",
   "object.updated": "object",
   "object.deleted": "object",
-  "customer.redact_requested": "customer",
-  "customer.data_requested": "customer",
   "customer.erased": "customer",
   "conversation.message_received": "conversation",
   "payout.created": "payout",
@@ -441,13 +437,6 @@ export const EVENT_FACT_SCHEMAS = {
     revision: z.number().int().positive(),
     status: statusOf(["deleted"]),
   }),
-  // Reserved until the core provides an erasure/data-request flow.
-  "customer.redact_requested": z.object({
-    customerId: id,
-  }),
-  "customer.data_requested": z.object({
-    customerId: id,
-  }),
   /**
    * Staff erased the customer's personal data (0179): contact, addresses,
    * sign-in identities, saved methods and consents, and their words on
@@ -550,6 +539,13 @@ export function parseEventFacts<T extends EventTopic>(topic: T, raw: unknown): E
 }
 
 // ── Subscription topic filters ────────────────────────────────────────────
+
+/**
+ * The most topic filters one webhook subscription lists: a fixed number, so
+ * the catalogue growing (or a topic leaving it) never moves a subscription
+ * schema's bound.
+ */
+export const WEBHOOK_TOPICS_MAX = 100;
 
 /**
  * A subscription filter is an exact topic, a resource prefix (`order.*`) or

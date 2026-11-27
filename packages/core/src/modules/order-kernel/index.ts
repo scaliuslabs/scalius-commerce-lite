@@ -11,6 +11,7 @@
 export * from "./browser";
 export * from "./shipment-claim";
 export * from "./payment-session-guard";
+export * from "./revision-conflict";
 export * from "./refund-attempt-guard";
 export * from "./refund-attempt-machine";
 export * from "./payment-record-move";

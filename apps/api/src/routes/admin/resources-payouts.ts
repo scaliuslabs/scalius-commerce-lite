@@ -12,8 +12,8 @@
 // `failed` with its `failureCode`. A provider answer that is unknown is 503
 // `payout_outcome_unknown` (`details.payoutId`), which is never kept as the
 // key's answer: repeat the same request with the same key and it is
-// resubmitted, never sent twice. The key with a different request is 409
-// `payout_request_mismatch`. Money is integer minor units of `currency`.
+// resubmitted, never sent twice. The key with a different request is 422
+// `idempotency_key_reused`. Money is integer minor units of `currency`.
 //
 // `payouts.reverse` takes money back from a paid payout through its provider
 // (a marketplace clawing back a seller's share after a refund), in part or
@@ -149,7 +149,7 @@ app.openapi(createRoute({
   path: "/payouts",
   tags: [TAG],
   summary: "Send a payout to a payee",
-  description: "Records the payout (pending) and sends it through the payout provider, which applies it once per payout id. Answers 201 with the payout: processing, paid, or failed with its `failureCode` (a decline). An unknown provider answer is 503 `payout_outcome_unknown` with `details.payoutId`: repeat the same request with the same Idempotency-Key to resubmit it; it is never sent twice. A repeat of an answered payout answers it without calling the provider. The key with another request is refused: 422 `idempotency_key_reused` within the key's 24 hours, then 409 `payout_request_mismatch` for good; a provider that is not an installed, active, set-up payout provider is 422 `payout_provider_unavailable`, with nothing recorded. Only an app sends payouts.",
+  description: "Records the payout (pending) and sends it through the payout provider, which applies it once per payout id. Answers 201 with the payout: processing, paid, or failed with its `failureCode` (a decline). An unknown provider answer is 503 `payout_outcome_unknown` with `details.payoutId`: repeat the same request with the same Idempotency-Key to resubmit it; it is never sent twice. A repeat of an answered payout answers it without calling the provider. The key with another request is refused for good: 422 `idempotency_key_reused` (after the key's 24 hours with `details.payoutId`); a provider that is not an installed, active, set-up payout provider is 422 `payout_provider_unavailable`, with nothing recorded. Only an app sends payouts.",
   request: {
     headers: payoutKeyHeaders,
     body: { required: true, content: { "application/json": { schema: PayoutCreateInput } } },
@@ -200,7 +200,7 @@ app.openapi(createRoute({
   path: "/payouts/{id}/reverse",
   tags: [TAG],
   summary: "Take money back from a paid payout",
-  description: "Records a reversal of one of the app's paid payouts (pending) and sends it through the payout's provider, which applies it once per reversal id. Partial reversals are allowed; together the reversals that have not failed never take back more than the payout. Answers 201 with the payout and `reversalId`, the reversal's entry in its `reversals`: processing, reversed, or failed with its `failureCode` (a decline). An unknown provider answer is 503 `payout_reversal_outcome_unknown` with `details.reversalId`: repeat the same request with the same Idempotency-Key to resume it; it is never applied twice. A repeat of an answered reversal answers it without calling the provider. Refused with nothing recorded: another app's payout (404), a payout that is not paid (409 `payout_not_reversible`), more than it has left (409 `payout_reversal_exceeds_payout`, `details.reversibleMinor`), another currency (422 `payout_reversal_currency_mismatch`), a provider that cannot reverse (422 `payout_reversal_unsupported`). The key with another request: 422 `idempotency_key_reused` within 24 hours, then 409 `payout_reversal_request_mismatch`.",
+  description: "Records a reversal of one of the app's paid payouts (pending) and sends it through the payout's provider, which applies it once per reversal id. Partial reversals are allowed; together the reversals that have not failed never take back more than the payout. Answers 201 with the payout and `reversalId`, the reversal's entry in its `reversals`: processing, reversed, or failed with its `failureCode` (a decline). An unknown provider answer is 503 `payout_reversal_outcome_unknown` with `details.reversalId`: repeat the same request with the same Idempotency-Key to resume it; it is never applied twice. A repeat of an answered reversal answers it without calling the provider. Refused with nothing recorded: another app's payout (404), a payout that is not paid (409 `payout_not_reversible`), more than it has left (409 `payout_reversal_exceeds_payout`, `details.reversibleMinor`), another currency (422 `payout_reversal_currency_mismatch`), a provider that cannot reverse (422 `payout_reversal_unsupported`). The key with another request is refused for good: 422 `idempotency_key_reused` (after the key's 24 hours with `details.reversalId`).",
   request: {
     params: idParam,
     headers: z.object({

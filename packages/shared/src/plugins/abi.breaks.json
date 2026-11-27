@@ -2488,5 +2488,473 @@
   "from": "2d122b8428facbf5",
   "change": "sdk.packages/shared/src/plugins/ui.d.ts#TypeAliasDeclaration:PluginUiNode: an existing signature changed or gained a required member.",
   "reason": "Pre-release (rc.1, before the theme and app contract freezes): a buyer or dashboard `text` node's `text` may also be a sentence of pieces (`PluginUiSpan[]`: `{ text, to? }`, 1 to 20, 2000 characters in all; a link's words 1 to 120 with no space at either end), whose links are drawn inside it, and the SDK's `ui.text` takes them. A string stays valid and means what it did. The same release settles what an app's words may be: every word of a UI tree is read with its bidi marks removed; a buyer button's `confirm` (never drawn on buyer pages) is refused; a store link path with a needless escape (`%61pps`, `%2F`) or one a second decoding reads (`%2561`) is refused; and the store's words apply only where an app could pass for the store (`STORE_WORD_LABEL_KINDS`: action words and every fixed word to buttons, links, bulk labels, purchase option titles and payment method and shipping rate renames, amount words and every fixed word to money-row labels, sentences only as a whole fixed word), with a Pay word's slot holding a number or one provider word. A buyer block that breaks them is refused as before; in a function's answer the offending add-on, discount or bundle title is now drawn as the store's neutral word (numbered when several) and an offending rename is skipped, logged once an hour, where beta 8 refused the whole answer; a manifest's checkout words are checked when a release is installed or updated, never when a stored manifest is read. A tree, answer or release that used those words where they apply is now refused or adjusted."
+ },
+ {
+  "snapshot": "./abi.manifest.snapshot.json",
+  "from": "4931765adbe1eaad",
+  "change": "manifest storefront.templates[].themeVersion: a new required field.",
+  "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops."
+ },
+ {
+  "snapshot": "./abi.manifest.snapshot.json",
+  "from": "4931765adbe1eaad",
+  "change": "manifest storefront.pagePresets[].themeVersion: a new required field.",
+  "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/plugin-sdk/src/pixel-testing.d.ts#FunctionDeclaration:createPixelTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifest: an existing signature changed or gained a required member.",
+  "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
+  "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/translation-coverage.d.ts#TypeAliasDeclaration:Manifest: an existing signature changed or gained a required member.",
+  "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7bcd9bc40b35bffd",
+  "change": "sdk.packages/plugin-sdk/src/runtime.d.ts#InterfaceDeclaration:PluginRuntimeBridge: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7bcd9bc40b35bffd",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:StableContractOperation: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock contract fix (rc.1 response seal, Nov 27): a stable operation in the SDK's contract copy loses `operationId` (the agent and REST name, not part of the app contract; an app names an operation by its app name) and gains `statuses`, the success statuses it answers, now sealed. createContractApi answers a handler's bare data with the operation's first success status (201 for a create) instead of always 200, and hands the app only the keys the operation declares, as the platform does."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7bcd9bc40b35bffd",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:ContractCall: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7bcd9bc40b35bffd",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:ContractApi: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7bcd9bc40b35bffd",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#InterfaceDeclaration:PluginTestHarnessOptions: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7bcd9bc40b35bffd",
+  "change": "sdk.packages/plugin-sdk/src/ui.d.ts#variable:ui: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the theme and app contract freezes): a buyer or dashboard `text` node's `text` may also be a sentence of pieces (`PluginUiSpan[]`: `{ text, to? }`, 1 to 20, 2000 characters in all; a link's words 1 to 120 with no space at either end), whose links are drawn inside it, and the SDK's `ui.text` takes them. A string stays valid and means what it did. The same release settles what an app's words may be: every word of a UI tree is read with its bidi marks removed; a buyer button's `confirm` (never drawn on buyer pages) is refused; a store link path with a needless escape (`%61pps`, `%2F`) or one a second decoding reads (`%2561`) is refused; and the store's words apply only where an app could pass for the store (`STORE_WORD_LABEL_KINDS`: action words and every fixed word to buttons, links, bulk labels, purchase option titles and payment method and shipping rate renames, amount words and every fixed word to money-row labels, sentences only as a whole fixed word), with a Pay word's slot holding a number or one provider word. A buyer block that breaks them is refused as before; in a function's answer the offending add-on, discount or bundle title is now drawn as the store's neutral word (numbered when several) and an offending rename is skipped, logged once an hour, where beta 8 refused the whole answer; a manifest's checkout words are checked when a release is installed or updated, never when a stored manifest is read. A tree, answer or release that used those words where they apply is now refused or adjusted."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7bcd9bc40b35bffd",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#variable:APP_ERROR_CODES: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, round two, Nov 27): `validation_error` now says where an issue's path points: into the operation's input; for an address, the field within that address; where the operation checks a normalised form of its input (products.create, orders.create), into that form. Its producers on stable operations send the path as keys and list indexes (two sent a dotted string), and the bridge delivers a dotted path from an older producer as keys and indexes. The details declarations moved into one table (DETAILS) with no change to any field."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "7bcd9bc40b35bffd",
+  "change": "sdk.packages/shared/src/plugins/ui.d.ts#TypeAliasDeclaration:PluginUiNode: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the theme and app contract freezes): a buyer or dashboard `text` node's `text` may also be a sentence of pieces (`PluginUiSpan[]`: `{ text, to? }`, 1 to 20, 2000 characters in all; a link's words 1 to 120 with no space at either end), whose links are drawn inside it, and the SDK's `ui.text` takes them. A string stays valid and means what it did. The same release settles what an app's words may be: every word of a UI tree is read with its bidi marks removed; a buyer button's `confirm` (never drawn on buyer pages) is refused; a store link path with a needless escape (`%61pps`, `%2F`) or one a second decoding reads (`%2561`) is refused; and the store's words apply only where an app could pass for the store (`STORE_WORD_LABEL_KINDS`: action words and every fixed word to buttons, links, bulk labels, purchase option titles and payment method and shipping rate renames, amount words and every fixed word to money-row labels, sentences only as a whole fixed word), with a Pay word's slot holding a number or one provider word. A buyer block that breaks them is refused as before; in a function's answer the offending add-on, discount or bundle title is now drawn as the store's neutral word (numbered when several) and an offending rename is skipped, logged once an hour, where beta 8 refused the whole answer; a manifest's checkout words are checked when a release is installed or updated, never when a stored manifest is read. A tree, answer or release that used those words where they apply is now refused or adjusted."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "61c8538218df9733",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#variable:APP_ERROR_CODES: an existing signature changed or gained a required member.",
+  "reason": "validation_error details declare an optional reason, once and on each issue: a theme refusal's machine-readable reason (one of the sealed STOREFRONT_THEME_SAVE_REASONS) reaches an app that writes a theme draft instead of being stripped. Two optional fields; nothing an app read before changes."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "dfaab6490d98fe47",
+  "change": "sdk.packages/plugin-sdk/src/pixel-testing.d.ts#FunctionDeclaration:createPixelTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "dfaab6490d98fe47",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "dfaab6490d98fe47",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#variable:APP_ERROR_CODES: an existing signature changed or gained a required member.",
+  "reason": "validation_error details declare an optional reason, once and on each issue: a theme refusal's machine-readable reason (one of the sealed STOREFRONT_THEME_SAVE_REASONS) reaches an app that writes a theme draft instead of being stripped. Two optional fields; nothing an app read before changes."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "dfaab6490d98fe47",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifest: an existing signature changed or gained a required member.",
+  "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "dfaab6490d98fe47",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
+  "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "dfaab6490d98fe47",
+  "change": "sdk.packages/shared/src/plugins/translation-coverage.d.ts#TypeAliasDeclaration:Manifest: an existing signature changed or gained a required member.",
+  "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/events.d.ts#variable:EVENT_FACT_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics `customer.redact_requested` and `customer.data_requested` leave the event catalogue, because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/events.d.ts#variable:EVENT_TOPICS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics `customer.redact_requested` and `customer.data_requested` leave the event catalogue, because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/events.d.ts#TypeAliasDeclaration:EventTopic: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics `customer.redact_requested` and `customer.data_requested` leave the event catalogue, because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/events.d.ts#TypeAliasDeclaration:EventTopicFilter: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics `customer.redact_requested` and `customer.data_requested` leave the event catalogue, because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#variable:APP_ERROR_CODES: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): one code per fact. `stock_version_conflict` is added (a stale `expectedStockVersion` on inventory.adjust and inventory.set_stock, which answered a plain `conflict`); `payout_request_mismatch` and `payout_reversal_request_mismatch` are removed, since a payout or reversal key reused for another request now answers `idempotency_key_reused` (422, `details.payoutId` / `details.reversalId`) whether the key layer or the payout record refuses it; `order_revision_conflict`'s meaning names every order write's `expectedRevision`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#TypeAliasDeclaration:AppErrorCode: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): one code per fact. `stock_version_conflict` is added (a stale `expectedStockVersion` on inventory.adjust and inventory.set_stock, which answered a plain `conflict`); `payout_request_mismatch` and `payout_reversal_request_mismatch` are removed, since a payout or reversal key reused for another request now answers `idempotency_key_reused` (422, `details.payoutId` / `details.reversalId`) whether the key layer or the payout record refuses it; `order_revision_conflict`'s meaning names every order write's `expectedRevision`."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "errors.payout_request_mismatch: the error code was removed.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): one code per fact. A payout or reversal key reused for another request answers 422 `idempotency_key_reused` (`details.payoutId` / `details.reversalId`) whether the key layer (within 24 hours) or the payout record (after) refuses it, so an app branches on one code; before, the record answered 409 with these payout codes."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "errors.payout_reversal_request_mismatch: the error code was removed.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): one code per fact. A payout or reversal key reused for another request answers 422 `idempotency_key_reused` (`details.payoutId` / `details.reversalId`) whether the key layer (within 24 hours) or the payout record (after) refuses it, so an app branches on one code; before, the record answered 409 with these payout codes."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "events.customer.redact_requested: the topic was removed.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics leave the event catalogue because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "events.customer.data_requested: the topic was removed.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics leave the event catalogue because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "events.facts.customer.redact_requested: the facts schema was removed.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics leave the event catalogue because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "events.facts.customer.data_requested: the facts schema was removed.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics leave the event catalogue because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "a2b949aa2d4f8cee",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#variable:APP_ERROR_CODES: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 review of the contract decisions, Nov 27, 2026): meanings only, no code or status changes. `payment_in_progress` also names a hosted payment page the buyer could still pay (payments.create refuses beside one, `details.paymentAttemptId`, unless `allowOpenAttempt`); `stock_version_conflict`, `product_revision_conflict` and `order_revision_conflict` name the bulk failures and lost races that now use them; `idempotency_key_reused` no longer promises details the key layer does not send."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "ceaed8f82750d7e3",
+  "change": "sdk.packages/plugin-sdk/src/runtime.d.ts#InterfaceDeclaration:PluginRuntimeBridge: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "ceaed8f82750d7e3",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:StableContractOperation: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock contract fix (rc.1 response seal, Nov 27): a stable operation in the SDK's contract copy loses `operationId` (the agent and REST name, not part of the app contract; an app names an operation by its app name) and gains `statuses`, the success statuses it answers, now sealed. createContractApi answers a handler's bare data with the operation's first success status (201 for a create) instead of always 200, and hands the app only the keys the operation declares, as the platform does."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "ceaed8f82750d7e3",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:ContractCall: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "ceaed8f82750d7e3",
+  "change": "sdk.packages/plugin-sdk/src/testing-contract.d.ts#InterfaceDeclaration:ContractApi: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "ceaed8f82750d7e3",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#InterfaceDeclaration:PluginTestHarnessOptions: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock naming fix (rc.1, Nov 27): one rename across the SDK. What an app passes to ctx.api.call is the operation's app name (`orders.get`), already called `operation` in `PluginApi.call`, yet the bridge, the harness's `api` option, createContractApi and `api.calls` called it `operationId`, the agent and REST name an app never sees. It is `operation` everywhere now: `api.calls[i].operation`; a contract handler receives `{ operation, contract, ... }` where `contract` is the sealed entry that was `operation` before. Parameter names change nothing at runtime; a test that reads `call.operationId`, or `call.operation.method` in a handler, reads `call.operation` and `call.contract.method`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "ceaed8f82750d7e3",
+  "change": "sdk.packages/plugin-sdk/src/ui.d.ts#variable:ui: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the theme and app contract freezes): a buyer or dashboard `text` node's `text` may also be a sentence of pieces (`PluginUiSpan[]`: `{ text, to? }`, 1 to 20, 2000 characters in all; a link's words 1 to 120 with no space at either end), whose links are drawn inside it, and the SDK's `ui.text` takes them. A string stays valid and means what it did. The same release settles what an app's words may be: every word of a UI tree is read with its bidi marks removed; a buyer button's `confirm` (never drawn on buyer pages) is refused; a store link path with a needless escape (`%61pps`, `%2F`) or one a second decoding reads (`%2561`) is refused; and the store's words apply only where an app could pass for the store (`STORE_WORD_LABEL_KINDS`: action words and every fixed word to buttons, links, bulk labels, purchase option titles and payment method and shipping rate renames, amount words and every fixed word to money-row labels, sentences only as a whole fixed word), with a Pay word's slot holding a number or one provider word. A buyer block that breaks them is refused as before; in a function's answer the offending add-on, discount or bundle title is now drawn as the store's neutral word (numbered when several) and an offending rename is skipped, logged once an hour, where beta 8 refused the whole answer; a manifest's checkout words are checked when a release is installed or updated, never when a stored manifest is read. A tree, answer or release that used those words where they apply is now refused or adjusted."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "ceaed8f82750d7e3",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#variable:APP_ERROR_CODES: an existing signature changed or gained a required member.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, round two, Nov 27): `validation_error` now says where an issue's path points: into the operation's input; for an address, the field within that address; where the operation checks a normalised form of its input (products.create, orders.create), into that form. Its producers on stable operations send the path as keys and list indexes (two sent a dotted string), and the bridge delivers a dotted path from an older producer as keys and indexes. The details declarations moved into one table (DETAILS) with no change to any field."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "ceaed8f82750d7e3",
+  "change": "sdk.packages/shared/src/plugins/ui.d.ts#TypeAliasDeclaration:PluginUiNode: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the theme and app contract freezes): a buyer or dashboard `text` node's `text` may also be a sentence of pieces (`PluginUiSpan[]`: `{ text, to? }`, 1 to 20, 2000 characters in all; a link's words 1 to 120 with no space at either end), whose links are drawn inside it, and the SDK's `ui.text` takes them. A string stays valid and means what it did. The same release settles what an app's words may be: every word of a UI tree is read with its bidi marks removed; a buyer button's `confirm` (never drawn on buyer pages) is refused; a store link path with a needless escape (`%61pps`, `%2F`) or one a second decoding reads (`%2561`) is refused; and the store's words apply only where an app could pass for the store (`STORE_WORD_LABEL_KINDS`: action words and every fixed word to buttons, links, bulk labels, purchase option titles and payment method and shipping rate renames, amount words and every fixed word to money-row labels, sentences only as a whole fixed word), with a Pay word's slot holding a number or one provider word. A buyer block that breaks them is refused as before; in a function's answer the offending add-on, discount or bundle title is now drawn as the store's neutral word (numbered when several) and an offending rename is skipped, logged once an hour, where beta 8 refused the whole answer; a manifest's checkout words are checked when a release is installed or updated, never when a stored manifest is read. A tree, answer or release that used those words where they apply is now refused or adjusted."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "ceaed8f82750d7e3",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#variable:APP_ERROR_CODES: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 merge of the contract decisions with the declared error details, Nov 27, 2026): the details table declares `payment_in_progress { paymentAttemptId?, status? }`, `idempotency_key_reused { payoutId?, reversalId? }` and `stock_version_conflict { variantId? }` (optional: other producers of the same code send none), and drops the two payout mismatch codes the contract decisions removed."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "2190973c490690dc",
+  "change": "errors.payout_request_mismatch: the error code was removed.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): one code per fact. A payout or reversal key reused for another request answers 422 `idempotency_key_reused` (`details.payoutId` / `details.reversalId`) whether the key layer (within 24 hours) or the payout record (after) refuses it, so an app branches on one code; before, the record answered 409 with these payout codes."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "2190973c490690dc",
+  "change": "errors.payout_reversal_request_mismatch: the error code was removed.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): one code per fact. A payout or reversal key reused for another request answers 422 `idempotency_key_reused` (`details.payoutId` / `details.reversalId`) whether the key layer (within 24 hours) or the payout record (after) refuses it, so an app branches on one code; before, the record answered 409 with these payout codes."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "2190973c490690dc",
+  "change": "events.customer.redact_requested: the topic was removed.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics leave the event catalogue because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "2190973c490690dc",
+  "change": "events.customer.data_requested: the topic was removed.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics leave the event catalogue because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "2190973c490690dc",
+  "change": "events.facts.customer.redact_requested: the facts schema was removed.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics leave the event catalogue because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "2190973c490690dc",
+  "change": "events.facts.customer.data_requested: the facts schema was removed.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics leave the event catalogue because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b88336def4963e1",
+  "change": "sdk.packages/shared/src/events-representations.d.ts#variable:EVENT_REPRESENTATION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b88336def4963e1",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:BuyerUiInput: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b88336def4963e1",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:BuyerUiLine: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b88336def4963e1",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:BuyerUiOrderLine: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b88336def4963e1",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:FunctionCart: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b88336def4963e1",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:FunctionCartLine: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b88336def4963e1",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_EXTENSION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b88336def4963e1",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_FUNCTION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b88336def4963e1",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_RUN_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b88336def4963e1",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontCartLine: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, review of the add-on money shape, Nov 27): the one add-on shape `LineAddOn` moves to its own leaf (`plugins/line-add-on.ts`, still exported from the plugins entry and the SDK) so the sealed order representation builds from the same definition, and gains `units` (the line's quantity for `per: \"unit\"`, its bundle units for `per: \"bundle\"`, null when no longer known): `totalMinor = amountMinor × units` whenever `amountMinor` is a number. The function cart gains `priceIncrementMinor` and each line `addOnStepMinor` and `bundle.units`/`perUnit` (optional, always sent), so an app can answer multiples of the step checkout rounds an add-on to once; island cart lines' add-ons gain `units`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "8b88336def4963e1",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontIslandContext: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "fdc163f28fa3f66e",
+  "change": "sdk.packages/shared/src/events.d.ts#variable:EVENT_FACT_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics `customer.redact_requested` and `customer.data_requested` leave the event catalogue, because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "fdc163f28fa3f66e",
+  "change": "sdk.packages/shared/src/events.d.ts#variable:EVENT_TOPICS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics `customer.redact_requested` and `customer.data_requested` leave the event catalogue, because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "fdc163f28fa3f66e",
+  "change": "sdk.packages/shared/src/events.d.ts#TypeAliasDeclaration:EventTopic: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics `customer.redact_requested` and `customer.data_requested` leave the event catalogue, because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "fdc163f28fa3f66e",
+  "change": "sdk.packages/shared/src/events.d.ts#TypeAliasDeclaration:EventTopicFilter: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics `customer.redact_requested` and `customer.data_requested` leave the event catalogue, because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "fdc163f28fa3f66e",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#variable:APP_ERROR_CODES: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 merge of the contract decisions with the declared error details, Nov 27, 2026): the details table declares `payment_in_progress { paymentAttemptId?, status? }`, `idempotency_key_reused { payoutId?, reversalId? }` and `stock_version_conflict { variantId? }` (optional: other producers of the same code send none), and drops the two payout mismatch codes the contract decisions removed."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "fdc163f28fa3f66e",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#TypeAliasDeclaration:AppErrorCode: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): one code per fact. `stock_version_conflict` is added (a stale `expectedStockVersion` on inventory.adjust and inventory.set_stock, which answered a plain `conflict`); `payout_request_mismatch` and `payout_reversal_request_mismatch` are removed, since a payout or reversal key reused for another request now answers `idempotency_key_reused` (422, `details.payoutId` / `details.reversalId`) whether the key layer or the payout record refuses it; `order_revision_conflict`'s meaning names every order write's `expectedRevision`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2a7419ed3d5a05c0",
+  "change": "sdk.packages/plugin-sdk/src/pixel-testing.d.ts#FunctionDeclaration:createPixelTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2a7419ed3d5a05c0",
+  "change": "sdk.packages/plugin-sdk/src/testing.d.ts#FunctionDeclaration:createPluginTestHarness: an existing signature changed or gained a required member.",
+  "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2a7419ed3d5a05c0",
+  "change": "sdk.packages/shared/src/events.d.ts#variable:EVENT_FACT_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics `customer.redact_requested` and `customer.data_requested` leave the event catalogue, because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2a7419ed3d5a05c0",
+  "change": "sdk.packages/shared/src/events.d.ts#variable:EVENT_TOPICS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics `customer.redact_requested` and `customer.data_requested` leave the event catalogue, because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2a7419ed3d5a05c0",
+  "change": "sdk.packages/shared/src/events.d.ts#TypeAliasDeclaration:EventTopic: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics `customer.redact_requested` and `customer.data_requested` leave the event catalogue, because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2a7419ed3d5a05c0",
+  "change": "sdk.packages/shared/src/events.d.ts#TypeAliasDeclaration:EventTopicFilter: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): the reserved privacy-request topics `customer.redact_requested` and `customer.data_requested` leave the event catalogue, because nothing emits them; every sealed topic now has an emitter. They return, with a `requestId` fact, only with the buyer request flow. A manifest that names either is refused at install (no app could have received one)."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2a7419ed3d5a05c0",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#variable:APP_ERROR_CODES: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 merge of the contract decisions with the declared error details, Nov 27, 2026): the details table declares `payment_in_progress { paymentAttemptId?, status? }`, `idempotency_key_reused { payoutId?, reversalId? }` and `stock_version_conflict { variantId? }` (optional: other producers of the same code send none), and drops the two payout mismatch codes the contract decisions removed."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2a7419ed3d5a05c0",
+  "change": "sdk.packages/shared/src/plugins/app-errors.d.ts#TypeAliasDeclaration:AppErrorCode: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1 contract decisions, Nov 27, 2026): one code per fact. `stock_version_conflict` is added (a stale `expectedStockVersion` on inventory.adjust and inventory.set_stock, which answered a plain `conflict`); `payout_request_mismatch` and `payout_reversal_request_mismatch` are removed, since a payout or reversal key reused for another request now answers `idempotency_key_reused` (422, `details.payoutId` / `details.reversalId`) whether the key layer or the payout record refuses it; `order_revision_conflict`'s meaning names every order write's `expectedRevision`."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2a7419ed3d5a05c0",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifest: an existing signature changed or gained a required member.",
+  "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2a7419ed3d5a05c0",
+  "change": "sdk.packages/shared/src/plugins/manifest.d.ts#TypeAliasDeclaration:PluginManifestInput: an existing signature changed or gained a required member.",
+  "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "2a7419ed3d5a05c0",
+  "change": "sdk.packages/shared/src/plugins/translation-coverage.d.ts#TypeAliasDeclaration:Manifest: an existing signature changed or gained a required member.",
+  "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops."
  }
 ]

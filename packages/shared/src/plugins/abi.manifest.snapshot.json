@@ -8786,6 +8786,7 @@
        "required": [
         "id",
         "name",
+        "themeVersion",
         "theme"
        ],
        "additionalProperties": false
@@ -8833,6 +8834,7 @@
        "required": [
         "id",
         "name",
+        "themeVersion",
         "sections"
        ],
        "additionalProperties": false

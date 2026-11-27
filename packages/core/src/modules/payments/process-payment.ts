@@ -68,6 +68,7 @@ import {
   orderCreatedNotificationOutboxId,
 } from "../notifications";
 import { fromMinor } from "@scalius/shared/money";
+import { RECORDED_PAYMENT_METHOD } from "@scalius/shared/payment-terms";
 import { sha256Hex } from "@scalius/shared/hash";
 
 const PAYMENT_CONFIRMATION_MAX_CAS_ATTEMPTS = 3;
@@ -263,10 +264,12 @@ async function validateDepositPaymentState(
  * other money succeeded.
  */
 async function giftCardOnlyPaidMinor(db: Database, orderId: string): Promise<number | null> {
+  // Tender the store took itself: gift cards, and payments staff or an app recorded by hand.
+  const storeTender = sql`${orderPayments.paymentMethod} IN (${GIFT_CARD_TENDER_METHOD}, ${RECORDED_PAYMENT_METHOD})`;
   const row = await db
     .select({
-      giftCardMinor: sql<number>`coalesce(sum(CASE WHEN ${orderPayments.paymentMethod} = ${GIFT_CARD_TENDER_METHOD} THEN ${orderPayments.amountMinor} ELSE 0 END), 0)`,
-      otherRows: sql<number>`coalesce(sum(CASE WHEN ${orderPayments.paymentMethod} = ${GIFT_CARD_TENDER_METHOD} THEN 0 ELSE 1 END), 0)`,
+      giftCardMinor: sql<number>`coalesce(sum(CASE WHEN ${storeTender} THEN ${orderPayments.amountMinor} ELSE 0 END), 0)`,
+      otherRows: sql<number>`coalesce(sum(CASE WHEN ${storeTender} THEN 0 ELSE 1 END), 0)`,
     })
     .from(orderPayments)
     .where(and(
@@ -278,9 +281,11 @@ async function giftCardOnlyPaidMinor(db: Database, orderId: string): Promise<num
 }
 
 /**
- * A plan-less balance is the gateway remainder of an order gift cards partly
- * paid: partial, paid > 0 all in gift-card tender, and the charge is exactly
- * the balance due (total − paid). Every other plan-less balance is refused.
+ * A plan-less balance is the gateway remainder of an order the store's own
+ * tender partly paid (gift cards, or payments recorded by hand: part of an
+ * invoice paid in cash, the rest on its payment page): partial, paid > 0 all
+ * in that tender, and the charge is exactly the balance due (total − paid).
+ * Every other plan-less balance is refused, for staff to reconcile.
  */
 async function validatePlanlessGiftCardBalanceState(
   db: Database,
@@ -709,6 +714,11 @@ export async function processPaymentConfirmed(
     if (!Number.isSafeInteger(incomingAmountMinor) || incomingAmountMinor < 0) {
       return { success: false, retryable: false, error: "Provider payment amount is invalid" };
     }
+    // The provider's reference is the payment's one identity (UNIQUE(provider, provider_ref)): a
+    // settlement without one could be recorded once per delivery, so it records nothing.
+    if (typeof params.providerRef !== "string" || params.providerRef.trim() === "") {
+      return { success: false, retryable: false, error: "Confirmed payment names no provider reference" };
+    }
 
     // ── 0. Claim or resume the provider payment record ──
     // UNIQUE(provider, provider_ref) is the primary idempotency guarantee. We
@@ -967,7 +977,7 @@ export async function processPaymentConfirmed(
                 SELECT 1 FROM order_payments
                 WHERE order_id = ${params.orderId}
                   AND status = ${PaymentRecordStatus.SUCCEEDED}
-                  AND payment_method <> ${GIFT_CARD_TENDER_METHOD}
+                  AND payment_method NOT IN (${GIFT_CARD_TENDER_METHOD}, ${RECORDED_PAYMENT_METHOD})
               )`
             : sql`1 = 1`;
 

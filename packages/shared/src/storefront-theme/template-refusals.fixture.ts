@@ -23,11 +23,11 @@ export const STOREFRONT_TEMPLATE_REFUSAL_VERSION = STOREFRONT_THEME_DOCUMENT_VER
 
 export const STOREFRONT_TEMPLATE_REFUSALS: readonly StorefrontTemplateRefusal[] = [
   // The light palette: the sale price (destructive) on the product card below 4.5:1.
-  { id: "light_contrast", theme: { tokens: { ...tokens, colors: { ...tokens.colors, destructive: "#e5484d" } } }, path: "tokens.colors.destructive", reason: null },
+  { id: "light_contrast", theme: { tokens: { ...tokens, colors: { ...tokens.colors, destructive: "#e5484d" } } }, path: "tokens.colors.destructive", reason: "contrast" },
   // The dark palette the template shows, as written (applying never remakes a template's own).
-  { id: "dark_contrast", theme: { tokens: { ...tokens, colorScheme: "dark", darkColors: { ...dark, destructive: dark.card } } }, path: "tokens.darkColors.destructive", reason: null },
+  { id: "dark_contrast", theme: { tokens: { ...tokens, colorScheme: "dark", darkColors: { ...dark, destructive: dark.card } } }, path: "tokens.darkColors.destructive", reason: "contrast" },
   // Helper text that reads as a brand colour or an error.
-  { id: "muted_colour", theme: { tokens: { ...tokens, colors: { ...tokens.colors, "muted-foreground": "#2b50aa" } } }, path: "tokens.colors.muted-foreground", reason: null },
+  { id: "muted_colour", theme: { tokens: { ...tokens, colors: { ...tokens.colors, "muted-foreground": "#2b50aa" } } }, path: "tokens.colors.muted-foreground", reason: "semantic_color" },
   // A private page's token text the buyer could not read.
   { id: "private_token", theme: { privatePages: { tokens: { cart: { "summary-total": { text: "#ffffff" } } } } }, path: "privatePages.tokens.cart.summary-total", reason: "contrast" },
   // Words among the amounts carrying a figure.

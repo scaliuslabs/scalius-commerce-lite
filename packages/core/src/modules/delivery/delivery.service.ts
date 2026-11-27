@@ -5,7 +5,7 @@
 import { deliveryProviders, deliveryShipments, orders, orderItems, products, ShipmentStatus, type Order } from "@scalius/database/schema";
 import { fromMinor } from "@scalius/shared/money";
 import { DELIVERY_HIERARCHY_COUNTRY } from "@scalius/shared/markets";
-import { providerServesCountry } from "@scalius/shared/plugins/providers";
+import { declaredCourierBookingOptions, providerServesCountry } from "@scalius/shared/plugins/providers";
 import {
   providerErrorOf,
   type CourierFind,
@@ -498,6 +498,21 @@ export async function readCourierItems(db: Database, orderId: string): Promise<{
   };
 }
 
+/**
+ * Why a booking's options cannot go to this courier, or null: a key it does
+ * not declare (`bookingOptions`), or a value outside its declaration. Checked
+ * before anything about the order is written (the bulk ship's claim included).
+ */
+export function refusedBookingOptions(
+  courier: Pick<Courier, "label" | "bookingOptions">,
+  chosen: ShipmentOptions["bookingOptions"] | undefined,
+): string | null {
+  const kept = declaredCourierBookingOptions(courier.bookingOptions, chosen);
+  const refused = Object.keys(chosen ?? {}).filter((key) => !(key in kept));
+  return refused.length === 0 ? null
+    : `${courier.label} does not take ${refused.map((key) => `"${key}"`).join(", ")} as given. Choose only the booking options it offers.`;
+}
+
 export async function createShipment(
   db: Database,
   orderId: string,
@@ -533,6 +548,9 @@ export async function createShipment(
   if (!providerServesCountry(courier.countries, recipient.countryCode)) {
     return { success: false, message: courierCountryMessage(courier.label, recipient.countryCode) };
   }
+  const refusedOptions = refusedBookingOptions(courier, options?.bookingOptions);
+  if (refusedOptions) return { success: false, message: refusedOptions };
+  const bookingOptions = declaredCourierBookingOptions(courier.bookingOptions, options?.bookingOptions);
   const preflightFailure = await courier.preflight?.(recipient, db);
   if (preflightFailure) return { success: false, message: preflightFailure };
 
@@ -554,9 +572,6 @@ export async function createShipment(
   // Provider money and contents are order authority, never browser/provider-
   // form authority. Keep only genuine merchant choices from the caller and
   // overwrite every commerce fact with the fresh saved order projection.
-  // The staff's booking choices are courier options; the courier's adapter
-  // keeps only the ones it declares (`bookingOptions`).
-  const bookingChoices = { deliveryType: options?.deliveryType, itemType: options?.itemType };
   const input: CourierShipmentInput = {
     idempotencyKey: shipmentId,
     orderId: order.id,
@@ -570,7 +585,7 @@ export async function createShipment(
     itemCount: totalItemCount > 0 ? totalItemCount : null,
     itemDescription: itemDescription || null,
     parcel: { weightGrams: options?.itemWeight === undefined ? null : Math.round(options.itemWeight * 1000), dimensionsCm: null },
-    options: Object.fromEntries(Object.entries(bookingChoices).filter(([, value]) => value !== undefined)) as CourierShipmentInput["options"],
+    options: bookingOptions,
   };
 
   // 1. Insert a "creating" placeholder shipment FIRST

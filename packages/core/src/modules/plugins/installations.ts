@@ -24,6 +24,7 @@ import {
   type PluginInstallationSource,
   type PluginInstallationStatus,
 } from "@scalius/database/schema";
+import { isEventTopicFilter } from "@scalius/shared/events";
 import { looksLikePlaceholderCredential } from "@scalius/shared/plugins/placeholder-credentials";
 import { currentProviderKind } from "@scalius/shared/plugins/providers/kinds";
 import { pluginObjectPatternIssues } from "@scalius/shared/plugins/object-patterns";
@@ -215,9 +216,52 @@ export function parseStoredPluginGrant(value: string | null): PluginGrantRequest
  *    `storefront.extensions` entry per target, with the function's reads.
  * 3. Before admin nesting: top-level `timeline` and `settingsGroups` move to
  *    `admin.timeline` and `admin.settingsGroups`.
+ * 4. Before `themeVersion` was required: a template or page preset that does
+ *    not state it was written for theme document version 10, as it was read
+ *    when it was installed.
+ * 5. A topic the platform removed from the event catalogue (the reserved
+ *    privacy-request names, rc.1) leaves `events` and each feature's
+ *    `events`: an installed app keeps running and loses only a topic nothing
+ *    ever sent. An install or update naming one is still refused.
  */
 export function upgradeStoredPluginManifest(manifest: Record<string, unknown>): Record<string, unknown> {
-  return nestAdminParts(buyerUiAsExtensions(permissionsAsScopes(manifest)));
+  return withoutRemovedEventTopics(statedThemeVersions(nestAdminParts(buyerUiAsExtensions(permissionsAsScopes(manifest)))));
+}
+
+/** The theme document version a stored template or preset without one was read at (`themeVersion` was optional then). */
+const STORED_DECLARATION_THEME_VERSION = 10;
+
+function statedThemeVersions(manifest: Record<string, unknown>): Record<string, unknown> {
+  const storefront = manifest.storefront;
+  if (!isObject(storefront)) return manifest;
+  const stated = (list: unknown) => Array.isArray(list)
+    ? list.map((entry) => isObject(entry) && entry.themeVersion === undefined ? { ...entry, themeVersion: STORED_DECLARATION_THEME_VERSION } : entry)
+    : list;
+  if (!Array.isArray(storefront.templates) && !Array.isArray(storefront.pagePresets)) return manifest;
+  return {
+    ...manifest,
+    storefront: {
+      ...storefront,
+      ...(Array.isArray(storefront.templates) ? { templates: stated(storefront.templates) } : {}),
+      ...(Array.isArray(storefront.pagePresets) ? { pagePresets: stated(storefront.pagePresets) } : {}),
+    },
+  };
+}
+
+function withoutRemovedEventTopics(manifest: Record<string, unknown>): Record<string, unknown> {
+  let changed = false;
+  const prune = (list: unknown[]) => {
+    const kept = list.filter((topic) => typeof topic !== "string" || isEventTopicFilter(topic));
+    if (kept.length !== list.length) changed = true;
+    return kept;
+  };
+  const upgraded: Record<string, unknown> = { ...manifest };
+  if (Array.isArray(manifest.events)) upgraded.events = prune(manifest.events);
+  if (Array.isArray(manifest.features)) {
+    upgraded.features = manifest.features.map((feature) =>
+      (isObject(feature) && Array.isArray(feature.events) ? { ...feature, events: prune(feature.events) } : feature));
+  }
+  return changed ? upgraded : manifest;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

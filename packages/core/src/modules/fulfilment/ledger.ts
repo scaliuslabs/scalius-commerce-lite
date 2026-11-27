@@ -21,7 +21,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { and, asc, desc, eq, ne, notInArray, sql, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { isFulfillmentType, type FulfillmentType } from "@scalius/shared/fulfilment";
-import { AppError, ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { AppError, ConflictError, NotFoundError, OrderRevisionConflictError, ValidationError } from "@scalius/core/errors";
 import {
     recordCODCollection,
     resolveOrderCurrencySnapshot,
@@ -37,6 +37,7 @@ import {
   noActiveShipmentClaimCondition,
   validateTransition,
   shipmentClaimShipmentStatusSql,
+  orderWriteConflict,
 } from "../order-kernel";
 import {
   applyOrderStatusChange,
@@ -699,7 +700,7 @@ export async function voidOrderFulfilment(
     }
     const order = await readOrderForFulfilment(db, orderId);
     if (options.expectedVersion !== undefined && order.version !== options.expectedVersion) {
-        throw new ConflictError("This order changed. Reload to see the latest.");
+        throw new OrderRevisionConflictError();
     }
     // The same rule the dashboard shows as `canVoid`.
     switch (fulfilmentVoidBlockedReason({
@@ -764,7 +765,7 @@ export async function voidOrderFulfilment(
         fulfillmentStatus = projectedFulfilmentStatus(await safeBatch(db, statements));
     } catch (error) {
         if (isBatchGuardError(error, FULFILMENT_CLAIM_GUARD)) {
-            throw new ConflictError("This order changed. Reload to see the latest.");
+            throw await orderWriteConflict(db, orderId, options.expectedVersion);
         }
         if (isBatchGuardError(error, PARCEL_SETTLED_GUARD)) {
             throw new ConflictError("This parcel's delivery is already settled, so it can't be taken back. Record a return instead.");

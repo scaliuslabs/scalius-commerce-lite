@@ -39,7 +39,7 @@ import {
   PaymentRecordStatus,
 } from "@scalius/database/schema";
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
-import { AppError, ConflictError, NotFoundError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
+import { AppError, ConflictError, NotFoundError, OrderRevisionConflictError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import { sha256Hex } from "@scalius/shared/hash";
 import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
 import type { PaymentType } from "./types";
@@ -56,7 +56,7 @@ import { getUnpayableOrderReason } from "./payable-order";
 import { acceptsProviderPayment, inferPaymentType, releaseAuthorization, validateIncomingPaymentState } from "./process-payment";
 import { readCustomerPaymentMethod, savedMethodVisibleTo, type SavedMethodActor } from "./saved-payment-methods";
 import { resolveOrderCurrencySnapshot } from "./order-currency";
-import { hasActiveShipmentClaim, SHIPMENT_CLAIM_CONFLICT_MESSAGE, shipmentClaimShipmentStatusSql } from "../order-kernel";
+import { hasActiveShipmentClaim, orderWriteConflict, SHIPMENT_CLAIM_CONFLICT_MESSAGE, shipmentClaimShipmentStatusSql } from "../order-kernel";
 import {
   closeCommandAttempt,
   commandAttemptKeyCondition,
@@ -251,6 +251,8 @@ function isConstraintError(error: unknown): boolean {
 async function claimAttempt(
   db: Database,
   input: {
+    /** The order revision the caller named: a lost guard on a moved order is then `order_revision_conflict`. */
+    expectedVersion?: number;
     attemptKey: string;
     requestHash: string;
     orderId: string;
@@ -313,7 +315,10 @@ async function claimAttempt(
       rows = reclaimed[1];
     }
   } catch (error) {
-    if (isBatchGuardError(error, CLAIM_GUARD)) throw new AppError(409, "payment_not_possible", input.guardMessage);
+    if (isBatchGuardError(error, CLAIM_GUARD)) {
+      const stale = await orderWriteConflict(db, input.orderId, input.expectedVersion, input.guardMessage);
+      throw stale instanceof OrderRevisionConflictError ? stale : new AppError(409, "payment_not_possible", input.guardMessage);
+    }
     // The order's single-flight index: another payment is being set up.
     if (isConstraintError(error)) throw inProgress();
     throw error;
@@ -471,7 +476,7 @@ export async function chargeSavedPaymentMethod(
   } else {
     if (method.status !== "active") throw new NotFoundError("Saved payment method not found");
     if (input.expectedVersion !== undefined && input.expectedVersion !== order.version) {
-      throw new ConflictError("This order changed. Read it again before charging it.");
+      throw new OrderRevisionConflictError("This order changed. Read it again before charging it.");
     }
     if (hasActiveShipmentClaim(order)) throw new AppError(409, "conflict", SHIPMENT_CLAIM_CONFLICT_MESSAGE);
     const unpayable = getUnpayableOrderReason(order);
@@ -508,6 +513,7 @@ export async function chargeSavedPaymentMethod(
   const correlationId = buildPaymentCorrelationId(input.orderId, paymentType, attemptKey.slice(-8));
 
   const attempt = await claimAttempt(db, {
+    expectedVersion: resuming ? undefined : input.expectedVersion,
     attemptKey,
     requestHash,
     orderId: input.orderId,
