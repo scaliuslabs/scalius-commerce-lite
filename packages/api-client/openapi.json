@@ -21074,7 +21074,7 @@
                 },
                 "code": {
                   "type": "string",
-                  "description": "price_changed, price_not_positive, stock_changed, below_reserved, not_found, retired, digital_stock, not_physical, revision_changed or needs_price."
+                  "description": "price_changed, price_not_positive, stock_version_conflict, below_reserved, not_found, retired, digital_stock, not_physical, product_revision_conflict or needs_price: a stale read has the name the single writes answer with."
                 }
               },
               "required": [
@@ -116471,7 +116471,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order `revision` you read; a change since is refused with 409 and the hold stays. Releasing a released hold answers it again whatever the revision."
+                    "description": "The order `revision` you read; a change since is refused with 409 `order_revision_conflict` and the hold stays. Releasing a released hold answers it again whatever the revision."
                   }
                 },
                 "required": [
@@ -116740,7 +116740,11 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order `revision` you read; a different one is refused with 409."
+                    "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
+                  },
+                  "allowOpenAttempt": {
+                    "type": "boolean",
+                    "description": "Record it, for the amount given, even though the buyer has a payment page open for the order that could still be paid: the order's open payment pages are cancelled at their provider in the same write, whether or not one was open when you read the order. If the buyer still pays on one, that payment is applied to what the order then owes when it is exactly that; on an order already paid in full it is refunded automatically (a late payment, with a timeline line; the order shows it as received until the refund lands); any other amount is left on the order for staff to reconcile, never counted. Without it, an open page (one the buyer touched within the last 24 hours, or a provider still processing a payment on one), or a payment being set up or charged right now, refuses the payment with 409 `payment_in_progress` (`details.paymentAttemptId`, `details.status`); one being set up or charged is refused either way."
                   }
                 },
                 "required": [
@@ -117842,15 +117846,28 @@
                   "options": {
                     "type": "object",
                     "properties": {
-                      "deliveryType": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 1000000
-                      },
-                      "itemType": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 1000000
+                      "bookingOptions": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "boolean"
+                            }
+                          ]
+                        },
+                        "maxProperties": 10,
+                        "propertyNames": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-zA-Z0-9]{0,31}$"
+                        },
+                        "description": "The courier's own booking choices, by the keys its manifest declares (`bookingOptions`): at most 10, each a string, number or boolean within the declaration. A key it does not declare, or a value outside it, refuses the booking before anything is written."
                       },
                       "itemWeight": {
                         "type": "number",
@@ -128396,7 +128413,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order `revision` you read; a different one is refused with 409 before the provider is called."
+                    "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
                   }
                 },
                 "required": [
@@ -129343,7 +129360,7 @@
           "App API - Payouts"
         ],
         "summary": "Send a payout to a payee",
-        "description": "Records the payout (pending) and sends it through the payout provider, which applies it once per payout id. Answers 201 with the payout: processing, paid, or failed with its `failureCode` (a decline). An unknown provider answer is 503 `payout_outcome_unknown` with `details.payoutId`: repeat the same request with the same Idempotency-Key to resubmit it; it is never sent twice. A repeat of an answered payout answers it without calling the provider. The key with another request is refused: 422 `idempotency_key_reused` within the key's 24 hours, then 409 `payout_request_mismatch` for good; a provider that is not an installed, active, set-up payout provider is 422 `payout_provider_unavailable`, with nothing recorded. Only an app sends payouts.",
+        "description": "Records the payout (pending) and sends it through the payout provider, which applies it once per payout id. Answers 201 with the payout: processing, paid, or failed with its `failureCode` (a decline). An unknown provider answer is 503 `payout_outcome_unknown` with `details.payoutId`: repeat the same request with the same Idempotency-Key to resubmit it; it is never sent twice. A repeat of an answered payout answers it without calling the provider. The key with another request is refused for good: 422 `idempotency_key_reused` (after the key's 24 hours with `details.payoutId`); a provider that is not an installed, active, set-up payout provider is 422 `payout_provider_unavailable`, with nothing recorded. Only an app sends payouts.",
         "parameters": [
           {
             "schema": {
@@ -129797,7 +129814,7 @@
           "App API - Payouts"
         ],
         "summary": "Take money back from a paid payout",
-        "description": "Records a reversal of one of the app's paid payouts (pending) and sends it through the payout's provider, which applies it once per reversal id. Partial reversals are allowed; together the reversals that have not failed never take back more than the payout. Answers 201 with the payout and `reversalId`, the reversal's entry in its `reversals`: processing, reversed, or failed with its `failureCode` (a decline). An unknown provider answer is 503 `payout_reversal_outcome_unknown` with `details.reversalId`: repeat the same request with the same Idempotency-Key to resume it; it is never applied twice. A repeat of an answered reversal answers it without calling the provider. Refused with nothing recorded: another app's payout (404), a payout that is not paid (409 `payout_not_reversible`), more than it has left (409 `payout_reversal_exceeds_payout`, `details.reversibleMinor`), another currency (422 `payout_reversal_currency_mismatch`), a provider that cannot reverse (422 `payout_reversal_unsupported`). The key with another request: 422 `idempotency_key_reused` within 24 hours, then 409 `payout_reversal_request_mismatch`.",
+        "description": "Records a reversal of one of the app's paid payouts (pending) and sends it through the payout's provider, which applies it once per reversal id. Partial reversals are allowed; together the reversals that have not failed never take back more than the payout. Answers 201 with the payout and `reversalId`, the reversal's entry in its `reversals`: processing, reversed, or failed with its `failureCode` (a decline). An unknown provider answer is 503 `payout_reversal_outcome_unknown` with `details.reversalId`: repeat the same request with the same Idempotency-Key to resume it; it is never applied twice. A repeat of an answered reversal answers it without calling the provider. Refused with nothing recorded: another app's payout (404), a payout that is not paid (409 `payout_not_reversible`), more than it has left (409 `payout_reversal_exceeds_payout`, `details.reversibleMinor`), another currency (422 `payout_reversal_currency_mismatch`), a provider that cannot reverse (422 `payout_reversal_unsupported`). The key with another request is refused for good: 422 `idempotency_key_reused` (after the key's 24 hours with `details.reversalId`).",
         "parameters": [
           {
             "schema": {
@@ -131208,8 +131225,6 @@
                         "object.created",
                         "object.updated",
                         "object.deleted",
-                        "customer.redact_requested",
-                        "customer.data_requested",
                         "customer.erased",
                         "conversation.message_received",
                         "payout.created",
@@ -131221,7 +131236,7 @@
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
                     },
                     "minItems": 1,
-                    "maxItems": 66
+                    "maxItems": 100
                   },
                   "description": {
                     "type": "string",
@@ -131548,8 +131563,6 @@
                         "object.created",
                         "object.updated",
                         "object.deleted",
-                        "customer.redact_requested",
-                        "customer.data_requested",
                         "customer.erased",
                         "conversation.message_received",
                         "payout.created",
@@ -131561,7 +131574,7 @@
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*`; the app's grant must cover it (its manifest `events`)."
                     },
                     "minItems": 1,
-                    "maxItems": 66
+                    "maxItems": 100
                   },
                   "description": {
                     "type": "string",
@@ -185465,7 +185478,7 @@
                   "expectedStockVersion": {
                     "type": "integer",
                     "minimum": 0,
-                    "description": "The SKU's stockVersion you read; any stock change since is refused with 409. Omit to apply whatever happened since."
+                    "description": "The SKU's stockVersion you read. Any stock change since is refused with 409 `stock_version_conflict` and nothing changes. Omit it to act on the stock as it is."
                   }
                 },
                 "required": [
@@ -186438,7 +186451,7 @@
                   "expectedStockVersion": {
                     "type": "integer",
                     "minimum": 0,
-                    "description": "The SKU's stockVersion you read; any stock change since is refused with 409. Omit to set the count whatever happened since."
+                    "description": "The SKU's stockVersion you read. Any stock change since is refused with 409 `stock_version_conflict` and nothing changes. Omit it to act on the stock as it is."
                   }
                 },
                 "required": [
@@ -240387,7 +240400,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`); a change since is refused with 409 and nothing changes. Omit to change it whatever happened since."
+                    "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
                   }
                 },
                 "required": [
@@ -240791,7 +240804,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`); a change since is refused with 409. Omit to mark it whatever happened since."
+                    "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
                   }
                 },
                 "additionalProperties": false
@@ -241623,15 +241636,28 @@
                   "options": {
                     "type": "object",
                     "properties": {
-                      "deliveryType": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 1000000
-                      },
-                      "itemType": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 1000000
+                      "bookingOptions": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "boolean"
+                            }
+                          ]
+                        },
+                        "maxProperties": 10,
+                        "propertyNames": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-zA-Z0-9]{0,31}$"
+                        },
+                        "description": "The courier's own booking choices, by the keys its manifest declares (`bookingOptions`): at most 10, each a string, number or boolean within the declaration. A key it does not declare, or a value outside it, refuses the booking before anything is written."
                       },
                       "itemWeight": {
                         "type": "number",
@@ -254683,15 +254709,28 @@
                   "options": {
                     "type": "object",
                     "properties": {
-                      "deliveryType": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 1000000
-                      },
-                      "itemType": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 1000000
+                      "bookingOptions": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "boolean"
+                            }
+                          ]
+                        },
+                        "maxProperties": 10,
+                        "propertyNames": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-zA-Z0-9]{0,31}$"
+                        },
+                        "description": "The courier's own booking choices, by the keys its manifest declares (`bookingOptions`): at most 10, each a string, number or boolean within the declaration. A key it does not declare, or a value outside it, refuses the booking before anything is written."
                       },
                       "itemWeight": {
                         "type": "number",
@@ -261616,7 +261655,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`); a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
+                    "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
                   }
                 },
                 "additionalProperties": false
@@ -261852,7 +261891,7 @@
                   "expectedRevision": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`); a change since is refused with 409 and nothing changes. Omit to act whatever happened since."
+                    "description": "The order's revision you read: `revision` in the order orders.get and every order write answer (the dashboard's order page calls it `version`). A change since is refused with 409 `order_revision_conflict` and nothing changes. Omit it to act on the order as it is."
                   }
                 },
                 "additionalProperties": false
@@ -273456,7 +273495,7 @@
           "Admin - Products"
         ],
         "summary": "Save the bulk editor's changed products in one request",
-        "description": "The changed rows of dashboard.products.bulk_edit_read (at most 50): status, price and discount, shipping profile, SKU weight and counted on hand at the default location. Every row commits in one batch, each under its own expectedAggregateRevision, so a row that fails (a stale revision, a refused value, a write that landed since the read) is reported in `results`, left whole, and the others stay saved. Counted quantities go through the stock ledger. The Idempotency-Key is required: a retry with the same key and body answers the first response, another body under it is refused. Each count names the stockVersion it was made against; a sale since fails that row (stock_changed). Rows past what one request may spend on this plan (only counted SKUs cost: their low-stock refresh) come back in `remaining`, unsaved: send them again.",
+        "description": "The changed rows of dashboard.products.bulk_edit_read (at most 50): status, price and discount, shipping profile, SKU weight and counted on hand at the default location. Every row commits in one batch, each under its own expectedAggregateRevision, so a row that fails (a stale revision, a refused value, a write that landed since the read) is reported in `results`, left whole, and the others stay saved. Counted quantities go through the stock ledger. The Idempotency-Key is required: a retry with the same key and body answers the first response, another body under it is refused. Each count names the stockVersion it was made against; a sale since fails that row (stock_version_conflict). Rows past what one request may spend on this plan (only counted SKUs cost: their low-stock refresh) come back in `remaining`, unsaved: send them again.",
         "parameters": [
           {
             "schema": {
@@ -273569,7 +273608,7 @@
                               "expectedStockVersion": {
                                 "type": "integer",
                                 "minimum": 0,
-                                "description": "Required with onHand: the SKU's stockVersion from dashboard.products.bulk_edit_read. Any stock change since (a sale) fails the row with stock_changed instead of booking the count over it."
+                                "description": "Required with onHand: the SKU's stockVersion from dashboard.products.bulk_edit_read. Any stock change since (a sale) fails the row with stock_version_conflict instead of booking the count over it."
                               }
                             },
                             "required": [
@@ -304067,8 +304106,6 @@
                         "object.created",
                         "object.updated",
                         "object.deleted",
-                        "customer.redact_requested",
-                        "customer.data_requested",
                         "customer.erased",
                         "conversation.message_received",
                         "payout.created",
@@ -304080,7 +304117,7 @@
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*` for every topic."
                     },
                     "minItems": 1,
-                    "maxItems": 66
+                    "maxItems": 100
                   },
                   "description": {
                     "type": "string",
@@ -304500,8 +304537,6 @@
                         "object.created",
                         "object.updated",
                         "object.deleted",
-                        "customer.redact_requested",
-                        "customer.data_requested",
                         "customer.erased",
                         "conversation.message_received",
                         "payout.created",
@@ -304513,7 +304548,7 @@
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*` for every topic."
                     },
                     "minItems": 1,
-                    "maxItems": 66
+                    "maxItems": 100
                   },
                   "description": {
                     "type": "string",
@@ -305615,8 +305650,6 @@
                 "object.created",
                 "object.updated",
                 "object.deleted",
-                "customer.redact_requested",
-                "customer.data_requested",
                 "customer.erased",
                 "conversation.message_received",
                 "payout.created",
