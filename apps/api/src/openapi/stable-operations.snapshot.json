@@ -25561,9 +25561,9 @@
         },
         {
          "type": "number"
-        },
-        {}
-       ]
+        }
+       ],
+       "nullable": true
       },
       "max": {
        "anyOf": [
@@ -25572,9 +25572,9 @@
         },
         {
          "type": "number"
-        },
-        {}
-       ]
+        }
+       ],
+       "nullable": true
       },
       "regex": {
        "type": "string",
@@ -26063,9 +26063,9 @@
         },
         {
          "type": "boolean"
-        },
-        {}
-       ]
+        }
+       ],
+       "nullable": true
       }
      },
      "description": "Before and after of the first 50 changes: prices (variantId, sku, beforeMinor, afterMinor), stock (variantId, locationId, beforeOnHand, afterOnHand), tags (customerId), status and publishing (productId)."
@@ -29421,9 +29421,9 @@
         },
         {
          "type": "number"
-        },
-        {}
-       ]
+        }
+       ],
+       "nullable": true
       },
       "max": {
        "anyOf": [
@@ -29432,9 +29432,9 @@
         },
         {
          "type": "number"
-        },
-        {}
-       ]
+        }
+       ],
+       "nullable": true
       },
       "regex": {
        "type": "string",

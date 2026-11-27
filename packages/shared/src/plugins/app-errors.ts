@@ -37,12 +37,33 @@ const fields = (properties: Record<string, unknown>, optional: readonly string[]
   required: Object.keys(properties).filter((key) => !optional.includes(key)),
 }) as const;
 
+/**
+ * The `error.details` each code delivers to an app (JSON Schema), in one
+ * table: a code here declares its details; any other code carries none. A
+ * field is only ever added (protocolBreakingChanges refuses a removed or
+ * retyped one), and the code's `meaning` names each field an app reads.
+ */
+const DETAILS = {
+  validation_error: fields({ issues: { type: "array", maxItems: 20, items: fields({ path: { type: "array", items: { anyOf: [{ type: "string" }, { type: "integer" }] } }, message: { type: "string" } }) } }, ["issues"]),
+  admin_order_create_request_mismatch: fields({ state: { type: "string", enum: ["committed", "processing", "failed"] }, canRetryWithNewKey: { type: "boolean" }, orderId: id }, ["orderId"]),
+  handle_unresolved: fields({ unresolved: { type: "array", maxItems: 20, items: fields({ kind: { type: "string" }, handle: { type: "string" } }) } }),
+  payout_request_mismatch: fields({ payoutId: id }),
+  payout_not_reversible: fields({ payoutId: id, status: { type: "string" } }),
+  payout_reversal_exceeds_payout: fields({ payoutId: id, reversibleMinor: { type: "integer", minimum: 0 } }),
+  payout_reversal_currency_mismatch: fields({ payoutId: id, currency: { type: "string" } }),
+  payout_reversal_request_mismatch: fields({ reversalId: id, payoutId: id }),
+  payout_reversal_outcome_unknown: fields({ payoutId: id, reversalId: id }),
+  payout_outcome_unknown: fields({ payoutId: id }),
+  sales_channel_product_unpublished: fields({ salesChannelId: id, productIds: { type: "array", items: id } }),
+  review_exists: fields({ reviewId: id }),
+} as const;
+
 export const APP_ERROR_CODES = {
   // ── Any operation ──
   validation_error: {
     status: 400,
-    meaning: "A path, query or body value the operation refuses; the message names the first. When the operation's schema refused it, details.issues names the fields (the first 20: each its path, as keys and list indexes, and a message).",
-    details: fields({ issues: { type: "array", maxItems: 20, items: fields({ path: { type: "array", items: { anyOf: [{ type: "string" }, { type: "integer" }] } }, message: { type: "string" } }) } }, ["issues"]),
+    meaning: "A path, query or body value the operation refuses; the message names the first. When the operation's schema refused it, details.issues names the fields (the first 20: each its path, as keys and list indexes, and a message). A path is into the operation's input; for an address it names the field within that address, and where the operation checks a normalised form of its input (products.create, orders.create), it is into that form.",
+    details: DETAILS.validation_error,
   },
   invalid_cursor: { status: 400, meaning: "The cursor is not one this list issued for this order; start again from the first page." },
   unauthorized: { status: 401, meaning: "No valid credential." },
@@ -97,7 +118,7 @@ export const APP_ERROR_CODES = {
   admin_order_create_request_mismatch: {
     status: 409,
     meaning: "The order request's key already belongs to another request: details.state is committed (details.orderId is the order it placed: read it, never place it again), processing (retry shortly) or failed (details.canRetryWithNewKey).",
-    details: fields({ state: { type: "string", enum: ["committed", "processing", "failed"] }, canRetryWithNewKey: { type: "boolean" }, orderId: id }, ["orderId"]),
+    details: DETAILS.admin_order_create_request_mismatch,
   },
   return_revision_conflict: { status: 409, meaning: "The return changed since its revision was read." },
   return_command_in_progress: { status: 409, meaning: "Another return command (a receipt, a racing request) is running on the order; retry shortly with the same key." },
@@ -123,7 +144,7 @@ export const APP_ERROR_CODES = {
   handle_unresolved: {
     status: 422,
     meaning: "No category or collection has the handle; details.unresolved lists them (the first 20, each its kind and handle).",
-    details: fields({ unresolved: { type: "array", maxItems: 20, items: fields({ kind: { type: "string" }, handle: { type: "string" } }) } }),
+    details: DETAILS.handle_unresolved,
   },
   section_not_found: { status: 404, meaning: "No section with that id is on the page." },
   template_not_owned: { status: 403, meaning: "An app applies only its own templates." },
@@ -138,16 +159,16 @@ export const APP_ERROR_CODES = {
   provider_invalid_response: { status: 503, meaning: "A provider answered something invalid (another order, a malformed answer); treat the outcome as unknown and retry with the same Idempotency-Key." },
   app_gift_card_limit: { status: 403, meaning: "The app reached the merchant's daily gift card value limit." },
   payout_provider_unavailable: { status: 422, meaning: "The payout provider is not an installed, active, set-up payout provider; nothing was recorded." },
-  payout_request_mismatch: { status: 409, meaning: "The Idempotency-Key already sent a different payout (details.payoutId); use a new key for a new payout.", details: fields({ payoutId: id }) },
+  payout_request_mismatch: { status: 409, meaning: "The Idempotency-Key already sent a different payout (details.payoutId); use a new key for a new payout.", details: DETAILS.payout_request_mismatch },
   payout_reversal_unsupported: { status: 422, meaning: "The payout's provider cannot reverse payouts (it does not implement reversePayout); nothing was recorded." },
-  payout_not_reversible: { status: 409, meaning: "Only a paid payout can be reversed (details.status is the payout's).", details: fields({ payoutId: id, status: { type: "string" } }) },
-  payout_reversal_exceeds_payout: { status: 409, meaning: "The reversal takes back more than the payout has left to give back (details.reversibleMinor), or the payout already has 20 reversals.", details: fields({ payoutId: id, reversibleMinor: { type: "integer", minimum: 0 } }) },
-  payout_reversal_currency_mismatch: { status: 422, meaning: "A reversal is in its payout's currency (details.currency).", details: fields({ payoutId: id, currency: { type: "string" } }) },
-  payout_reversal_request_mismatch: { status: 409, meaning: "The Idempotency-Key already reversed another amount or payout (details.reversalId); use a new key for a new reversal.", details: fields({ reversalId: id, payoutId: id }) },
-  payout_reversal_outcome_unknown: { status: 503, meaning: "The reversal is recorded (details.reversalId) but the provider's answer is unknown; repeat the same request with the same Idempotency-Key to resume it, never applied twice.", details: fields({ payoutId: id, reversalId: id }) },
-  payout_outcome_unknown: { status: 503, meaning: "The payout is recorded (details.payoutId) but the provider's answer is unknown; repeat the same request with the same Idempotency-Key to resubmit it, never sent twice.", details: fields({ payoutId: id }) },
+  payout_not_reversible: { status: 409, meaning: "Only a paid payout can be reversed (details.status is the payout's).", details: DETAILS.payout_not_reversible },
+  payout_reversal_exceeds_payout: { status: 409, meaning: "The reversal takes back more than the payout has left to give back (details.reversibleMinor), or the payout already has 20 reversals.", details: DETAILS.payout_reversal_exceeds_payout },
+  payout_reversal_currency_mismatch: { status: 422, meaning: "A reversal is in its payout's currency (details.currency).", details: DETAILS.payout_reversal_currency_mismatch },
+  payout_reversal_request_mismatch: { status: 409, meaning: "The Idempotency-Key already reversed another amount or payout (details.reversalId); use a new key for a new reversal.", details: DETAILS.payout_reversal_request_mismatch },
+  payout_reversal_outcome_unknown: { status: 503, meaning: "The reversal is recorded (details.reversalId) but the provider's answer is unknown; repeat the same request with the same Idempotency-Key to resume it, never applied twice.", details: DETAILS.payout_reversal_outcome_unknown },
+  payout_outcome_unknown: { status: 503, meaning: "The payout is recorded (details.payoutId) but the provider's answer is unknown; repeat the same request with the same Idempotency-Key to resubmit it, never sent twice.", details: DETAILS.payout_outcome_unknown },
   conversation_channel_unavailable: { status: 422, meaning: "The thread's chat channel has no installed, active, set-up messaging provider to carry a public reply; add an internal note or set the app up." },
-  sales_channel_product_unpublished: { status: 422, meaning: "An order or quote on an app's sales channel names a product not published to it (details.productIds); publish it to the channel first. Nothing was written.", details: fields({ salesChannelId: id, productIds: { type: "array", items: id } }) },
+  sales_channel_product_unpublished: { status: 422, meaning: "An order or quote on an app's sales channel names a product not published to it (details.productIds); publish it to the channel first. Nothing was written.", details: DETAILS.sales_channel_product_unpublished },
   pos_sales_channel_not_owned: { status: 403, meaning: "An app sells in person only from its own sales channel (`<app id>:<channel>`, declared in its manifest)." },
   pos_location_unavailable: { status: 422, meaning: "The sale's location does not exist or is archived." },
   pos_location_not_on_channel: { status: 422, meaning: "The sales channel does not sell from the sale's location." },
@@ -164,7 +185,7 @@ export const APP_ERROR_CODES = {
   digital_asset_not_ready: { status: 409, meaning: "The digital item is not ready to deliver (its file is still uploading, or it is archived)." },
   digital_keys_exhausted: { status: 409, meaning: "The licence-key pool has too few keys for the line; the store imports more." },
   reviews_disabled: { status: 403, meaning: "The store is not taking reviews (its reviews setting is off)." },
-  review_exists: { status: 409, meaning: "The buyer already has a live review of the product, or the order line has its review; details.reviewId names it.", details: fields({ reviewId: id }) },
+  review_exists: { status: 409, meaning: "The buyer already has a live review of the product, or the order line has its review; details.reviewId names it.", details: DETAILS.review_exists },
   review_not_eligible: { status: 409, meaning: "The order line was not handed over on a delivered order, or its review window closed." },
   review_not_verifiable: { status: 422, meaning: "A verified purchase needs a delivered order line of the review's customer; nothing was written." },
 

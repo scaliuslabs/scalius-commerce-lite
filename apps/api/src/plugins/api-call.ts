@@ -26,6 +26,7 @@ import { writeAgentAuditEvent } from "../agent-access/audit";
 import type { PluginPrincipal } from "../agent-access/types";
 import { authorizePluginOperation, pluginTierAllows, pluginWithinRateLimit, resolvePluginPrincipal } from "./authority";
 import { projectOperationResponse } from "./protected-response";
+import { MAX_PROJECTION_DEPTH, SchemaProjectionDepthError } from "@scalius/shared/schema-projection";
 import { IDEMPOTENCY_KEY_PATTERN } from "../routes/admin/idempotency";
 import { appOperationName, resolveAppOperation } from "./app-operations";
 import { APP_ERROR_CODES, isAppErrorCode, type AppErrorCode } from "@scalius/shared/plugins/app-errors";
@@ -240,6 +241,9 @@ export async function callPluginOperation(options: {
       }
       const code = dispatchRefusalCode(error.code);
       return refusal(APP_ERROR_CODES[code].status, code, error.message);
+    }
+    if (error instanceof SchemaProjectionDepthError) {
+      return refusal(500, "internal_error", `The answer nests deeper than ${MAX_PROJECTION_DEPTH} levels, so it cannot be delivered; read it in smaller parts.`);
     }
     return refusal(500, "internal_error", "The operation could not be completed.");
   }

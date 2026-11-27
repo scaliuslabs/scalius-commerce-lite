@@ -5,16 +5,18 @@
 
 import { APP_ERROR_CODES, isAppErrorCode, type AppErrorCodeEntry } from "./app-errors";
 import { schemaProjector, type SchemaProjector } from "../schema-projection";
+import { normalizedDetails } from "./app-error-details-check";
 
 const detailsProjectors = new Map<string, SchemaProjector>();
 
 /**
  * The `error.details` an app receives with `code`: the refusal's details
- * projected to the code's declared keys, each declared list cut to its
+ * (normalised: `normalizedDetails`) projected to the code's declared keys, each declared list cut to its
  * `maxItems`; undefined for a code that declares none (or no details).
  */
 export function appErrorDetails(code: string, details: unknown): Record<string, unknown> | undefined {
   const declared = isAppErrorCode(code) ? (APP_ERROR_CODES[code] as AppErrorCodeEntry).details : undefined;
+  details = normalizedDetails(code, details);
   if (!declared || typeof details !== "object" || details === null || Array.isArray(details)) return undefined;
   let project = detailsProjectors.get(code);
   if (!project) {
@@ -29,3 +31,4 @@ export function appErrorDetails(code: string, details: unknown): Record<string, 
   }
   return Object.keys(projected).length > 0 ? projected : undefined;
 }
+

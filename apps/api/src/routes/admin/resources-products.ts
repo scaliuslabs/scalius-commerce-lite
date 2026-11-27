@@ -187,7 +187,7 @@ function editorCreateInput(body: CreateBody, places: number): unknown {
 
 function issuesError(error: z.ZodError): ValidationError {
   return new ValidationError(error.issues[0]?.message ?? "Check the product.", {
-    issues: error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })),
+    issues: error.issues.map((issue) => ({ path: issue.path.filter((key) => typeof key !== "symbol"), message: issue.message })),
   });
 }
 

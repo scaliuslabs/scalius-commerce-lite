@@ -5189,7 +5189,7 @@ The resources and shapes the operations name.
 | `name` | string | yes |  |
 | `description` | string \| null | yes |  |
 | `type` | "single_line_text" \| "multi_line_text" \| "integer" \| "decimal" \| "boolean" \| "date" \| "date_time" \| "url" \| "color" \| "json" \| "money" \| "product_reference" \| "variant_reference" \| "collection_reference" \| "media_reference" \| "object_reference" \| "list.single_line_text" \| "list.multi_line_text" \| "list.integer" \| "list.decimal" \| "list.date" \| "list.date_time" \| "list.url" \| "list.color" \| "list.money" \| "list.product_reference" \| "list.variant_reference" \| "list.collection_reference" \| "list.media_reference" \| "list.object_reference" | yes |  |
-| `validations` | { to?: string \| null, min?: string \| number \| unknown, max?: string \| number \| unknown, regex?: string \| null, choices?: string[] \| null } | yes |  |
+| `validations` | { to?: string \| null, min?: string \| number \| null, max?: string \| number \| null, regex?: string \| null, choices?: string[] \| null } | yes |  |
 | `storefrontVisible` | boolean | yes |  |
 | `position` | integer | yes |  |
 | `revision` | integer | yes | at least 1 |
@@ -5283,7 +5283,7 @@ The resources and shapes the operations name.
 | `unchanged` | integer | yes | Items already as asked (no write) |
 | `failed` | integer | yes | Items refused; the first 50 are in failures with a code |
 | `currency` | string \| null | yes | The store currency of every *Minor amount in sample (price runs); null otherwise |
-| `sample` | (Record<string, string \| number \| boolean \| unknown>)[] | yes | Before and after of the first 50 changes: prices (variantId, sku, beforeMinor, afterMinor), stock (variantId, locationId, beforeOnHand, afterOnHand), tags (customerId), status and publishing (productId) |
+| `sample` | (Record<string, string \| number \| boolean \| null>)[] | yes | Before and after of the first 50 changes: prices (variantId, sku, beforeMinor, afterMinor), stock (variantId, locationId, beforeOnHand, afterOnHand), tags (customerId), status and publishing (productId) |
 | `failures` | { id: string, code: string }[] | yes |  |
 | `errorCode` | string \| null | yes | Why a failed run stopped |
 | `createdAt` | string \| null | yes | ISO 8601 date-time |
@@ -5700,7 +5700,7 @@ Type: { type: "resource", resourceType: "page" | "category" | "collection" | "pr
 | `to` | string |  |  |
 | `required` | boolean |  | default `false` |
 | `description` | string |  | at most 300 characters |
-| `validations` | { min?: string \| number \| unknown, max?: string \| number \| unknown, regex?: string \| null, choices?: string[] \| null } |  | default `{}` |
+| `validations` | { min?: string \| number \| null, max?: string \| number \| null, regex?: string \| null, choices?: string[] \| null } |  | default `{}` |
 
 ### ObjectRecord
 

@@ -18511,7 +18511,7 @@
  "errors": {
   "validation_error": {
    "status": 400,
-   "meaning": "A path, query or body value the operation refuses; the message names the first. When the operation's schema refused it, details.issues names the fields (the first 20: each its path, as keys and list indexes, and a message).",
+   "meaning": "A path, query or body value the operation refuses; the message names the first. When the operation's schema refused it, details.issues names the fields (the first 20: each its path, as keys and list indexes, and a message). A path is into the operation's input; for an address it names the field within that address, and where the operation checks a normalised form of its input (products.create, orders.create), it is into that form.",
    "details": {
     "type": "object",
     "properties": {

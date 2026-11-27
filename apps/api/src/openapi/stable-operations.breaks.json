@@ -3256,5 +3256,335 @@
   "from": "5c884e0ad30524dc",
   "change": "behaviour: an app's ctx.api.call answer carries only the keys the operation's output schema declares; the snapshot and the SDK contract no longer carry operationId; every operation's success statuses are sealed.",
   "reason": "Pre-lock contract fix (rc.1 response seal, Nov 27): the bridge only redacted a route's answer, so a key a handler added without declaring it would have reached apps, and removing it later would break an app though the sealed contract never had it. Answers are now projected to the declared schema (protected-response.ts; the SDK's createContractApi does the same), so the snapshot is the whole promise. A probe over 806 calls to 170 stable operations in the test suite, and a review of the other 39 handlers, found no undeclared key, so no app loses a field it could see before. The operationId (the agent and REST name) left the app contract instead of being sealed: an app names an operation by its app name. Success statuses (201 for a create, 200 or 202 for a bulk run) were not compared, so a 201 becoming 200 would have broken an app branching on it unrefused; they are now part of the snapshot and any change is a break. No schema diff produces this entry: it records the change for review."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "bulk_runs.get output data.run.sample[]{*}: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "bulk_runs.list output data.runs[].sample[]{*}: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_field_definitions.get output data.definition.validations.max: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_field_definitions.get output data.definition.validations.min: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_field_definitions.list output data.definitions[].validations.max: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_field_definitions.list output data.definitions[].validations.min: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.get_brand_values output data.fields[].definition.validations.max: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.get_brand_values output data.fields[].definition.validations.min: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.get_category_values output data.fields[].definition.validations.max: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.get_category_values output data.fields[].definition.validations.min: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.get_collection_values output data.fields[].definition.validations.max: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.get_collection_values output data.fields[].definition.validations.min: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.get_customer_values output data.fields[].definition.validations.max: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.get_customer_values output data.fields[].definition.validations.min: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.get_order_values output data.fields[].definition.validations.max: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.get_order_values output data.fields[].definition.validations.min: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.get_page_values output data.fields[].definition.validations.max: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.get_page_values output data.fields[].definition.validations.min: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.get_product_values output data.fields[].definition.validations.max: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.get_product_values output data.fields[].definition.validations.min: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.get_variant_values output data.fields[].definition.validations.max: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.get_variant_values output data.fields[].definition.validations.min: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.set_brand_values output data.fields[].definition.validations.max: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.set_brand_values output data.fields[].definition.validations.min: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.set_category_values output data.fields[].definition.validations.max: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.set_category_values output data.fields[].definition.validations.min: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.set_collection_values output data.fields[].definition.validations.max: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.set_collection_values output data.fields[].definition.validations.min: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.set_customer_values output data.fields[].definition.validations.max: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.set_customer_values output data.fields[].definition.validations.min: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.set_order_values output data.fields[].definition.validations.max: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.set_order_values output data.fields[].definition.validations.min: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.set_page_values output data.fields[].definition.validations.max: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.set_page_values output data.fields[].definition.validations.min: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.set_product_values output data.fields[].definition.validations.max: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.set_product_values output data.fields[].definition.validations.min: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.set_variant_values output data.fields[].definition.validations.max: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "custom_fields.set_variant_values output data.fields[].definition.validations.min: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "customers.bulk_tag output data.run.sample[]{*}: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "object_types.create input body.fields[].validations.max: a request variant is no longer accepted.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "object_types.create input body.fields[].validations.min: a request variant is no longer accepted.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "object_types.create output data.type.fields[].validations.max: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "object_types.create output data.type.fields[].validations.min: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "object_types.get output data.type.fields[].validations.max: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "object_types.get output data.type.fields[].validations.min: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "object_types.list output data.types[].fields[].validations.max: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "object_types.list output data.types[].fields[].validations.min: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "object_types.update input body.fields[].validations.max: a request variant is no longer accepted.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "object_types.update input body.fields[].validations.min: a request variant is no longer accepted.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "object_types.update output data.type.fields[].validations.max: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "object_types.update output data.type.fields[].validations.min: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "products.bulk_publish output data.run.sample[]{*}: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "products.bulk_set_status output data.run.sample[]{*}: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "variants.bulk_set_prices output data.run.sample[]{*}: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
+ },
+ {
+  "snapshot": "stable-operations.snapshot.json",
+  "from": "9d866a461f925250",
+  "change": "variants.bulk_set_stock output data.run.sample[]{*}: the response may now be null.",
+  "reason": "Pre-lock contract fix (rc.1 response seal review, Nov 27): z.null() inside a union was written as an empty schema option (`{}`), which reads as \"any value\": the projection had to keep every key of an object under it, and the snapshot did not say null. The OpenAPI finalizer now writes null as `nullable: true` on the union (OpenAPI 3.0's form), so the option list holds only the real shapes. The values the route sends and accepts are exactly what they were (null was always one of them); the checker reads the new form as \"may now be null\" and \"a variant is no longer accepted\" because the old form spelled null as anything. No app sees a change."
  }
 ]

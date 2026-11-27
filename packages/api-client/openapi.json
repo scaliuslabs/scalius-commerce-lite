@@ -507,10 +507,10 @@
                   "free",
                   "feeFrom"
                 ]
-              },
-              {}
+              }
             ],
-            "description": "Free when the product ships free, else the cheapest active delivery rate; null without a rate."
+            "description": "Free when the product ships free, else the cheapest active delivery rate; null without a rate.",
+            "nullable": true
           }
         },
         "required": [
@@ -1699,12 +1699,12 @@
                 ]
               },
               "darkColors": {
+                "nullable": true,
                 "allOf": [
                   {
                     "$ref": "#/components/schemas/StorefrontThemeColors"
                   }
-                ],
-                "nullable": true
+                ]
               },
               "colorSchemeToggle": {
                 "type": "boolean"
@@ -4020,15 +4020,15 @@
                     },
                     {
                       "type": "boolean"
-                    },
-                    {}
-                  ]
+                    }
+                  ],
+                  "nullable": true
                 }
               },
               "maxItems": 24
-            },
-            {}
-          ]
+            }
+          ],
+          "nullable": true
         }
       },
       "StorefrontSkinRef": {
@@ -7549,7 +7549,6 @@
           {
             "type": "boolean"
           },
-          {},
           {
             "type": "array",
             "items": {
@@ -7573,7 +7572,8 @@
               ]
             }
           }
-        ]
+        ],
+        "nullable": true
       },
       "PluginUiNode": {
         "oneOf": [
@@ -9043,9 +9043,9 @@
                         },
                         {
                           "type": "boolean"
-                        },
-                        {}
-                      ]
+                        }
+                      ],
+                      "nullable": true
                     },
                     "tone": {
                       "type": "string",
@@ -9177,7 +9177,6 @@
                           {
                             "type": "boolean"
                           },
-                          {},
                           {
                             "type": "object",
                             "properties": {
@@ -9352,7 +9351,8 @@
                             ],
                             "additionalProperties": false
                           }
-                        ]
+                        ],
+                        "nullable": true
                       }
                     },
                     "to": {
@@ -13406,9 +13406,9 @@
                                   },
                                   {
                                     "type": "boolean"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "tone": {
                                 "type": "string",
@@ -13540,7 +13540,6 @@
                                     {
                                       "type": "boolean"
                                     },
-                                    {},
                                     {
                                       "type": "object",
                                       "properties": {
@@ -13715,7 +13714,8 @@
                                       ],
                                       "additionalProperties": false
                                     }
-                                  ]
+                                  ],
+                                  "nullable": true
                                 }
                               },
                               "to": {
@@ -17798,12 +17798,12 @@
             ]
           },
           "kit": {
+            "nullable": true,
             "allOf": [
               {
                 "$ref": "#/components/schemas/StorefrontKit"
               }
-            ],
-            "nullable": true
+            ]
           },
           "customFields": {
             "type": "array",
@@ -20696,9 +20696,9 @@
                   },
                   {
                     "type": "boolean"
-                  },
-                  {}
-                ]
+                  }
+                ],
+                "nullable": true
               }
             },
             "description": "Before and after of the first 50 changes: prices (variantId, sku, beforeMinor, afterMinor), stock (variantId, locationId, beforeOnHand, afterOnHand), tags (customerId), status and publishing (productId)."
@@ -24914,9 +24914,9 @@
                   },
                   {
                     "type": "number"
-                  },
-                  {}
-                ]
+                  }
+                ],
+                "nullable": true
               },
               "max": {
                 "anyOf": [
@@ -24925,9 +24925,9 @@
                   },
                   {
                     "type": "number"
-                  },
-                  {}
-                ]
+                  }
+                ],
+                "nullable": true
               },
               "regex": {
                 "type": "string",
@@ -28596,14 +28596,14 @@
                       },
                       {
                         "type": "boolean"
-                      },
-                      {}
-                    ]
+                      }
+                    ],
+                    "nullable": true
                   }
                 }
-              },
-              {}
-            ]
+              }
+            ],
+            "nullable": true
           },
           "min": {
             "type": "number",
@@ -28731,9 +28731,9 @@
               },
               {
                 "type": "boolean"
-              },
-              {}
-            ]
+              }
+            ],
+            "nullable": true
           },
           "min": {
             "type": "number",
@@ -32372,14 +32372,14 @@
                                 },
                                 {
                                   "type": "boolean"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           }
-                        },
-                        {}
-                      ]
+                        }
+                      ],
+                      "nullable": true
                     }
                   },
                   "secrets": {
@@ -34075,9 +34075,9 @@
                   },
                   {
                     "type": "number"
-                  },
-                  {}
-                ]
+                  }
+                ],
+                "nullable": true
               },
               "max": {
                 "anyOf": [
@@ -34086,9 +34086,9 @@
                   },
                   {
                     "type": "number"
-                  },
-                  {}
-                ]
+                  }
+                ],
+                "nullable": true
               },
               "regex": {
                 "type": "string",
@@ -43676,36 +43676,36 @@
                           "type": "object",
                           "properties": {
                             "logo": {
+                              "nullable": true,
                               "allOf": [
                                 {
                                   "$ref": "#/components/schemas/StorefrontBrandImage"
                                 }
-                              ],
-                              "nullable": true
+                              ]
                             },
                             "darkLogo": {
+                              "nullable": true,
                               "allOf": [
                                 {
                                   "$ref": "#/components/schemas/StorefrontBrandImage"
                                 }
-                              ],
-                              "nullable": true
+                              ]
                             },
                             "footerLogo": {
+                              "nullable": true,
                               "allOf": [
                                 {
                                   "$ref": "#/components/schemas/StorefrontBrandImage"
                                 }
-                              ],
-                              "nullable": true
+                              ]
                             },
                             "favicon": {
+                              "nullable": true,
                               "allOf": [
                                 {
                                   "$ref": "#/components/schemas/StorefrontBrandImage"
                                 }
-                              ],
-                              "nullable": true
+                              ]
                             }
                           },
                           "required": [
@@ -44311,9 +44311,9 @@
                                     },
                                     {
                                       "type": "boolean"
-                                    },
-                                    {}
-                                  ]
+                                    }
+                                  ],
+                                  "nullable": true
                                 }
                               }
                             },
@@ -44482,9 +44482,9 @@
                                       "items": {
                                         "type": "string"
                                       }
-                                    },
-                                    {}
-                                  ]
+                                    }
+                                  ],
+                                  "nullable": true
                                 },
                                 "description": "The app's own settings it declares public, in the page's language: what its components read as `context.app.settings`."
                               }
@@ -45265,36 +45265,36 @@
                           "type": "object",
                           "properties": {
                             "logo": {
+                              "nullable": true,
                               "allOf": [
                                 {
                                   "$ref": "#/components/schemas/StorefrontBrandImage"
                                 }
-                              ],
-                              "nullable": true
+                              ]
                             },
                             "darkLogo": {
+                              "nullable": true,
                               "allOf": [
                                 {
                                   "$ref": "#/components/schemas/StorefrontBrandImage"
                                 }
-                              ],
-                              "nullable": true
+                              ]
                             },
                             "footerLogo": {
+                              "nullable": true,
                               "allOf": [
                                 {
                                   "$ref": "#/components/schemas/StorefrontBrandImage"
                                 }
-                              ],
-                              "nullable": true
+                              ]
                             },
                             "favicon": {
+                              "nullable": true,
                               "allOf": [
                                 {
                                   "$ref": "#/components/schemas/StorefrontBrandImage"
                                 }
-                              ],
-                              "nullable": true
+                              ]
                             }
                           },
                           "required": [
@@ -59624,9 +59624,9 @@
                                                 },
                                                 {
                                                   "type": "boolean"
-                                                },
-                                                {}
-                                              ]
+                                                }
+                                              ],
+                                              "nullable": true
                                             },
                                             "tone": {
                                               "type": "string",
@@ -59758,7 +59758,6 @@
                                                   {
                                                     "type": "boolean"
                                                   },
-                                                  {},
                                                   {
                                                     "type": "object",
                                                     "properties": {
@@ -59933,7 +59932,8 @@
                                                     ],
                                                     "additionalProperties": false
                                                   }
-                                                ]
+                                                ],
+                                                "nullable": true
                                               }
                                             },
                                             "to": {
@@ -84442,12 +84442,12 @@
                                         },
                                         "swatch": {
                                           "description": "The value's swatch (a colour, an image from Files) for a swatch picker; null without one.",
+                                          "nullable": true,
                                           "allOf": [
                                             {
                                               "$ref": "#/components/schemas/ProductOptionValueSwatch"
                                             }
-                                          ],
-                                          "nullable": true
+                                          ]
                                         }
                                       },
                                       "required": [
@@ -85314,12 +85314,12 @@
                                 "nullable": true
                               },
                               "kit": {
+                                "nullable": true,
                                 "allOf": [
                                   {
                                     "$ref": "#/components/schemas/StorefrontKit"
                                   }
-                                ],
-                                "nullable": true
+                                ]
                               }
                             },
                             "required": [
@@ -92167,9 +92167,9 @@
                                                     },
                                                     {
                                                       "type": "boolean"
-                                                    },
-                                                    {}
-                                                  ]
+                                                    }
+                                                  ],
+                                                  "nullable": true
                                                 },
                                                 "tone": {
                                                   "type": "string",
@@ -92301,7 +92301,6 @@
                                                       {
                                                         "type": "boolean"
                                                       },
-                                                      {},
                                                       {
                                                         "type": "object",
                                                         "properties": {
@@ -92476,7 +92475,8 @@
                                                         ],
                                                         "additionalProperties": false
                                                       }
-                                                    ]
+                                                    ],
+                                                    "nullable": true
                                                   }
                                                 },
                                                 "to": {
@@ -97868,9 +97868,9 @@
                                                 },
                                                 {
                                                   "type": "boolean"
-                                                },
-                                                {}
-                                              ]
+                                                }
+                                              ],
+                                              "nullable": true
                                             },
                                             "tone": {
                                               "type": "string",
@@ -98002,7 +98002,6 @@
                                                   {
                                                     "type": "boolean"
                                                   },
-                                                  {},
                                                   {
                                                     "type": "object",
                                                     "properties": {
@@ -98177,7 +98176,8 @@
                                                     ],
                                                     "additionalProperties": false
                                                   }
-                                                ]
+                                                ],
+                                                "nullable": true
                                               }
                                             },
                                             "to": {
@@ -103004,9 +103004,9 @@
                                                 },
                                                 {
                                                   "type": "boolean"
-                                                },
-                                                {}
-                                              ]
+                                                }
+                                              ],
+                                              "nullable": true
                                             },
                                             "tone": {
                                               "type": "string",
@@ -103138,7 +103138,6 @@
                                                   {
                                                     "type": "boolean"
                                                   },
-                                                  {},
                                                   {
                                                     "type": "object",
                                                     "properties": {
@@ -103313,7 +103312,8 @@
                                                     ],
                                                     "additionalProperties": false
                                                   }
-                                                ]
+                                                ],
+                                                "nullable": true
                                               }
                                             },
                                             "to": {
@@ -156314,9 +156314,9 @@
                                 },
                                 {
                                   "type": "boolean"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "description": "Values of the app columns named in appColumns, by row id then <app id>/<column id> (money in major units of the store currency). Absent when no app column was asked for."
@@ -178132,9 +178132,9 @@
                         "enum": [
                           ""
                         ]
-                      },
-                      {}
-                    ]
+                      }
+                    ],
+                    "nullable": true
                   },
                   "notes": {
                     "type": "string",
@@ -178546,9 +178546,9 @@
                         "enum": [
                           ""
                         ]
-                      },
-                      {}
-                    ]
+                      }
+                    ],
+                    "nullable": true
                   },
                   "notes": {
                     "type": "string",
@@ -203189,9 +203189,9 @@
                                     {
                                       "type": "string",
                                       "maxLength": 300
-                                    },
-                                    {}
-                                  ]
+                                    }
+                                  ],
+                                  "nullable": true
                                 }
                               }
                             },
@@ -203212,9 +203212,9 @@
                               {
                                 "type": "string",
                                 "maxLength": 300
-                              },
-                              {}
-                            ]
+                              }
+                            ],
+                            "nullable": true
                           }
                         },
                         "notes": {
@@ -209251,12 +209251,12 @@
                         "maxLength": 100
                       },
                       "value": {
+                        "nullable": true,
                         "allOf": [
                           {
                             "$ref": "#/components/schemas/StorefrontLandingPage"
                           }
-                        ],
-                        "nullable": true
+                        ]
                       }
                     },
                     "required": [
@@ -230763,9 +230763,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "createdAt": {
                                 "anyOf": [
@@ -230774,9 +230774,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -240074,9 +240074,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "codStatus": {
                               "type": "string"
@@ -240112,9 +240112,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "receiptUrl": {
                               "type": "string",
@@ -249119,9 +249119,9 @@
                                 },
                                 {
                                   "type": "boolean"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "description": "Values of the app columns named in appColumns, by row id then <app id>/<column id> (money in major units of the store currency). Absent when no app column was asked for."
@@ -255243,9 +255243,9 @@
                             },
                             {
                               "type": "number"
-                            },
-                            {}
-                          ]
+                            }
+                          ],
+                          "nullable": true
                         },
                         "accessMode": {
                           "type": "string",
@@ -255857,9 +255857,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -258019,9 +258019,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "codReceiptUrl": {
                                 "type": "string",
@@ -258131,9 +258131,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "balancePaidAt": {
                               "anyOf": [
@@ -258142,9 +258142,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "balanceDueDate": {
                               "type": "string",
@@ -258628,9 +258628,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "createdAt": {
                                 "anyOf": [
@@ -258694,9 +258694,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {}
-                                      ]
+                                        }
+                                      ],
+                                      "nullable": true
                                     },
                                     "lastAttemptAt": {
                                       "anyOf": [
@@ -258705,9 +258705,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {}
-                                      ]
+                                        }
+                                      ],
+                                      "nullable": true
                                     },
                                     "lastError": {
                                       "type": "string",
@@ -258720,9 +258720,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {}
-                                      ]
+                                        }
+                                      ],
+                                      "nullable": true
                                     },
                                     "deliveredAt": {
                                       "anyOf": [
@@ -258731,9 +258731,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {}
-                                      ]
+                                        }
+                                      ],
+                                      "nullable": true
                                     },
                                     "failedAt": {
                                       "anyOf": [
@@ -258742,9 +258742,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {}
-                                      ]
+                                        }
+                                      ],
+                                      "nullable": true
                                     },
                                     "skippedAt": {
                                       "anyOf": [
@@ -258753,9 +258753,9 @@
                                         },
                                         {
                                           "type": "number"
-                                        },
-                                        {}
-                                      ]
+                                        }
+                                      ],
+                                      "nullable": true
                                     },
                                     "createdAt": {
                                       "anyOf": [
@@ -270714,9 +270714,9 @@
                                 },
                                 {
                                   "type": "boolean"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "description": "Values of the app columns named in appColumns, by row id then <app id>/<column id> (money in major units of the store currency). Absent when no app column was asked for."
@@ -275048,9 +275048,9 @@
                                     },
                                     {
                                       "type": "number"
-                                    },
-                                    {}
-                                  ]
+                                    }
+                                  ],
+                                  "nullable": true
                                 },
                                 "textLengths": {
                                   "type": "object",
@@ -276086,12 +276086,12 @@
                                           "type": "integer"
                                         },
                                         "swatch": {
+                                          "nullable": true,
                                           "allOf": [
                                             {
                                               "$ref": "#/components/schemas/ProductOptionValueSwatch"
                                             }
-                                          ],
-                                          "nullable": true
+                                          ]
                                         }
                                       },
                                       "required": [
@@ -277535,12 +277535,12 @@
                                     },
                                     "swatch": {
                                       "description": "The value's swatch for a swatch picker; null without one.",
+                                      "nullable": true,
                                       "allOf": [
                                         {
                                           "$ref": "#/components/schemas/ProductOptionValueSwatch"
                                         }
-                                      ],
-                                      "nullable": true
+                                      ]
                                     }
                                   },
                                   "required": [
@@ -282242,12 +282242,12 @@
                           "$ref": "#/components/schemas/DigitalAsset"
                         },
                         "upload": {
+                          "nullable": true,
                           "allOf": [
                             {
                               "$ref": "#/components/schemas/DigitalUploadSession"
                             }
-                          ],
-                          "nullable": true
+                          ]
                         }
                       },
                       "required": [
@@ -290731,9 +290731,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -293401,9 +293401,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -293412,9 +293412,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -293461,9 +293461,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -293472,9 +293472,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "deletedAt": {
                                 "anyOf": [
@@ -293483,9 +293483,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -293574,9 +293574,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -293585,9 +293585,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -293655,9 +293655,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -293666,9 +293666,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -293899,9 +293899,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -293910,9 +293910,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -294154,9 +294154,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -294165,9 +294165,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -294399,9 +294399,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -294410,9 +294410,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "deletedAt": {
                                 "anyOf": [
@@ -294421,9 +294421,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -294648,9 +294648,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -294659,9 +294659,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "deletedAt": {
                               "anyOf": [
@@ -294670,9 +294670,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -294914,9 +294914,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -294925,9 +294925,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "deletedAt": {
                               "anyOf": [
@@ -294936,9 +294936,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -295163,9 +295163,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -295174,9 +295174,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "deletedAt": {
                               "anyOf": [
@@ -295185,9 +295185,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -295416,9 +295416,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -295427,9 +295427,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -295702,9 +295702,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -295713,9 +295713,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -295998,9 +295998,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -296009,9 +296009,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -296257,9 +296257,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -296268,9 +296268,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -296489,9 +296489,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -296500,9 +296500,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -296773,9 +296773,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -296784,9 +296784,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -297042,9 +297042,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -297053,9 +297053,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -297148,9 +297148,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -297159,9 +297159,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -297229,9 +297229,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               },
                               "updatedAt": {
                                 "anyOf": [
@@ -297240,9 +297240,9 @@
                                   },
                                   {
                                     "type": "number"
-                                  },
-                                  {}
-                                ]
+                                  }
+                                ],
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -297508,9 +297508,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             },
                             "updatedAt": {
                               "anyOf": [
@@ -297519,9 +297519,9 @@
                                 },
                                 {
                                   "type": "number"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -302342,9 +302342,9 @@
                                     },
                                     {
                                       "type": "boolean"
-                                    },
-                                    {}
-                                  ]
+                                    }
+                                  ],
+                                  "nullable": true
                                 }
                               },
                               "type": {
@@ -309157,14 +309157,14 @@
                                 },
                                 {
                                   "type": "boolean"
-                                },
-                                {}
-                              ]
+                                }
+                              ],
+                              "nullable": true
                             }
                           }
-                        },
-                        {}
-                      ]
+                        }
+                      ],
+                      "nullable": true
                     }
                   },
                   "translations": {
@@ -310407,10 +310407,10 @@
                           },
                           {
                             "type": "number"
-                          },
-                          {}
+                          }
                         ],
-                        "description": "Text and URL: minimum length. Numbers, money, dates: minimum value (money in integer minor units of the store currency)."
+                        "description": "Text and URL: minimum length. Numbers, money, dates: minimum value (money in integer minor units of the store currency).",
+                        "nullable": true
                       },
                       "max": {
                         "anyOf": [
@@ -310419,10 +310419,10 @@
                           },
                           {
                             "type": "number"
-                          },
-                          {}
+                          }
                         ],
-                        "description": "Text and URL: maximum length. Numbers, money, dates: maximum value (money in integer minor units of the store currency)."
+                        "description": "Text and URL: maximum length. Numbers, money, dates: maximum value (money in integer minor units of the store currency).",
+                        "nullable": true
                       },
                       "regex": {
                         "type": "string",
@@ -310842,10 +310842,10 @@
                           },
                           {
                             "type": "number"
-                          },
-                          {}
+                          }
                         ],
-                        "description": "Text and URL: minimum length. Numbers, money, dates: minimum value (money in integer minor units of the store currency)."
+                        "description": "Text and URL: minimum length. Numbers, money, dates: minimum value (money in integer minor units of the store currency).",
+                        "nullable": true
                       },
                       "max": {
                         "anyOf": [
@@ -310854,10 +310854,10 @@
                           },
                           {
                             "type": "number"
-                          },
-                          {}
+                          }
                         ],
-                        "description": "Text and URL: maximum length. Numbers, money, dates: maximum value (money in integer minor units of the store currency)."
+                        "description": "Text and URL: maximum length. Numbers, money, dates: maximum value (money in integer minor units of the store currency).",
+                        "nullable": true
                       },
                       "regex": {
                         "type": "string",
