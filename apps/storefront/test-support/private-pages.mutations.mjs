@@ -253,7 +253,7 @@ export const MUTATIONS = {
   },
   "H1 token mode paints no hover": {
     why: "a hover surface paints nothing in token mode: a control the host gives a hover shows none under the pointer",
-    rewrites: [rewrite(TOKENS, '.map((name) => [name, ["background-color:var(--pt-h)", ":hover"]] as const),', '.map((name) => [name, ["background-color:transparent"]] as const),')],
+    rewrites: [rewrite(TOKENS, '"sm:hover:bg-muted/60"].map((name) => [name, ["background-color:var(--pt-h)", ":hover"]] as const),', '"sm:hover:bg-muted/60"].map((name) => [name, ["background-color:transparent"]] as const),')],
     cases: [B1],
     expect: /shows no hover/,
   },
