@@ -26,6 +26,7 @@ import { formatList } from "@scalius/shared/locale-words";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { isAdminApiConflictError } from "~/lib/admin-api-error";
 import { apiData, type ApiResult } from "~/lib/api";
+import { sameFormValue } from "~/lib/form-values";
 import { SectionCard, actionErrorText } from "./shared";
 
 type Update = NonNullable<ApiResult<typeof getApiV1AdminSettingsThemeTemplateUpdate>["update"]>;
@@ -71,11 +72,11 @@ function difference(mine: unknown, theirs: unknown, t: Messages): string | null 
   const locale = getLocale();
   if (Array.isArray(mine) || Array.isArray(theirs)) {
     const [before, after] = [Array.isArray(mine) ? mine : [], Array.isArray(theirs) ? theirs : []];
-    const names = (list: unknown[]) => new Map(list.map((member) => [memberName(member), JSON.stringify(member)]));
+    const names = (list: unknown[]) => new Map(list.map((member) => [memberName(member), member]));
     const [old, next] = [names(before), names(after)];
     const added = [...next.keys()].filter((name) => !old.has(name));
     const removed = [...old.keys()].filter((name) => !next.has(name));
-    const changed = [...next.keys()].filter((name) => old.has(name) && old.get(name) !== next.get(name));
+    const changed = [...next.keys()].filter((name) => old.has(name) && !sameFormValue(old.get(name), next.get(name)));
     const parts = [
       added.length > 0 ? t("themeUpdateListAdded", { items: formatList(added, locale) }) : null,
       removed.length > 0 ? t("themeUpdateListRemoved", { items: formatList(removed, locale) }) : null,
@@ -86,7 +87,7 @@ function difference(mine: unknown, theirs: unknown, t: Messages): string | null 
   const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
   if (!isObject(mine) && !isObject(theirs)) return null;
   const [before, after] = [isObject(mine) ? mine : {}, isObject(theirs) ? theirs : {}];
-  const fields = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter((key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]));
+  const fields = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter((key) => !sameFormValue(before[key], after[key]));
   return t("themeUpdateFields", { fields: formatList(fields, locale) });
 }
 
