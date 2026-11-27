@@ -82,6 +82,10 @@ export const GALLERY_CUSTOMER = {
   },
 } as const;
 
+/** The protected account line's inputs hash (its plan answered `lifetime`), as the cart store computes it (api.test.ts holds it to that). */
+export const CUSTOMER_PROTECTED_HASH = "d71752b2a6a3b969";
+export const GALLERY_CUSTOMER_PROTECTED_KEY = `line:v3:prod_gta5:variant:var_gta5_account:p:${CUSTOMER_PROTECTED_HASH}`;
+
 /** More of the reference store's games, each with its four options as the store sells them (taller lines than a plain product's). */
 const CUSTOMER_GAMES = [
   { id: "prod_elden", name: "Elden Ring", price: 4679, options: ["Standard Edition", "Steam"] },
@@ -100,8 +104,15 @@ const CUSTOMER_GAMES = [
 export function galleryCustomerCart(protectedAccount: boolean, games = 0): string {
   const { account, redeem } = GALLERY_CUSTOMER;
   const unit = account.price + (protectedAccount ? GALLERY_CUSTOMER.protectionMinor / 100 : 0);
+  // With the games, the account line as a store keeps it once protected: the app's answer and its add-on on the line
+  // (its "Add-on" row and Edit, as tall as a real line).
+  const kept = games > 0 && protectedAccount ? {
+    propertiesHash: CUSTOMER_PROTECTED_HASH,
+    properties: [{ key: `${GALLERY_CUSTOMER.appId}.${GALLERY_CUSTOMER.inputKey}`, value: "lifetime", label: GALLERY_CUSTOMER.title, displayValue: GALLERY_CUSTOMER.title, priceMinor: 0, appDrawnChoice: true }],
+    adjustments: [{ key: "_adjustment", label: GALLERY_CUSTOMER.title, displayValue: "", priceMinor: GALLERY_CUSTOMER.protectionMinor, appId: GALLERY_CUSTOMER.appId }],
+  } : {};
   return JSON.stringify({ items: {
-    [account.key]: { ...account.line, price: unit, quantity: protectedAccount ? 2 : 1 },
+    [games > 0 && protectedAccount ? GALLERY_CUSTOMER_PROTECTED_KEY : account.key]: { ...account.line, ...kept, price: unit, quantity: protectedAccount ? 2 : 1 },
     ...(games > 0 ? Object.fromEntries(CUSTOMER_GAMES.slice(0, games).map((game) => [game.key, game.line])) : { [redeem.key]: redeem.line }),
   } });
 }

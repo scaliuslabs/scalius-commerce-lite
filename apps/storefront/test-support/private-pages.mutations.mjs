@@ -497,7 +497,7 @@ export const MUTATIONS = {
     why: "the rows above the total scroll in a pane of their own that can be shorter than an app's block: the block shows as a sliver",
     rewrites: [rewrite("apps/storefront/src/components/CartFlyout.tsx", '<div className="mt-auto shrink-0 space-y-3 border-t', '<div className="mt-auto shrink-0 max-h-8 overflow-y-auto space-y-3 border-t')],
     cases: ["five lines in the customer's drawer on a phone"],
-    expect: /drawer lines: an app block in the drawer's footer .*sliver/,
+    expect: /drawer lines: an app block in the drawer's footer .*pane of its own/,
   },
   "H-i the dialog's actions stack with Confirm on top": {
     why: "Confirm comes first in the dialog's markup: where its large Confirm and Go back do not fit side by side, Confirm stacks on top, away from the thumb",

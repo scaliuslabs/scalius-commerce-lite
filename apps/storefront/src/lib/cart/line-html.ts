@@ -98,7 +98,7 @@ export const detailsPart = (inner: string): string => `<div class="mt-0.5 text-s
 
 /** The `remove` sub-part: the same named control in every variant, its look and content the variant's. */
 export function lineRemove({ words, describedBy, cartKey }: CartLineHtmlSlots, look: string, content: string): string {
-  return `<button type="button" aria-label="${escapeHtml(words.remove)}"${describedBy} ${cartCallAttributes("removeFromCart", cartKey)} data-part="line-remove" class="shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring ${look}">${content}</button>`;
+  return `<button type="button" aria-label="${escapeHtml(words.remove)}"${describedBy} ${cartCallAttributes("removeFromCart", cartKey)} data-part="line-remove" data-control="action" class="shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring ${look}">${content}</button>`;
 }
 
 function priceHtml(view: CartLineView, words: CartLineHtmlWords): string {

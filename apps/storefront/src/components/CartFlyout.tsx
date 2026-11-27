@@ -851,6 +851,7 @@ export default function CartFlyout({ onReady }: Props) {
           aria-label={lineCopy.removeFor(view.lineName)}
           aria-describedby={describedBy}
           onClick={remove}
+          data-control="action"
           className="flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive active:scale-90 sm:h-8 sm:w-8 cursor-pointer"
           data-part="line-remove"
         >

@@ -1583,12 +1583,14 @@ function layoutShiftOver(bound) {
 function drawerLinesShown() {
   const problems = [];
   const sheet = '[data-private="cart-drawer"]';
+  // At scroll 0, as the drawer opens (the walk before scrolled each text into view).
+  for (const box of document.querySelectorAll(`${sheet} [data-part="drawer-scroll"] *`)) if (box.scrollTop > 0) box.scrollTop = 0;
   const region = document.querySelector(`${sheet} [data-part="drawer-scroll"]`)?.getBoundingClientRect();
   const lines = [...document.querySelectorAll(`${sheet} [data-part="drawer-lines"] [data-part="line"]`)].map((line) => line.getBoundingClientRect());
   if (!region) return ["the drawer draws no scrolling region"];
   const whole = lines.filter((line) => line.top >= region.top - 0.5 && line.bottom <= region.bottom + 0.5 && line.bottom <= innerHeight).length;
   const wanted = innerHeight >= 700 ? 2 : 1;
-  if (whole < wanted) problems.push(`${whole} whole line${whole === 1 ? "" : "s"} on screen at ${innerWidth}x${innerHeight} (its scrolling region ${Math.round(region.height)}px of the sheet): at least ${wanted}`);
+  if (whole < wanted) problems.push(`${whole} whole line${whole === 1 ? "" : "s"} on screen at ${innerWidth}x${innerHeight} (its scrolling region ${Math.round(region.top)} to ${Math.round(region.bottom)}, the lines ${lines.slice(0, 3).map((line) => `${Math.round(line.top)} to ${Math.round(line.bottom)}`).join(", ")}): at least ${wanted}`);
   for (const part of ["drawer-checkout", "drawer-total"]) {
     const box = document.querySelector(`${sheet} [data-part="${part}"]`)?.getBoundingClientRect();
     if (!box || box.top < 0 || box.bottom > innerHeight + 0.5) problems.push(`${part === "drawer-total" ? "the total" : "Check out"} is not wholly on screen`);
@@ -1597,9 +1599,10 @@ function drawerLinesShown() {
     if (!block.checkVisibility()) continue;
     const height = block.getBoundingClientRect().height;
     if (height < 8 || block.scrollHeight > block.clientHeight + 1) problems.push(`an app block in the drawer's footer is drawn ${Math.round(height)}px tall, its own height ${block.scrollHeight}px`);
+    // It scrolls with the lines in the drawer's own region, or lies in a box that shows it whole.
     for (let box = block.parentElement; box && !box.matches(sheet); box = box.parentElement) {
       if (!/(auto|scroll|hidden|clip)/.test(getComputedStyle(box).overflowY)) continue;
-      if (box.clientHeight + 1 < height) problems.push(`an app block in the drawer's footer (${Math.round(height)}px) lies in a pane ${box.clientHeight}px tall: it shows only a sliver`);
+      if (!box.parentElement?.matches('[data-part="drawer-scroll"]') && box.clientHeight + 1 < height) problems.push(`an app block in the drawer's footer (${Math.round(height)}px) lies in a pane of its own ${box.clientHeight}px tall: it shows only a sliver`);
       break;
     }
   }
