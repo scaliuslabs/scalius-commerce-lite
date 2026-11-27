@@ -44,8 +44,8 @@ const canonical = (value: unknown) => JSON.stringify(value, (_, entry) => (entry
  * The sites whose reasons and constants are data here. Pack and validate
  * (`scalius-plugin validate`, `pnpm plugin pack`) run the store's own checks
  * through its contract (`loadPluginContract`: manifest parse and policy,
- * handlers, listing images, the storefront build and the theme templates);
- * their own additions are listed with the source in refusal-census.test.ts.
+ * handlers, listing images, the storefront build and the theme templates)
+ * and its own package sizes; refusal-census.test.ts lists them from the source.
  */
 export function refusalCensusSites(): Record<string, CensusSite> {
   const storeWords = { words: STORE_ACTION_AND_AMOUNT_WORDS, kinds: STORE_WORD_LABEL_KINDS, slots: STORE_WORD_SLOT_PATTERNS };

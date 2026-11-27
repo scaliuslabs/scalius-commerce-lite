@@ -30,7 +30,7 @@ import { ForbiddenError, ValidationError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import { conflictResponse, errorResponseSchema, errorResponses, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
 import { isPluginSandboxAvailable } from "../../plugins/loaders/sandbox-availability";
-import { PLUGIN_PACKAGE_MAX_BYTES } from "../../plugins/package-zip";
+import { PLUGIN_PACKAGE_MAX_BYTES } from "@scalius/shared/plugins/package-limits";
 
 type AppContext = Context<{ Bindings: Env }>;
 

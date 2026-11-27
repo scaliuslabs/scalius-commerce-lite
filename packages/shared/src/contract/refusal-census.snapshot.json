@@ -127,7 +127,7 @@
  "functionOutput": {
   "at": "each function's answer (its sealed output schema, then the store's words give way: function-words.ts)",
   "reasons": [],
-  "constants": "1740b87abfcce726"
+  "constants": "12c258529dbca8b4"
  },
  "storefrontOutput": {
   "at": "each storefront render's markup (sanitizePluginHtml) and its bundle at upload",
@@ -152,6 +152,6 @@
    "Storefront",
    "Theme templates"
   ],
-  "constants": "488344f2c079a402"
+  "constants": "165f20b31191be4c"
  }
 }

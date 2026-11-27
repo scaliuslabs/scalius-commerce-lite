@@ -3449,5 +3449,12 @@
   "change": "sdk.packages/shared/src/plugins/translation-coverage.d.ts#TypeAliasDeclaration:Manifest: an existing signature changed or gained a required member.",
   "reason": "Before the rc.1 freeze: a template and a page preset must state themeVersion (the theme document version they are written for). Absent once read as version 10, so a template written for a later version silently ran the old upgrade steps (the 12 → 13 step dropped its dark colours); a missing one is now refused with the current version named. Stored manifests of installed apps read an absent one as 10, as they were installed (upgradeStoredPluginManifest), so no installed app stops.",
   "type": "pre-lock"
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "d477a3506e659ed2",
+  "change": "tables.hostHooks.phoneBar.selectors: the key was removed.",
+  "reason": "Pre-lock (rc.1 seals review, Nov 27): the phone bar's promised hooks become data hooks (data-part tab-bar, tab, tab-label, tab-icon, tab-badge, with aria-current and --mobile-tabs-height). The old #mobile-tab-bar id and .mobile-tab class stay in the markup, so a theme styling them keeps working; they are no longer promised. Sealed the same day it was first sealed, before any release carried it.",
+  "type": "pre-lock"
  }
 ]

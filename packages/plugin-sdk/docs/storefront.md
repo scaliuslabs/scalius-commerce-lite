@@ -547,7 +547,7 @@ A field's pieces are `[data-buy-field-part="…"]` with the names above. The SDK
 
 ### Styling the store's phone bar
 
-Under any header that leaves the phone navigation to the store, the store draws its bottom bar (the tabs the theme document chose). Style it through these names only: the bar `#mobile-tab-bar`, each tab `.mobile-tab`, a tab's label (its last `span`, `.mobile-tab > span:last-child`) and icon (`.mobile-tab svg`), the current tab `.mobile-tab[aria-current]`, and the bar's height `--mobile-tabs-height` (read it to keep your own fixed content above the bar). The names hold; anything else inside the bar does not.
+Under any header that leaves the phone navigation to the store, the store draws its bottom bar (the tabs the theme document chose). Style it through these hooks only: the bar `[data-part="tab-bar"]`, each tab `[data-part="tab"]`, a tab's label `[data-part="tab-label"]` and icon `[data-part="tab-icon"]` (the store's `svg`, or the image your link tab names), the cart tab's count `[data-part="tab-badge"]` (empty when the cart is), the current tab `[data-part="tab"][aria-current]`, and the bar's height `--mobile-tabs-height` (read it to keep your own fixed content above the bar). The names hold; their nesting and anything else inside the bar do not. The bar's older `#mobile-tab-bar` id and `.mobile-tab` class are still in the markup, but they are not promised: move to the hooks above.
 
 Every hook on this page that holds is in the store's sealed list `STOREFRONT_HOST_HOOKS`, by where it is: the buy form, placed offers, kits, related products, the filters wrapper, the sticky buy column and the phone bar. The list only grows.
 

@@ -60,6 +60,8 @@ export const SEALS = [
   "packages/shared/src/storefront-theme/private-anatomy.snapshot.txt",
   "packages/shared/src/storefront-theme/save-reasons.snapshot.json",
   "packages/shared/src/storefront-theme/read-bounds.snapshot.json",
+  // Tied to PRIVATE_CHECKER_VERSION / PRIVATE_POLICY_VERSION (private-compile-golden.test.ts): moving it raises one, which save-reasons' rule then refuses without an entry.
+  "packages/shared/src/storefront-theme/private-compile.golden.json",
   "packages/shared/src/contract/refusal-census.snapshot.json",
 ];
 

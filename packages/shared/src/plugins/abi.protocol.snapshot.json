@@ -22861,13 +22861,14 @@
      ]
     },
     "phoneBar": {
-     "selectors": [
-      "#mobile-tab-bar",
-      ".mobile-tab",
-      ".mobile-tab > span:last-child",
-      ".mobile-tab svg",
-      ".mobile-tab[aria-current]"
+     "data-part": [
+      "tab-bar",
+      "tab",
+      "tab-label",
+      "tab-icon",
+      "tab-badge"
      ],
+     "aria-current": [],
      "custom-properties": [
       "--mobile-tabs-height"
      ]
@@ -23514,6 +23515,18 @@
     "uploads.readBytes": {
      "value": 262144,
      "loosens": "up"
+    },
+    "package.bytes": {
+     "value": 20971520,
+     "loosens": "up"
+    },
+    "package.fileBytes": {
+     "value": 16777216,
+     "loosens": "up"
+    },
+    "webhooks.topics": {
+     "value": 100,
+     "loosens": "up"
     }
    }
   },
@@ -23826,6 +23839,37 @@
      "পরিশোধযোগ্য"
     ]
    }
+  },
+  "landingHandlesNeverValid": {
+   "rule": "refuse",
+   "value": [
+    "404",
+    "500",
+    "account",
+    "admin",
+    "api",
+    "apps",
+    "blog",
+    "brands",
+    "buy",
+    "cart",
+    "categories",
+    "checkout",
+    "collections",
+    "health",
+    "localization",
+    "newsletter",
+    "order-success",
+    "pages",
+    "payment-recovery",
+    "products",
+    "search",
+    "track-order"
+   ]
+  },
+  "marketSubfolderPattern": {
+   "rule": "refuse",
+   "value": "^[a-z]{2}(?:-[a-z]{2})?$"
   },
   "neutralWords": {
    "rule": "grow",

@@ -8,8 +8,9 @@
 //            a refused label;
 //   loosen   the limits an app is built against (app-limits.ts);
 //   refuse   lists a check refuses by: the store's action and amount words,
-//            their slot patterns, the label kinds' reach and the theme's
-//            amount words. A new member refuses an app or theme that passes
+//            their slot patterns, the label kinds' reach, the theme's
+//            amount words, and the handles and subfolder form a stored
+//            landing page is read against. A new member refuses an app or theme that passes
 //            today, so after the lock it is a security entry, never growth.
 //
 // A table's rule is part of what is sealed: changing it is a break too.
@@ -19,6 +20,8 @@ import { STORE_ACTION_AND_AMOUNT_WORDS, STORE_WORD_LABEL_KINDS, STORE_WORD_SLOT_
 import { growOnlyBreaks, loosenOnlyBreaks, refusalListBreaks, type SealedLimit } from "../contract/rules";
 import { STOREFRONT_HOST_CSS_VARIABLES, STOREFRONT_HOST_HOOKS } from "../storefront-theme/host-contract";
 import { PRIVATE_LABEL_AMOUNT_WORDS } from "../storefront-theme/private-layout";
+import { LANDING_HANDLES_NEVER_VALID } from "../storefront-theme/pages";
+import { MARKET_SUBFOLDER_PATTERN } from "../markets";
 import { appSealedLimits } from "./app-limits";
 import { STOREFRONT_SKIN_HTML_ALLOW_LIST } from "./html";
 
@@ -65,6 +68,9 @@ export function contractTables(): Record<string, ContractTable> {
     storeWordOwn: table("grow", Object.fromEntries(Object.entries(STORE_WORD_LABEL_KINDS).map(([kind, scope]) => [kind, "own" in scope ? scope.own : []]))),
     storeWordsReason: table("grow", STORE_WORDS_REASON),
     themeLabelAmountWords: table("refuse", PRIVATE_LABEL_AMOUNT_WORDS),
+    // What a stored landing page's handle is read against (read-lists.test.ts): a new handle or a wider form fails a stored theme's read.
+    landingHandlesNeverValid: table("refuse", [...LANDING_HANDLES_NEVER_VALID].sort()),
+    marketSubfolderPattern: table("refuse", MARKET_SUBFOLDER_PATTERN.source),
     // What the store draws over an app's label that passed for its word (function-words.ts).
     neutralWords: table("grow", { addOn: { en: LINE_ENTRY_WORDS_EN.lineAddOnText, bn: LINE_ENTRY_WORDS_BN.lineAddOnText }, discount: STORE_ACTION_AND_AMOUNT_WORDS.discountText }),
   };

@@ -55,7 +55,14 @@ function schemaBreaks(label: string, before: unknown, after: unknown, direction:
 
 /** The manifest an app writes: the host must keep accepting every manifest it accepted. */
 export function manifestBreakingChanges(before: unknown, after: unknown): string[] {
-  return schemaBreaks("manifest", record(before).schema, record(after).schema, "request");
+  return [...versionBreaks(before, after), ...schemaBreaks("manifest", record(before).schema, record(after).schema, "request")];
+}
+
+/** A changed contract version is itself a change: after the lock only a `new-version` entry accepts it. */
+function versionBreaks(before: unknown, after: unknown): string[] {
+  const was = record(before).apiVersion;
+  const now = record(after).apiVersion;
+  return was !== undefined && was !== now ? [`apiVersion: ${String(was)} became ${String(now)}: a new contract version.`] : [];
 }
 
 function isObject(value: unknown): value is Json {
@@ -113,7 +120,11 @@ function providerRequiredBreaks(before: unknown, after: unknown): string[] {
 export function protocolBreakingChanges(before: unknown, after: unknown): string[] {
   const was = record(before);
   const now = record(after);
-  const problems: string[] = [];
+  const problems: string[] = [...versionBreaks(before, after)];
+  const sealedEvents = record(was.events);
+  if (sealedEvents.apiVersion !== undefined && sealedEvents.apiVersion !== record(now.events).apiVersion) {
+    problems.push(`events.apiVersion: ${String(sealedEvents.apiVersion)} became ${String(record(now.events).apiVersion)}: a new contract version.`);
+  }
 
   const nowFunctions = record(now.functions);
   problems.push(...removedKeys("functions", was.functions, now.functions, "function point"));

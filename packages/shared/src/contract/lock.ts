@@ -110,7 +110,9 @@ export async function ledgerDigest(entries: readonly unknown[]): Promise<string>
  * growth, whatever an entry claims. (The SDK seal's "an existing signature
  * changed" says neither, so growth there is the reviewer's word.)
  */
-const NEVER_GROWTH = /was removed|no longer|tightened|newly required|a new required|may now be null|went back|changed from|is now required|a new refusal|moved from|type changed|a new limit/;
+const NEVER_GROWTH = /was removed|no longer|tightened|newly required|a new required|may now be null|went back|changed from|is now required|a new refusal|moved from|type changed|a new limit|now names who may|a new contract version/;
+/** A change line that is a contract version change: only a `new-version` entry accepts it. */
+const VERSION_CHANGE = /: a new contract version\.$/;
 
 /** Why an entry written after the lock cannot accept a change, or null. */
 export function postLockEntryProblem(entry: LedgerEntry, lock: Pick<ContractLock, "contractVersion">, supportedVersions?: readonly string[]): string | null {
@@ -119,6 +121,7 @@ export function postLockEntryProblem(entry: LedgerEntry, lock: Pick<ContractLock
   if (!(LEDGER_ENTRY_TYPES as readonly string[]).includes(entry.type)) return `Unknown entry type ${JSON.stringify(entry.type)}.`;
   if (entry.type === "pre-lock") return "Pre-lock entries end at the lock: a break now is a security fix or a new contract version.";
   if (entry.type === "growth" && NEVER_GROWTH.test(entry.change)) return "This change removes or tightens something: it is not growth.";
+  if (VERSION_CHANGE.test(entry.change) && entry.type !== "new-version") return "A contract version change is accepted only as new-version.";
   if (entry.type === "security") {
     const advisory = entry.advisory;
     if (!advisory || !advisory.id?.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(advisory.date ?? "")) {
@@ -127,7 +130,10 @@ export function postLockEntryProblem(entry: LedgerEntry, lock: Pick<ContractLock
   }
   if (entry.type === "new-version") {
     if (!entry.version || entry.version === lock.contractVersion) return `A new-version entry names the contract version it belongs to, other than the locked ${lock.contractVersion}.`;
-    if (supportedVersions && !supportedVersions.includes(entry.version)) return `Contract version ${entry.version} is not one this build supports (${supportedVersions.join(", ")}).`;
+    // A new version is real only when this build runs it beside the locked one (an adapter keeps the old shapes).
+    if (!supportedVersions) return "A new-version entry is checked against the versions this build supports.";
+    if (!supportedVersions.includes(entry.version)) return `Contract version ${entry.version} is not one this build supports (${supportedVersions.join(", ")}).`;
+    if (!supportedVersions.includes(lock.contractVersion)) return `This build no longer supports the locked contract version ${lock.contractVersion}: a new version ships beside it.`;
   }
   return null;
 }

@@ -88,13 +88,15 @@ export const STOREFRONT_HOST_HOOKS = {
     "custom-properties": ["--sticky-column-shift"],
   },
   /**
-   * The store's phone bar under any header: the bar, each tab, the tab's
-   * label (its last `span`) and icon (`svg`), the current tab, and the bar's
-   * height. These are the names the bar carries today; no data hooks of its
-   * own yet.
+   * The store's phone bar under any header: the bar, each tab, a tab's label,
+   * its icon (the store's `svg` or the theme's image) and the cart tab's
+   * count, the current tab (`aria-current`), and the bar's height. Its old
+   * `#mobile-tab-bar` id and `.mobile-tab` class stay in the markup but are
+   * not promised.
    */
   phoneBar: {
-    selectors: ["#mobile-tab-bar", ".mobile-tab", ".mobile-tab > span:last-child", ".mobile-tab svg", ".mobile-tab[aria-current]"],
+    "data-part": ["tab-bar", "tab", "tab-label", "tab-icon", "tab-badge"],
+    "aria-current": [],
     "custom-properties": ["--mobile-tabs-height"],
   },
 } as const;

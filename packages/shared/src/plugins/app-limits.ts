@@ -17,6 +17,8 @@ import { PROVIDER_CHECKOUT_DEADLINE_MS } from "./provider-deadline";
 import { PLUGIN_UPLOAD_READ_MAX_BYTES } from "./uploads";
 import { STOREFRONT_APP_TEMPLATE_MAX_BYTES } from "./storefront-components";
 import { STOREFRONT_SKIN_HTML_BOUNDS } from "./html";
+import { PLUGIN_PACKAGE_FILE_MAX_BYTES, PLUGIN_PACKAGE_MAX_BYTES } from "./package-limits";
+import { WEBHOOK_TOPICS_MAX } from "../events";
 import type { SealedLimit } from "../contract/rules";
 
 /** Functions sit on checkout's path: their wall time is capped below the manifest's (ms). */
@@ -69,5 +71,8 @@ export function appSealedLimits(): Record<string, SealedLimit> {
     "jobs.stateBytes": up(PLUGIN_JOB_STATE_MAX_BYTES),
     ...Object.fromEntries(Object.entries(PLUGIN_MESSAGE_LIMITS).map(([name, value]) => [`messages.${name}`, up(value)])),
     "uploads.readBytes": up(PLUGIN_UPLOAD_READ_MAX_BYTES),
+    "package.bytes": up(PLUGIN_PACKAGE_MAX_BYTES),
+    "package.fileBytes": up(PLUGIN_PACKAGE_FILE_MAX_BYTES),
+    "webhooks.topics": up(WEBHOOK_TOPICS_MAX),
   };
 }
