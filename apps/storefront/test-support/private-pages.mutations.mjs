@@ -419,9 +419,79 @@ export const MUTATIONS = {
  * the modules it serves, and which files it rewrote and which it could not
  * (the gate asks, and a mutation that tests nothing fails the run).
  */
+// ─── A theme's chrome on the buyer's own pages (buyer-chrome.browser.mjs `--mutations`) ───
+const CHROME = "apps/storefront/src/components/private/PrivateChrome.astro";
+const CHROME_STYLE = "apps/storefront/src/lib/private-pages/chrome-style.ts";
+const SHADOW = '<scalius-chrome data-chrome={target}><template shadowrootmode="open"><style is:inline set:html={style}></style><Fragment set:html={chrome.html} /></template></scalius-chrome>';
+const CSS = "packages/shared/src/plugins/buyer-chrome-css.ts";
+const REBUILD = "packages/shared/src/plugins/inert-html.ts";
+/** Each names the check of buyer-chrome.browser.mjs that must fail under it. */
+export const CHROME_MUTATIONS = {
+  "C1 no shadow root": {
+    why: "the chrome is drawn in the page itself: its sheet and its layers reach the page",
+    rewrites: [rewrite(CHROME, SHADOW, '<scalius-chrome data-chrome={target}><style is:inline set:html={style}></style><Fragment set:html={chrome.html} /></scalius-chrome>')],
+    expect: /^shadow: the (?:header|footer) is drawn without a shadow root|^style: |^covered: /,
+  },
+  "C2 a form kept": {
+    why: "the rebuild keeps a theme's forms and fields",
+    rewrites: [
+      rewrite("packages/shared/src/plugins/inert-html.ts", '"noscript", "video", "audio", "canvas", "math", "foreignobject", "use", "image", "portal", "form", "input", "select",', '"noscript", "video", "audio", "canvas", "math", "foreignobject", "use", "image", "portal", "select",'),
+      rewrite("packages/shared/src/plugins/inert-html.ts", '  "a", "abbr", "address", ', '  "a", "abbr", "address", "form", "input", '),
+    ],
+    expect: /^markup: /,
+  },
+  "C3 no paint containment on the host": {
+    why: "the guard no longer paint-contains the host (the frame still clips: the gate names the host's own containment)",
+    rewrites: [rewrite(CHROME_STYLE, "max-inline-size:100%!important;contain:paint!important;", "max-inline-size:100%!important;")],
+    expect: /^containment: /,
+  },
+  "C4 the theme's sheet unlayered": {
+    why: "the store's reading of the theme's sheet is imported outside its layer, so its important rules in a layer it names outrank the guard",
+    rewrites: [rewrite(CHROME_STYLE, "theme ? `@import ${cssUrl(theme)} layer(theme);` : \"\",", "theme ? `@import ${cssUrl(theme)};` : \"\",")],
+    expect: /^containment: /,
+  },
+  "C5 no store frame": {
+    why: "the shadow host sits in no frame of the store's: the host's own effects and layers paint over the page",
+    rewrites: [rewrite(CHROME, "<div data-buyer-chrome-frame={target} style={BUYER_CHROME_FRAME_STYLE[target]}>", "<div data-buyer-chrome-frame={target}>")],
+    expect: /^covered: |^containment: /,
+  },
+  "C6 selectors unchecked": {
+    why: "the check lets :host hold, chain or nest under a selector that matches the page around the host",
+    rewrites: [rewrite(CSS, "function checkSelector(values: CssComponent[]): void {\n", "function checkSelector(values: CssComponent[]): void {\n  if (values.length > 0) return;\n")],
+    expect: /^refusal: /,
+  },
+  "C7 URLs unchecked": {
+    why: "the check lets a sheet's URL reach outside the app's own public files",
+    rewrites: [rewrite(CSS, "  if (url.origin !== \"https://store.invalid\" || !url.pathname.startsWith(`${RELEASE}public/`) || url.hash) {", "  if (url.protocol === \"never:\") {")],
+    expect: /^refusal: /,
+  },
+  "C8 a theme popover kept": {
+    why: "the rebuild keeps a theme's popover in the theme's region, so a theme element reaches the top layer",
+    rewrites: [
+      rewrite(REBUILD, '    if (name === "popover" || name === "popovertarget" || name === "popovertargetaction" || name === "data-panel") continue;', '    if (name === "popover" || name === "popovertarget") { out.push([name, name === "popover" ? "auto" : value]); continue; }\n    if (name === "popovertargetaction" || name === "data-panel") continue;'),
+      rewrite(REBUILD, '    const panel = POPOVER_TAGS.has(tag) && "popover" in node.attribs ? rebuild.panels.get(node.attribs.id ?? "") : undefined;', "    const panel = undefined as number | undefined;"),
+    ],
+    // The panel check, or the markup check's own finding: a region's markup that names a popover.
+    expect: /^panel: |^covered: |^markup: .*\bpopover(?:target)?>/,
+  },
+};
+
+/** Each chrome mutation names the check it must fail, and each rewrite's text is in its file exactly once. */
+export async function chromeMutationsHold(read) {
+  const problems = [];
+  for (const [name, mutation] of Object.entries(CHROME_MUTATIONS)) {
+    for (const { file, find } of mutation.rewrites) {
+      const source = await read(file);
+      const at = source.indexOf(find);
+      if (at < 0 || source.indexOf(find, at + find.length) >= 0) problems.push(`${name}: ${file} does not hold its text exactly once`);
+    }
+  }
+  return problems;
+}
+
 export function galleryMutation(name) {
-  const mutation = MUTATIONS[name];
-  if (!mutation) throw new Error(`Unknown mutation ${name}: one of ${Object.keys(MUTATIONS).join(", ")}.`);
+  const mutation = MUTATIONS[name] ?? CHROME_MUTATIONS[name];
+  if (!mutation) throw new Error(`Unknown mutation ${name}: one of ${[...Object.keys(MUTATIONS), ...Object.keys(CHROME_MUTATIONS)].join(", ")}.`);
   const applied = new Set();
   const missed = new Set();
   // The source is rewritten as it is read from disk, before any compiler (TypeScript, Astro) sees it.

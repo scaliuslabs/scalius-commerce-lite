@@ -30,6 +30,8 @@ export const CONTRACT_SEALS: readonly ContractSeal[] = [
   { path: "packages/shared/src/storefront-theme/save-reasons.snapshot.json", ledger: CONTRACT, snapshot: "storefront-theme/save-reasons.snapshot.json", test: "packages/shared/src/storefront-theme/save-reasons.test.ts", beforeLock: "review" },
   { path: "packages/shared/src/storefront-theme/read-bounds.snapshot.json", ledger: CONTRACT, snapshot: "storefront-theme/read-bounds.snapshot.json", test: "packages/shared/src/storefront-theme/read-bounds.test.ts", beforeLock: "ledger" },
   { path: "packages/shared/src/storefront-theme/private-compile.golden.json", ledger: CONTRACT, snapshot: "storefront-theme/private-compile.golden.json", test: "packages/shared/src/storefront-theme/private-compile-golden.test.ts", beforeLock: "review" },
+  { path: "packages/shared/src/plugins/buyer-chrome-css.verdicts.json", ledger: CONTRACT, snapshot: "plugins/buyer-chrome-css.verdicts.json", test: "packages/shared/src/plugins/buyer-chrome-verdicts.test.ts", beforeLock: "review" },
+  { path: "packages/shared/src/plugins/buyer-chrome-css.version.json", ledger: CONTRACT, snapshot: "plugins/buyer-chrome-css.version.json", test: "packages/shared/src/plugins/buyer-chrome-verdicts.test.ts", beforeLock: "review" },
   { path: "packages/shared/src/contract/refusal-census.snapshot.json", ledger: CONTRACT, snapshot: "contract/refusal-census.snapshot.json", test: "packages/shared/src/contract/refusal-census.test.ts", beforeLock: "review" },
 ];
 

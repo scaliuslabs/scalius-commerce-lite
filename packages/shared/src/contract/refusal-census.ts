@@ -57,6 +57,11 @@ export function refusalCensusSites(): Record<string, CensusSite> {
       reasons: [],
       governedBy: ["tables.limits", ...words, "tables.neutralWords", "abi.protocol.snapshot.json"],
     },
+    buyerChrome: {
+      at: "a theme's header and footer on a buyer's own page: its stylesheet checked and written again (buyer-chrome-css.ts), its markup rebuilt inert (inert-html.ts)",
+      reasons: [],
+      governedBy: ["tables.inertMarkup", "tables.inertBehaviours", "tables.buyerChromePanels", "tables.buyerChromeCssAtRules", "tables.limits", "buyer-chrome-css.verdicts.json", "buyer-chrome-css.version.json"],
+    },
     storefrontOutput: {
       at: "each storefront render's markup (sanitizePluginHtml) and its bundle at upload",
       reasons: ["too_large", "too_complex"],

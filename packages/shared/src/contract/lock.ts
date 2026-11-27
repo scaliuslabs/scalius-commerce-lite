@@ -136,6 +136,8 @@ export async function ledgerDigest(entries: readonly unknown[]): Promise<string>
 export const UNJUDGED_LINES: ReadonlyArray<{ shape: RegExp; direction: "accepts" | "refuses" }> = [
   { shape: /: pattern changed\.$/, direction: "accepts" },
   { shape: /^tables\.skinHtml\.patterns\.[\w-]+: the value changed from /, direction: "accepts" },
+  // The paths a release may hold (storefront-protocol.ts): a wider pattern takes more files.
+  { shape: /^storefront\.STOREFRONT_FILE_PATH: the constant value changed\.$/, direction: "accepts" },
   { shape: /^tables\.(?:storeWordSlots\.[\w-]+|marketSubfolderPattern): the value changed from .*: a new refusal\.$/, direction: "refuses" },
 ];
 

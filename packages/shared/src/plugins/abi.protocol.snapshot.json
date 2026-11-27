@@ -22634,7 +22634,8 @@
   "STOREFRONT_PACKAGE_DIR": "storefront",
   "STOREFRONT_MODULE_FILE": "storefront.js",
   "STOREFRONT_STYLESHEET_FILE": "styles.css",
-  "STOREFRONT_FILE_PATH": "^(?:storefront\\.js|styles\\.css|pixel\\.js|islands\\/[a-z][a-z0-9_-]{0,47}\\.js|public\\/(?:[a-z0-9][a-z0-9_-]{0,63}\\/){0,3}[a-z0-9][a-z0-9_.-]{0,99})$",
+  "STOREFRONT_BUYER_CHROME_FILE": "buyer-chrome.css",
+  "STOREFRONT_FILE_PATH": "^(?:storefront\\.js|styles\\.css|buyer-chrome\\.css|pixel\\.js|islands\\/[a-z][a-z0-9_-]{0,47}\\.js|public\\/(?:[a-z0-9][a-z0-9_-]{0,63}\\/){0,3}[a-z0-9][a-z0-9_.-]{0,99})$",
   "STOREFRONT_SEAL_PREFIX": "//# scalius-storefront ",
   "STOREFRONT_CARD_FACT_KINDS": [
    "pack_size",
@@ -23308,6 +23309,378 @@
     }
    }
   },
+  "inertMarkup": {
+   "rule": "grow",
+   "value": {
+    "tags": [
+     "a",
+     "abbr",
+     "address",
+     "article",
+     "aside",
+     "b",
+     "bdi",
+     "blockquote",
+     "br",
+     "button",
+     "caption",
+     "code",
+     "dd",
+     "del",
+     "details",
+     "div",
+     "dl",
+     "dt",
+     "em",
+     "figcaption",
+     "figure",
+     "footer",
+     "h1",
+     "h2",
+     "h3",
+     "h4",
+     "h5",
+     "h6",
+     "header",
+     "hr",
+     "i",
+     "img",
+     "ins",
+     "li",
+     "mark",
+     "nav",
+     "ol",
+     "p",
+     "picture",
+     "pre",
+     "q",
+     "s",
+     "search",
+     "section",
+     "small",
+     "source",
+     "span",
+     "strong",
+     "sub",
+     "summary",
+     "sup",
+     "table",
+     "tbody",
+     "td",
+     "tfoot",
+     "th",
+     "thead",
+     "time",
+     "tr",
+     "u",
+     "ul",
+     "svg",
+     "g",
+     "path",
+     "circle",
+     "ellipse",
+     "line",
+     "polyline",
+     "polygon",
+     "rect",
+     "defs"
+    ],
+    "attributes": [
+     "title",
+     "hidden",
+     "lang",
+     "dir",
+     "translate",
+     "role",
+     "aria-label",
+     "aria-hidden",
+     "aria-current",
+     "aria-level",
+     "class",
+     "id",
+     "style",
+     "aria-labelledby",
+     "aria-describedby",
+     "aria-details",
+     "aria-controls",
+     "headers",
+     "role",
+     "aria-current",
+     "data-ui",
+     "data-tone",
+     "data-scalius-when",
+     "data-account-link",
+     "data-color-scheme-toggle",
+     "data-cart-open",
+     "data-search-open",
+     "data-menu-drawer",
+     "data-sticky-header",
+     "data-scalius-cart-count"
+    ],
+    "byTag": {
+     "a": [
+      "href",
+      "rel",
+      "hreflang",
+      "target"
+     ],
+     "button": [
+      "aria-expanded",
+      "aria-pressed",
+      "type",
+      "data-buyer-panel-open",
+      "data-buyer-panel-close"
+     ],
+     "summary": [
+      "aria-expanded"
+     ],
+     "img": [
+      "src",
+      "srcset",
+      "sizes",
+      "alt",
+      "width",
+      "height",
+      "loading",
+      "decoding",
+      "fetchpriority"
+     ],
+     "source": [
+      "srcset",
+      "sizes",
+      "media",
+      "type",
+      "width",
+      "height"
+     ],
+     "details": [
+      "open",
+      "name"
+     ],
+     "ol": [
+      "start",
+      "reversed",
+      "type"
+     ],
+     "td": [
+      "colspan",
+      "rowspan"
+     ],
+     "th": [
+      "colspan",
+      "rowspan",
+      "scope",
+      "abbr"
+     ],
+     "time": [
+      "datetime"
+     ],
+     "span": [
+      "aria-live",
+      "data-empty"
+     ]
+    },
+    "svgTags": [
+     "svg",
+     "g",
+     "path",
+     "circle",
+     "ellipse",
+     "line",
+     "polyline",
+     "polygon",
+     "rect",
+     "defs"
+    ],
+    "svg": [
+     "viewbox",
+     "preserveaspectratio",
+     "focusable",
+     "fill",
+     "fill-opacity",
+     "fill-rule",
+     "clip-rule",
+     "stroke",
+     "stroke-width",
+     "stroke-linecap",
+     "stroke-linejoin",
+     "stroke-dasharray",
+     "stroke-dashoffset",
+     "stroke-miterlimit",
+     "stroke-opacity",
+     "opacity",
+     "vector-effect",
+     "pathlength",
+     "transform",
+     "d",
+     "points",
+     "cx",
+     "cy",
+     "r",
+     "rx",
+     "ry",
+     "x",
+     "y",
+     "x1",
+     "y1",
+     "x2",
+     "y2",
+     "width",
+     "height",
+     "xmlns"
+    ],
+    "values": {
+     "role": [
+      "none",
+      "presentation",
+      "img",
+      "note",
+      "group",
+      "list",
+      "listitem",
+      "navigation",
+      "banner",
+      "contentinfo",
+      "region",
+      "figure",
+      "separator",
+      "heading",
+      "term",
+      "definition",
+      "paragraph"
+     ],
+     "aria-current": [
+      "page",
+      "step",
+      "location",
+      "date",
+      "time",
+      "true",
+      "false"
+     ],
+     "data-ui": [
+      "banner",
+      "badge",
+      "text",
+      "heading",
+      "link",
+      "image",
+      "disclosure",
+      "divider",
+      "stack",
+      "columns"
+     ],
+     "data-tone": [
+      "neutral",
+      "info",
+      "success",
+      "warning",
+      "critical"
+     ],
+     "type": [
+      "button"
+     ],
+     "aria-live": [
+      "polite"
+     ],
+     "data-scalius-when": [
+      "signed-in",
+      "signed-out"
+     ],
+     "data-buyer-panel-close": [
+      ""
+     ]
+    }
+   }
+  },
+  "inertBehaviours": {
+   "rule": "grow",
+   "value": {
+    "data-scalius-when": {
+     "tags": "any",
+     "values": [
+      "signed-in",
+      "signed-out"
+     ]
+    },
+    "data-account-link": {
+     "tags": [
+      "a"
+     ]
+    },
+    "data-color-scheme-toggle": {
+     "tags": [
+      "button"
+     ]
+    },
+    "data-cart-open": {
+     "tags": [
+      "a",
+      "button"
+     ]
+    },
+    "data-search-open": {
+     "tags": [
+      "a",
+      "button"
+     ]
+    },
+    "data-menu-drawer": {
+     "tags": [
+      "div",
+      "nav",
+      "aside",
+      "section",
+      "ul",
+      "ol"
+     ]
+    },
+    "data-sticky-header": {
+     "tags": "any"
+    },
+    "data-scalius-cart-count": {
+     "tags": [
+      "span"
+     ]
+    }
+   }
+  },
+  "buyerChromePanels": {
+   "rule": "grow",
+   "value": {
+    "kinds": [
+     "drawer",
+     "menu"
+    ],
+    "opensWith": [
+     "popovertarget"
+    ],
+    "marks": [
+     "data-panel",
+     "data-menu-drawer"
+    ],
+    "hostHooks": [
+     "data-buyer-panel-open",
+     "data-buyer-panel-close"
+    ]
+   }
+  },
+  "buyerChromeCssAtRules": {
+   "rule": "grow",
+   "value": [
+    "media",
+    "supports",
+    "layer",
+    "container",
+    "keyframes",
+    "-webkit-keyframes",
+    "starting-style"
+   ]
+  },
+  "buyerChromePath": {
+   "rule": "grow",
+   "value": "/_buyer-chrome/{app}/{release}/c{checker}/{sha256}.css"
+  },
   "delivery": {
    "rule": "grow",
    "value": {
@@ -23640,6 +24013,18 @@
     },
     "theme.translations.text": {
      "value": 8000,
+     "loosens": "up"
+    },
+    "buyerChrome.headerMaxSvh": {
+     "value": 50,
+     "loosens": "up"
+    },
+    "buyerChrome.footerMaxSvh": {
+     "value": 100,
+     "loosens": "up"
+    },
+    "buyerChrome.markupBytes": {
+     "value": 65536,
      "loosens": "up"
     }
    }

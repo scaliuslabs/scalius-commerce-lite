@@ -13,9 +13,11 @@ import { GALLERY_ACCOUNT_SESSION, GALLERY_CLAIM, GALLERY_THREAD_ID } from "./acc
 import { getOrderReceiptCookieName } from "../lib/order-receipt-cookie";
 import { galleryCartSeed } from "./cart-seed";
 import { installGalleryListingApp } from "./listing-app-extension";
+import { installGalleryChromeApps } from "./chrome-app-extension";
 
-// The gallery's own listing app answers as a bundled app (listing-app.tsx).
+// The gallery's own listing app answers as a bundled app (listing-app.tsx), and its theme app for buyer pages (chrome-app.ts).
 installGalleryListingApp();
+installGalleryChromeApps();
 import { PRODUCT_SCENARIO_SLUGS, mediaShape, setFixtureOrigin } from "./fixtures";
 
 if (import.meta.env.PROD) {
@@ -48,6 +50,7 @@ const PAGES: Record<GalleryPage, { module: string; path: (entry: GalleryEntry) =
   "sample-checkout": { module: SAMPLE_PAGE, path: () => "/theme-preview/sample/checkout", params: () => ({ page: "checkout" }) },
   "sample-receipt": { module: SAMPLE_PAGE, path: () => "/theme-preview/sample/receipt", params: () => ({ page: "receipt" }) },
   "sample-account": { module: SAMPLE_PAGE, path: () => "/theme-preview/sample/account", params: () => ({ page: "account" }) },
+  account: { module: "/src/pages/account.astro", path: () => "/account", params: () => ({}) },
   "account-inbox": { module: "/src/pages/account/inbox/index.astro", path: () => "/account/inbox", params: () => ({}) },
   "account-order": { module: "/src/pages/account/orders/[id].astro", path: () => `/account/orders/${GALLERY_CLAIM.orderId}`, params: () => ({ id: GALLERY_CLAIM.orderId }) },
   "account-profile-remove-address": { module: "/src/pages/account/profile.astro", path: () => "/account/profile", params: () => ({}) },

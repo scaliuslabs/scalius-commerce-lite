@@ -28,6 +28,14 @@ import { LANDING_HANDLES_NEVER_VALID } from "../storefront-theme/pages";
 import { MARKET_SUBFOLDER_PATTERN } from "../markets";
 import { appSealedLimits } from "./app-limits";
 import { STOREFRONT_SKIN_HTML_ALLOW_LIST } from "./html";
+import { INERT_BEHAVIOURS, INERT_MARKUP, INERT_PANEL_KINDS } from "./inert-html";
+import { BUYER_CHROME_CSS_AT_RULES } from "./buyer-chrome-css";
+
+/**
+ * The store's path of a release's derived buyer-chrome sheet (apps/storefront lib/extensions files.ts
+ * `buyerChromeSheetPath`): the sheet's `./public/...` URLs resolve against it, so its shape is sealed.
+ */
+export const BUYER_CHROME_SHEET_PATH = "/_buyer-chrome/{app}/{release}/c{checker}/{sha256}.css";
 
 
 /**
@@ -51,8 +59,16 @@ export function contractTables(): Record<string, ContractTable> {
     hostCssVariables: table("grow", STOREFRONT_HOST_CSS_VARIABLES),
     hostHooks: table("grow", STOREFRONT_HOST_HOOKS),
     skinHtml: table("grow", STOREFRONT_SKIN_HTML_ALLOW_LIST),
-    // HOOK (buyer-page chrome): when plugins/inert-html.ts lands, seal its allow-list here the same way:
-    //   inertHtml: table("grow", STOREFRONT_INERT_HTML_ALLOW_LIST),
+    // A theme's header and footer on a buyer's own page (skins with `buyerPages: true`): the markup the
+    // rebuild keeps, the host behaviours it may trigger, the panels a popover is lifted as and the
+    // attributes that open and close them, the at-rules its sheet may hold, and the store's path of
+    // that sheet (its `./public/...` URLs resolve against it). What the sheet refuses is sealed by its
+    // verdicts (buyer-chrome-css.verdicts.json) and its checker's version (buyer-chrome-css.version.json).
+    inertMarkup: table("grow", INERT_MARKUP),
+    inertBehaviours: table("grow", INERT_BEHAVIOURS),
+    buyerChromePanels: table("grow", { kinds: INERT_PANEL_KINDS, opensWith: ["popovertarget"], marks: ["data-panel", "data-menu-drawer"], hostHooks: ["data-buyer-panel-open", "data-buyer-panel-close"] }),
+    buyerChromeCssAtRules: table("grow", BUYER_CHROME_CSS_AT_RULES),
+    buyerChromePath: table("grow", BUYER_CHROME_SHEET_PATH),
     delivery: table("grow", {
       headers: { eventId: WEBHOOK_EVENT_ID_HEADER, topic: WEBHOOK_TOPIC_HEADER, apiVersion: WEBHOOK_API_VERSION_HEADER, signature: WEBHOOK_SIGNATURE_HEADER },
       secretPrefix: WEBHOOK_SECRET_PREFIX,

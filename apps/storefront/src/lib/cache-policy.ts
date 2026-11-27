@@ -48,6 +48,40 @@ export function isPayingStorefrontPathname(pathname: string): boolean {
   }
 }
 
+/**
+ * The buyer's own pages where a theme's header and footer draw when their
+ * skin asks (`buyerPages: true`), rebuilt inert inside a shadow root
+ * (components/private/PrivateChrome.astro): the account (its sign-in view
+ * included), the receipt, order tracking, warranty claims, the gift-card
+ * balance and the newsletter pages. Never a page where the buyer pays
+ * (`PAYING_STOREFRONT_ROOTS`), a receipt that takes a payment (Layout checks
+ * `isPaymentPage`), an agent's handoff or the theme editor's canvas.
+ */
+export const BUYER_CHROME_STOREFRONT_ROOTS = [
+  "account",
+  "gift-card-balance",
+  "newsletter",
+  "order-success",
+  "track-order",
+  "warranty-claims",
+] as const satisfies ReadonlyArray<Exclude<(typeof PRIVATE_STOREFRONT_ROOTS)[number], (typeof PAYING_STOREFRONT_ROOTS)[number]>>;
+
+const BUYER_CHROME_PATHNAME_RE = new RegExp(`^/(?:${BUYER_CHROME_STOREFRONT_ROOTS.join("|")})(?:/|$)`);
+
+/** The buyer page's root a theme's chrome draws on (`/account`), or null: decoded like `isPrivateStorefrontPathname`, and an undecodable path is none. */
+export function buyerChromeRoot(pathname: string): string | null {
+  let path = pathname;
+  if (path.includes("%")) {
+    try {
+      path = decodeURIComponent(path);
+    } catch {
+      return null;
+    }
+  }
+  if (!BUYER_CHROME_PATHNAME_RE.test(path) || isPayingStorefrontPathname(path)) return null;
+  return `/${path.split("/")[1]}`;
+}
+
 const PRIVATE_STOREFRONT_PATHNAME_RE = new RegExp(`^/(?:${PRIVATE_STOREFRONT_ROOTS.join("|")})(?:/|$)`);
 
 /**

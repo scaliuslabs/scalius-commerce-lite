@@ -67,6 +67,19 @@ export const storefrontSkinDeclarationSchema = z.object({
   name: title,
   description: description.optional(),
   settings: pluginSettingsSchemaSchema.default([]),
+  /**
+   * A header or footer skin that also draws on the buyer's own pages (the
+   * account, the receipt, order tracking, warranty claims, the gift-card
+   * balance, the newsletter pages; never the cart, checkout, buy now or
+   * payment recovery), so they look like the rest of the store. There its
+   * markup is rebuilt inert (no island, form or field; links to the store's
+   * pages and to URLs it was handed) and drawn inside a shadow root with the
+   * app's stylesheet (packages/plugin-sdk/docs/private-pages.md). A Super
+   * Admin approves it (`storefrontBuyerPages`). Absent: the store's own
+   * header and footer draw there.
+   */
+  // Only a header or footer skin draws there: install-time policy (manifest-policy.ts), never a stored read's.
+  buyerPages: z.literal(true).optional(),
 }).strict();
 export type StorefrontSkinDeclaration = z.infer<typeof storefrontSkinDeclarationSchema> & { target: StorefrontSkinTarget };
 
@@ -336,7 +349,8 @@ export interface StorefrontExtension {
   sectionSettings: Record<string, PluginSettingsSchema>;
   /** Section types whose object reads bind the page's resource (`{ resource }`): their template part is read per resource. */
   resourceSections?: string[];
-  skins: Array<{ id: string; target: StorefrontSkinTarget; settings: PluginSettingsSchema }>;
+  /** `buyerPages`: a header or footer skin that declares it and whose grant covers it (`storefrontBuyerPages`). */
+  skins: Array<{ id: string; target: StorefrontSkinTarget; settings: PluginSettingsSchema; buyerPages?: true }>;
   /**
    * Components (`storefront.components`), drawn at the edge at their targets;
    * `reads`: it declares object reads, which the product template's part answers.
@@ -446,7 +460,8 @@ function parseStorefrontExtensions(value: readonly unknown[]): StorefrontExtensi
       const record = skin as Record<string, unknown>;
       if (typeof record.id !== "string" || !PLUGIN_KEY_PATTERN.test(record.id) || !isStorefrontSkinTarget(record.target)) return [];
       const settings = pluginSettingsSchemaSchema.safeParse(record.settings ?? []);
-      return settings.success ? [{ id: record.id, target: record.target, settings: settings.data }] : [];
+      const buyerPages = record.buyerPages === true && (record.target === "header" || record.target === "footer");
+      return settings.success ? [{ id: record.id, target: record.target, settings: settings.data, ...(buyerPages ? { buyerPages: true as const } : {}) }] : [];
     }) : [];
     const components = Array.isArray(item.components) ? item.components.flatMap((component) => {
       if (typeof component !== "object" || component === null) return [];

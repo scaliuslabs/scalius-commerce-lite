@@ -11,6 +11,8 @@ import { pageLanguage } from "./store-time-zone";
 export const CODE_KIND: Readonly<Record<string, BuyerApiErrorKind>> = {
   unauthorized: "signIn", customer_sign_in_required: "signIn", authentication_required: "signIn",
   forbidden: "forbidden", not_found: "notFound", conflict: "conflict",
+  // The same send key used again for different content (a message posted twice with edits): reload and send once more.
+  idempotency_key_reused: "conflict",
   validation_error: "invalid", invalid_input: "invalid", bad_request: "invalid",
   rate_limited: "rateLimited", too_many_requests: "rateLimited",
   code_recently_sent: "codeJustSent", code_limit_reached: "codeLimitReached",

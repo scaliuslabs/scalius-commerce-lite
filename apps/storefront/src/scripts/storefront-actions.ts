@@ -31,7 +31,22 @@ function handOffPopover(target: Element | null): void {
 /** Install once for the document; delegation also covers replaced app markup. */
 export function installStorefrontActions(): () => void {
   if (uninstall) return uninstall;
-  const targetOf = (event: Event) => event.target instanceof Element ? event.target : null;
+  // The press's own element, inside a buyer page chrome's open shadow root too (components/private/PrivateChrome.astro):
+  // a document listener otherwise sees only the shadow host. There a theme's markup reaches a store behaviour only
+  // through the rebuild's closed list (`INERT_BEHAVIOURS`: `data-search-open`, `data-account-link`), never through
+  // the ids and attributes the store's own markup carries (`#account-link`, `#mobile-search-toggle`, `data-open-auth`).
+  const targetOf = (event: Event) => {
+    const first = event.composedPath()[0];
+    return first instanceof Element ? first : event.target instanceof Element ? event.target : null;
+  };
+  const inChrome = (element: Element) => {
+    const root = element.getRootNode();
+    return root instanceof ShadowRoot && root.host.localName === "scalius-chrome";
+  };
+  const SEARCH = "#mobile-search-toggle, #scrolled-search-trigger, [data-search-open]";
+  const ACCOUNT = "#account-link, [data-account-link]";
+  const matching = (target: Element | null, page: string, chrome: string | null) =>
+    target ? (inChrome(target) ? (chrome === null ? null : target.closest(chrome)) : target.closest(page)) : null;
   const modified = (event: MouseEvent) => event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
   const openSearch = (event: Event) => {
     event.preventDefault();
@@ -41,16 +56,16 @@ export function installStorefrontActions(): () => void {
   const click = (event: MouseEvent) => {
     if (event.defaultPrevented || event.button !== 0 || modified(event)) return;
     const target = targetOf(event);
-    if (target?.closest("#mobile-search-toggle, #scrolled-search-trigger, [data-search-open]")) {
+    if (matching(target, SEARCH, "[data-search-open]")) {
       openSearch(event);
-    } else if (target?.closest("[data-open-auth]")) {
+    } else if (target && matching(target, "[data-open-auth]", null)) {
       // A sign-in button: opens the dialog whatever the sign-in hint says
       // (`data-open-auth="sign_in"` names the intent).
       const intent = target.closest("[data-open-auth]")!.getAttribute("data-open-auth");
       event.preventDefault();
       handOffPopover(target);
       window.dispatchEvent(new CustomEvent("open-auth-modal", intent ? { detail: { intent } } : undefined));
-    } else if (target?.closest("#account-link, [data-account-link]")) {
+    } else if (matching(target, ACCOUNT, "[data-account-link]")) {
       // This non-authoritative cookie is only a UI hint. Read it at the click,
       // so a login/logout in another tab doesn't leave a captured stale value.
       if (document.cookie.split(";").some((cookie) => cookie.trim() === "cs_auth=1")) return;
@@ -63,7 +78,7 @@ export function installStorefrontActions(): () => void {
     if (event.defaultPrevented || event.pointerType === "" || event.button !== 0 || modified(event)) return;
     // Pointer users open the palette; keyboard users can type and submit the
     // ordinary GET search form without JavaScript taking their field away.
-    if (targetOf(event)?.closest("[data-search-inline]")) openSearch(event);
+    if (matching(targetOf(event), "[data-search-inline]", null)) openSearch(event);
   };
   // Predictive search (Dawn's): the first letters typed in a header's search
   // field (the store's, or a theme's `searchForm()`) open the typeahead

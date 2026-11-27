@@ -324,7 +324,7 @@ export function registerAppLifecycleRoutes(app: OpenAPIHono<{ Bindings: Env }>, 
     }
     const { downloadRegistryRelease, storeRelease, installRelease } = await releases();
     const release = await downloadRegistryRelease(db, body);
-    await storeRelease(c.env, release);
+    await storeRelease(c.env, release, db);
     const installation = await installRelease(db, release, { source: "registry", actorUserId: actorId(c) });
     return ok(c, { app: await deps.detail(c, installation) });
   });
@@ -374,7 +374,7 @@ export function registerAppLifecycleRoutes(app: OpenAPIHono<{ Bindings: Env }>, 
     }
     // Before anything is stored: an update keeps the developer the app was installed with.
     requirePinnedSigner(current, { source: "registry", signerKeyId: release.signer?.id ?? null });
-    await storeRelease(c.env, release);
+    await storeRelease(c.env, release, db);
     const { updatePluginToRelease } = await lifecycle();
     const result = await updatePluginToRelease(
       deps.lifecycleContext(c) as never,
@@ -437,7 +437,7 @@ export function registerAppLifecycleRoutes(app: OpenAPIHono<{ Bindings: Env }>, 
     }
     // Before anything is stored or trusted: an update keeps the developer the app was installed with.
     if (current) requirePinnedSigner(current, { source: "upload", signerKeyId: release.signer?.id ?? null });
-    await storeRelease(c.env, release);
+    await storeRelease(c.env, release, db);
     if (newKey) await trustDeveloperKey(db, newKey);
     if (!current) {
       const installation = await installRelease(db, release, { source: "upload", actorUserId: actorId(c) });

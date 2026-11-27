@@ -163,6 +163,19 @@
    "tables.storeWords"
   ]
  },
+ "buyerChrome": {
+  "at": "a theme's header and footer on a buyer's own page: its stylesheet checked and written again (buyer-chrome-css.ts), its markup rebuilt inert (inert-html.ts)",
+  "reasons": [],
+  "governedBy": [
+   "buyer-chrome-css.verdicts.json",
+   "buyer-chrome-css.version.json",
+   "tables.buyerChromeCssAtRules",
+   "tables.buyerChromePanels",
+   "tables.inertBehaviours",
+   "tables.inertMarkup",
+   "tables.limits"
+  ]
+ },
  "storefrontOutput": {
   "at": "each storefront render's markup (sanitizePluginHtml) and its bundle at upload",
   "reasons": [

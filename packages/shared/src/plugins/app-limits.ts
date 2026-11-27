@@ -18,6 +18,8 @@ import { PLUGIN_UPLOAD_READ_MAX_BYTES } from "./uploads";
 import { STOREFRONT_APP_TEMPLATE_MAX_BYTES } from "./storefront-components";
 import { STOREFRONT_SKIN_HTML_BOUNDS } from "./html";
 import { PLUGIN_PACKAGE_FILE_MAX_BYTES, PLUGIN_PACKAGE_MAX_BYTES, PLUGIN_PACKAGE_MAX_ENTRIES } from "./package-limits";
+import { BUYER_CHROME_FRAME_MAX_SVH } from "./buyer-chrome-frame";
+import { INERT_MARKUP_MAX_BYTES } from "./inert-html";
 import { PRIVATE_COMPILED_CSS_MAX_BYTES, PRIVATE_LAYOUT_MAX_DEPTH, PRIVATE_WORDS_LIMITS } from "../storefront-theme/private-schema";
 import { PRIVATE_CONTRAST_FLOOR, PRIVATE_EDGE_MIN_WIDTH, PRIVATE_MARK_CONTRAST_FLOOR, PRIVATE_TOKEN_LIMITS } from "../storefront-theme/private-tokens";
 import { STOREFRONT_MOBILE_TAB_LIMITS } from "../storefront-theme/blocks";
@@ -104,5 +106,8 @@ export function appSealedLimits(): Record<string, SealedLimit> {
     "package.files": up(PLUGIN_PACKAGE_MAX_ENTRIES),
     "webhooks.topics": up(WEBHOOK_TOPICS_MAX),
     ...themeLimits(),
+    "buyerChrome.headerMaxSvh": up(BUYER_CHROME_FRAME_MAX_SVH.header),
+    "buyerChrome.footerMaxSvh": up(BUYER_CHROME_FRAME_MAX_SVH.footer),
+    "buyerChrome.markupBytes": up(INERT_MARKUP_MAX_BYTES),
   };
 }

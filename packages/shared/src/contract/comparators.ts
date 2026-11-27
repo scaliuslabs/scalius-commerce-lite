@@ -10,6 +10,7 @@ import { refusalCensusBreakingChanges } from "./census-compat";
 import { representationsBreakingChanges, type RepresentationSnapshot } from "./events-compat";
 import { readBoundsBreakingChanges } from "./read-bounds-compat";
 import { stableBreakingChanges, type StableSnapshot } from "./stable-compat";
+import { checkerVersionBreakingChanges, verdictsBreakingChanges } from "./verdicts-compat";
 
 type Compare = (before: string, after: string) => string[];
 const json = (rule: (before: unknown, after: unknown) => string[]): Compare => (before, after) => rule(JSON.parse(before), JSON.parse(after));
@@ -29,6 +30,8 @@ export const CONTRACT_COMPARATORS: Readonly<Record<string, Compare>> = {
   "packages/shared/src/storefront-theme/read-bounds.snapshot.json": json(readBoundsBreakingChanges),
   "packages/shared/src/storefront-theme/private-compile.golden.json": exact("private compile golden"),
   "packages/shared/src/contract/refusal-census.snapshot.json": json(refusalCensusBreakingChanges),
+  "packages/shared/src/plugins/buyer-chrome-css.verdicts.json": json(verdictsBreakingChanges),
+  "packages/shared/src/plugins/buyer-chrome-css.version.json": json(checkerVersionBreakingChanges),
 };
 
 /** The rule of one sealed snapshot. */
