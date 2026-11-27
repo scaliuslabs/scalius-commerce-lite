@@ -209,21 +209,25 @@ const labelOf = (tab: PhoneTab): string => (tab.kind === "link" ? tab.label : co
     grid-template-columns: repeat(var(--mobile-tab-count, 5), minmax(0, 1fr));
     grid-template-rows: 1fr auto auto 1fr;
     row-gap: 0;
-    height: var(--mobile-tabs-height);
+    /* A least height: a theme's own larger chip grows the bar instead of pushing every label past it. */
+    min-height: var(--mobile-tabs-height);
     max-width: 40rem;
     margin-inline: auto;
   }
 
+  /* The four rows are named by number, not `-1`: a theme that restyles the list leaves the tab its own four rows. */
   :where(.mobile-tab-bar > ul > li) {
     display: grid;
-    grid-row: 1 / -1;
+    grid-row: 1 / 5;
     grid-template-rows: subgrid;
     min-width: 0;
   }
 
+  /* Without subgrid (an older browser, or a restyled list) each tab centres its own icon and label. */
   :where(.mobile-tab) {
     display: grid;
-    grid-row: 1 / -1;
+    grid-row: 1 / 5;
+    grid-template-rows: 1fr auto auto 1fr;
     grid-template-rows: subgrid;
     justify-items: center;
     width: 100%;
