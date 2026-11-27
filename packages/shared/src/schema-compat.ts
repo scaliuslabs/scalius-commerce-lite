@@ -189,9 +189,11 @@ function compare(before: Side, after: Side, direction: SchemaDirection, path: st
     }
     if (a.multipleOf !== undefined && a.multipleOf !== b.multipleOf) out.push(`${at}: multipleOf tightened to ${String(a.multipleOf)}.`);
     if (a.not !== undefined && JSON.stringify(a.not) !== JSON.stringify(b.not)) out.push(`${at}: a not was added or changed.`);
-  } else if (b.format !== undefined && a.format !== b.format) {
-    // A response no longer promises its format.
-    out.push(`${at}: the format ${String(b.format)} is no longer promised.`);
+  } else {
+    // A response no longer promises its format, or the pattern its values matched (any change: a
+    // widening is not proven).
+    if (b.format !== undefined && a.format !== b.format) out.push(`${at}: the format ${String(b.format)} is no longer promised.`);
+    if (b.pattern !== undefined && a.pattern !== b.pattern) out.push(`${at}: the pattern ${String(b.pattern)} is no longer promised.`);
   }
   if (Array.isArray(b.prefixItems) || Array.isArray(a.prefixItems)) {
     const was = Array.isArray(b.prefixItems) ? b.prefixItems : [];
