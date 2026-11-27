@@ -18,6 +18,7 @@ import { deliveryShipments, orderEvents, ShipmentStatus } from "@scalius/databas
 import type { CourierShipmentStatus } from "@scalius/shared/plugins/providers";
 import { courierReportHolds } from "@scalius/shared/shipment-state";
 import { NotFoundError } from "@scalius/core/errors";
+import { orderEventData } from "../../utils/agent-attribution";
 import { shipmentMove } from "./shipment-move";
 import { COURIER_REPORT_HELD } from "./types";
 
@@ -90,7 +91,7 @@ export async function applyCourierReport(db: Database, shipmentId: string, repor
         // What the courier reported, on the order's timeline (the dashboard words it).
         db.insert(orderEvents).select(sql`
           SELECT ${`oev_${Date.now().toString(36).padStart(9, "0")}${nanoid(8)}`}, ${row.orderId}, 'courier_report', NULL,
-                 ${JSON.stringify({ shipmentId, courierName: row.courierName, previousStatus: row.status, reportedStatus: report.status, rawStatus: report.rawStatus })},
+                 ${orderEventData({ shipmentId, courierName: row.courierName, previousStatus: row.status, reportedStatus: report.status, rawStatus: report.rawStatus })},
                  NULL, NULL, unixepoch()
           WHERE ${held}
         `),
