@@ -54,7 +54,8 @@ export function ciSteps({ base, scripts }) {
     // Each seal test records what it generated (SCALIUS_CONTRACT_RUN); the judge (the anchor tag's own script) requires one record per seal.
     // Vitest's on-disk module cache keeps a test's `import.meta.glob` list from the run that wrote it, so a file added
     // since then is missing from it: a gate starts from an empty cache.
-    { id: "contract", name: "Contract seals and lock", cmd: `rm -rf node_modules/.vitest-cache && SCALIUS_CONTRACT_RUN=ci-$$ pnpm exec vitest run ${CONTRACT_TESTS.join(" ")} --maxWorkers=2 && node scripts/contract-lock.mjs judge --run ci-$$` },
+    { id: "test-cache", name: "Empty test cache", cmd: "rm -rf node_modules/.vitest-cache" },
+    { id: "contract", name: "Contract seals and lock", cmd: `SCALIUS_CONTRACT_RUN=ci-$$ pnpm exec vitest run ${CONTRACT_TESTS.join(" ")} --maxWorkers=2 && node scripts/contract-lock.mjs judge --run ci-$$` },
     // Before the suite: its tests of the built apps (the storefront's chunk graph) read the build on disk, and a build
     // left by an earlier tree would be judged in this one's name.
     { id: "build", name: "Build", cmd: "pnpm build", broad: true },
