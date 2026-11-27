@@ -112,7 +112,7 @@ const checkoutConfigSchema = z.object({
     label: z.object({ en: z.string().max(200), bn: z.string().max(200) }),
   }),
   giftCardsLive: z.boolean().openapi({
-    description: "The store holds a live gift card (active, unexpired, with a balance). Where no method but cash is listed, a key, a download or a gift card can be bought only with one: without any, the storefront stops it early.",
+    description: "The store holds a live gift card (active, unexpired, with a balance, in a currency this page sells in). Where no method but cash is listed, a key, a download or a gift card can be bought only with one: without any, the storefront stops it early. Read only when every enabled method is cash on delivery; false on any other store.",
   }),
 });
 

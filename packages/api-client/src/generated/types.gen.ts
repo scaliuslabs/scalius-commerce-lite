@@ -14363,7 +14363,7 @@ export type GetApiV1CheckoutConfigResponses = {
                 };
             };
             /**
-             * The store holds a live gift card (active, unexpired, with a balance). Where no method but cash is listed, a key, a download or a gift card can be bought only with one: without any, the storefront stops it early.
+             * The store holds a live gift card (active, unexpired, with a balance, in a currency this page sells in). Where no method but cash is listed, a key, a download or a gift card can be bought only with one: without any, the storefront stops it early. Read only when every enabled method is cash on delivery; false on any other store.
              */
             giftCardsLive: boolean;
         };
