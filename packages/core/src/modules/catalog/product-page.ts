@@ -73,7 +73,7 @@ import {
     getStorefrontProductRecommendations,
     type ProductRecommendations,
 } from "./recommendations";
-import { declareProductGallery, deps } from "./declare-deps";
+import { declareProductGallery, deps, withLookupScope } from "./declare-deps";
 import {
     pageSkuBuyerMinor,
     productPageHasKitsSql,
@@ -130,7 +130,9 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
     // options, values and SKUs, its category and brand, folded into this
     // first statement; nothing at the root but the localized handles.
     const translation = translationScopeOf(pricing);
-    const productRow = await db
+    // "Found" is decided in this statement (active, published, a resolvable SKU): a miss
+    // depends on every table it reads (withLookupScope), never only on the products table.
+    const productRow = await withLookupScope(() => db
         .select({
             id: products.id,
             name: products.name,
@@ -229,13 +231,10 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
             productPublishedToChannelSql(sql`${products.id}`),
             publicProductHasBuyerResolvableSku(),
         ))
-        .get();
+        .get(), { nothingFound: (row) => !row });
 
     if (!productRow) {
-        // Any product can take this slug or become public under it, or a
-        // localized handle can name one.
-        deps.listMembership("all");
-        deps.table("products");
+        // A localized handle can come to name one.
         deps.localizedSlugSpace("product");
         return null;
     }

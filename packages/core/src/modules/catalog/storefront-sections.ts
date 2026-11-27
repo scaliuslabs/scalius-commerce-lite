@@ -58,7 +58,7 @@ import {
     type ProductRecommendationItem,
 } from "./recommendations";
 import { unixToDate } from "@scalius/shared/utils";
-import { deps } from "./declare-deps";
+import { deps, withLookupScope } from "./declare-deps";
 import { qualifiedColumn } from "../../utils/qualified-column";
 
 export const STOREFRONT_PRODUCT_TEXT_CHUNK_MAX = 12_000;
@@ -513,11 +513,10 @@ export async function getStorefrontProductSection(
     query: StorefrontProductSectionQuery,
     pricing: MarketPricing | null = null,
 ) {
-    const identity = await readPublicProductIdentity(db, slug, translationScopeOf(pricing));
+    // A miss depends on every table the identity statement's "found" decision reads.
+    const identity = await withLookupScope(() => readPublicProductIdentity(db, slug, translationScopeOf(pricing)), { nothingFound: (row) => !row });
     if (!identity) {
-        // Any product can take this slug or become public under it, or a localized handle name it.
-        deps.listMembership("all");
-        deps.table("products");
+        // A localized handle can come to name one.
         deps.localizedSlugSpace("product");
         return null;
     }

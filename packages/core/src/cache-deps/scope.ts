@@ -18,6 +18,8 @@ import {
   CACHE_DEP_ENTRY_KEY_BUDGET,
   CACHE_DEP_ROW_KEYED_TABLES,
   cacheDepKind,
+  cacheDepKindsForTable,
+  cacheDepTableKeys,
   isCacheDep,
   type CacheDepKind,
 } from "@scalius/shared/cache-deps";
@@ -60,6 +62,15 @@ export interface DependencyScopeOptions {
   readonly budget?: number;
   /** Log sink for coarse/uncacheable lines; defaults to `console.warn`. */
   readonly log?: (line: string) => void;
+}
+
+export interface LookupScopeOptions<T> {
+  /**
+   * Whether the lookup's answer is a negative one (nothing found). Such an
+   * answer depends on every registered table the lookup read, by its coarse
+   * keys: the keys of a row it found would not cover the rows it did not.
+   */
+  readonly nothingFound: (value: T) => boolean;
 }
 
 export interface DependencyScopeResult<T> {
@@ -254,8 +265,61 @@ export async function withDependencyScope<T>(
   return { value, dependencies };
 }
 
+/**
+ * Sees the statements of one lookup on their way to its scope: they are
+ * recorded there as any read, and the tap keeps their tables.
+ */
+class LookupTap implements ReadObserver {
+  readonly tables = new Set<string>();
+  readonly valueTables: ReadonlySet<string>;
+
+  constructor(readonly scope: DependencyScope) {
+    this.valueTables = scope.valueTables;
+  }
+
+  observeTables(tables: readonly string[]): void {
+    for (let index = 0; index < tables.length; index += 1) this.tables.add(tables[index]!);
+    this.scope.observeTables(tables);
+  }
+
+  observeBoundStatement(tables: readonly string[], sql: string, params: readonly unknown[]): void {
+    this.scope.observeBoundStatement(tables, sql, params);
+  }
+}
+
+/**
+ * Run one lookup whose answer may be negative (a slug that names nothing
+ * public, a list that comes back empty) in the current scope. Its statements
+ * are recorded as any read, and a positive answer depends on what its reader
+ * declares. A negative one (`nothingFound`) also depends on every registered
+ * table the lookup's statements read, by its coarse keys
+ * (`cacheDepTableKeys`): whatever decides "found" (a join, an EXISTS, a
+ * subquery) is in those statements, so the negative answer cannot miss a
+ * table its positive decision reads, and the two cannot drift. Settings
+ * documents stay covered by the rows the statements pin. Outside a scope it
+ * only runs the lookup.
+ */
+export async function withLookupScope<T>(
+  lookup: () => T | Promise<T>,
+  options: LookupScopeOptions<T>,
+): Promise<T> {
+  const scope = activeDependencyScope();
+  if (scope === null) return await lookup();
+  const tap = new LookupTap(scope);
+  // Awaited inside the tap: a lazy query builder runs when awaited, in the context that awaits it.
+  const value = await runWithReadObserver(tap, async () => await lookup());
+  if (options.nothingFound(value)) {
+    for (const table of tap.tables) {
+      if (cacheDepKindsForTable(table) === null || ROW_KEYED_TABLES.has(table)) continue;
+      for (const key of cacheDepTableKeys(table)) scope.declare(key);
+    }
+  }
+  return value;
+}
+
 /** The dependency scope of the current async context, or null. */
 export function activeDependencyScope(): DependencyScope | null {
-  const observer = currentReadObserver();
+  const current = currentReadObserver();
+  const observer = current instanceof LookupTap ? current.scope : current;
   return observer instanceof DependencyScope && !observer.isClosed ? observer : null;
 }

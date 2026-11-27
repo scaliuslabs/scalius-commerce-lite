@@ -92,6 +92,8 @@ export function selectProductPageKitRows(db: Database, productId: string, pricin
         quantity: sql<number>`page_sku.quantity`.mapWith(Number).as("pk_quantity"),
         variantLive: sql<number>`page_variant.id IS NOT NULL`.mapWith(Number).as("pk_variant_live"),
         productId: sql<string | null>`page_product.id`.as("pk_product_id"),
+        // The product the SKU belongs to even while it is soft-deleted: restoring it (or moving it) advances that product's key.
+        skuProductId: sql<string | null>`(SELECT sku_owner.product_id FROM product_variants AS sku_owner WHERE sku_owner.id = page_sku.variant_id)`.as("pk_sku_product_id"),
         productName: sql<string | null>`page_product.name`.as("pk_product_name"),
         productSlug: sql<string | null>`page_product.slug`.as("pk_product_slug"),
         productActive: sql<number | null>`page_product.is_active`.as("pk_product_active"),
@@ -264,7 +266,11 @@ export function resolveProductPageKits(
     const incrementMinor = context.market?.incrementMinor ?? context.storeIncrementMinor;
     const money = (minor: number) => fromMinor(minor, context.decimalPlaces);
     // Every product a kit or offer shows: its price, band, status and pictures reach this page.
-    for (const row of rows) if (row.productId) deps.product(row.productId);
+    // A placed or component SKU that is gone (soft-deleted) still depends on its own product, whose key its return advances.
+    for (const row of rows) {
+        if (row.productId) deps.product(row.productId);
+        if (row.skuProductId) deps.product(row.skuProductId);
+    }
     const chainsOf = (row: ProductPageKitRow) => context.translation && row.trRows !== undefined
         ? foldedProductChains(context.translation, row.trRows)
         : null;
