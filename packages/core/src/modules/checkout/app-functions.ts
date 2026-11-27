@@ -63,6 +63,8 @@ import {
 } from "@scalius/shared/plugins";
 import { APP_SCOPED_KEY_MAX_LENGTH, purchaseOptionId } from "@scalius/shared/plugins/ids";
 import { isLineInputEntry, type AppLineInputs } from "@scalius/shared/line-properties";
+import { buyerLineAddOns } from "@scalius/shared/add-on-folding";
+import { LINE_ADD_ONS_MAX } from "@scalius/shared/line-identity";
 import { parseQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { floorToIncrementMinor, percentOfMinor, roundToIncrementMinor } from "@scalius/shared/money";
 import { defaultOrderSalesChannelId } from "@scalius/shared/sales-channels";
@@ -480,6 +482,16 @@ export interface AppCartLineSource {
   adjustments?: ReadonlyArray<{ value: string; priceMinor: number; appId?: string }>;
 }
 
+/** A function cart line's add-ons in the one contract shape (`LineAddOn`), from the per-unit entries checkout priced. */
+function functionLineAddOns(line: AppCartLineSource): FunctionCart["lines"][number]["addOns"] {
+  if (!line.adjustments?.length) return [];
+  const kind = line.bundle?.kit ? "kit" : line.bundle?.kind ?? null;
+  const bundle = kind ? { kind, units: line.bundle?.units ?? null } : null;
+  return buyerLineAddOns([{ entries: line.adjustments, quantity: line.quantity, bundle }], bundle)
+    .slice(0, LINE_ADD_ONS_MAX)
+    .map(({ details: _details, ...addOn }) => ({ ...addOn, title: addOn.title.slice(0, 80) }));
+}
+
 /**
  * Entries an order line freezes beside its buyer inputs that are not inputs:
  * add-ons, purchase options (each its own fact of the line) and a gift
@@ -571,10 +583,9 @@ export function buildAppFunctionCart(input: {
       weightGrams: variant?.weightGrams ?? null,
       shippingProfileId: product?.shippingProfileId ?? DEFAULT_SHIPPING_PROFILE_ID,
       purchaseOptions: [...new Set(line.purchaseOptions ?? [])].sort(),
-      // Each with the app that added it: like the price, every app sees them.
-      addOns: (line.adjustments ?? []).flatMap((adjustment) => adjustment.appId
-        ? [{ appId: adjustment.appId, title: adjustment.value.slice(0, 80), amountMinor: adjustment.priceMinor }]
-        : []).slice(0, 5),
+      // Each with the app that added it: like the price, every app sees them. A bundle's
+      // (an expanded bundle's anchor, a kit's line) is once per bundle unit (`per: "bundle"`).
+      addOns: functionLineAddOns(line),
     };
   });
   const customer = input.facts.customer

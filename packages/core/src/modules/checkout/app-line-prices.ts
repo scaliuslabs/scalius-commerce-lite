@@ -62,7 +62,7 @@ import type { Database } from "@scalius/database/client";
 import { LINE_ADJUSTMENT_MAX_MINOR, LINE_ADJUSTMENTS_PER_LINE_MAX, type FunctionCart, type PluginFunctionOutput } from "@scalius/shared/plugins";
 import { LINE_ADD_ONS_SERIALIZED_MAX, lineAdjustmentProperty } from "@scalius/shared/line-properties";
 import { storeAmountMinor, type AppLinePrice, type ResolvedPriceSource, type StoreAmountConversion } from "@scalius/shared/market-pricing";
-import { roundToIncrementMinor } from "@scalius/shared/money";
+import { addOnShareMinor, roundToIncrementMinor } from "@scalius/shared/money";
 import { purchaseOptionAppId } from "@scalius/shared/plugins/ids";
 
 /** Two apps whose purchase options a line carries both priced it. */
@@ -82,7 +82,7 @@ import type {
     StorefrontCartValidationResult,
 } from "./cart-validation";
 
-/** A line could not take an app's add-on (past the most a line holds, or a bundle fee that does not divide over its anchor). */
+/** A line could not take an app's add-on (past the most a line holds, or more than an order line keeps). */
 export const ADD_ON_UNAVAILABLE_REASON = "add_on_unavailable";
 
 /**
@@ -411,6 +411,21 @@ export function addOnUnavailable(): ValidationError {
     return new ValidationError("This item can't take one of the extras chosen for it. Remove the extra to continue.", {
         reason: ADD_ON_UNAVAILABLE_REASON,
     });
+}
+
+/**
+ * A bundle's add-on as its anchor charges it, per bundle unit: a fixed fee or
+ * a share of the bundle unit's price (`basisMinor`), rounded half-up to the
+ * step the anchor can carry, the increment times the anchor's units per
+ * bundle unit (`perUnit`), so every anchor unit pays the same exact amount
+ * and no fee is refused for not dividing (৳351 over a pair is ৳352, ৳176
+ * each). A positive fee takes at least one step; a free extra stays 0.
+ */
+export function bundleFeeMinor(addOn: AppLineAddOn, basisMinor: number, perUnit: number, incrementMinor: number): number {
+    if (!Number.isSafeInteger(perUnit) || perUnit < 1) throw addOnUnavailable();
+    const step = perUnit * incrementMinor;
+    if ("percent" in addOn) return addOnShareMinor(basisMinor, addOn.percent, step);
+    return addOn.amountMinor === 0 ? 0 : Math.max(step, roundToIncrementMinor(addOn.amountMinor, step));
 }
 
 /**

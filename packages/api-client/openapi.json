@@ -18820,7 +18820,7 @@
                   "maxItems": 60,
                   "x-scalius-app-owned": "items"
                 },
-                "adjustments": {
+                "addOns": {
                   "type": "array",
                   "items": {
                     "type": "object",
@@ -18835,14 +18835,27 @@
                         "type": "string",
                         "maxLength": 4000
                       },
-                      "amountMinor": {
+                      "totalMinor": {
                         "type": "integer"
+                      },
+                      "amountMinor": {
+                        "type": "integer",
+                        "nullable": true
+                      },
+                      "per": {
+                        "type": "string",
+                        "enum": [
+                          "unit",
+                          "bundle"
+                        ]
                       }
                     },
                     "required": [
                       "appId",
                       "title",
-                      "amountMinor"
+                      "totalMinor",
+                      "amountMinor",
+                      "per"
                     ]
                   },
                   "maxItems": 10
@@ -18930,7 +18943,7 @@
                 "taxMinor",
                 "purchaseOptions",
                 "properties",
-                "adjustments"
+                "addOns"
               ]
             }
           },
@@ -100540,6 +100553,10 @@
                                 },
                                 "maxItems": 20,
                                 "description": "A kit line's items, in the kit's order: each one's name and option values in the page's language, its units in one kit and its picture. Null on any other line."
+                              },
+                              "bundle": {
+                                "type": "boolean",
+                                "description": "A kit or an app's bundle sold as one line: its quantity is bundle units and its `adjustments` are each once per bundle unit."
                               }
                             },
                             "required": [
@@ -100563,7 +100580,8 @@
                               "availableQuantity",
                               "productImageMediaId",
                               "productImage",
-                              "kitItems"
+                              "kitItems",
+                              "bundle"
                             ]
                           }
                         },

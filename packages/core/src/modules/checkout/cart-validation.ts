@@ -56,7 +56,7 @@ import { appFlagsSql } from "../../utils/app-flags";
 import { shippingWeightGrams, type ShippingLine } from "../delivery/browser";
 import { bundleGroupPricing } from "@scalius/shared/product-bundles";
 import { resolvePrice, storeAmountMinor, type AppLinePrice, type ResolvedPriceSource, type StoreAmountConversion } from "@scalius/shared/market-pricing";
-import { addOnUnavailable, bundleAnchors, resolveCartWithAppLinePrices, type AppLineAddOn, type AppLinePricer } from "./app-line-prices";
+import { addOnUnavailable, bundleAnchors, bundleFeeMinor, resolveCartWithAppLinePrices, type AppLineAddOn, type AppLinePricer } from "./app-line-prices";
 import { expandCartKits, type CartTransformer, type TransformedCart } from "./cart-transform";
 import { cartKitItems, cartProductTranslationsSql, cartVariantOptionValuesSql, translateCartRows, type CartBuyerRead } from "./kit-items";
 import {
@@ -1176,17 +1176,16 @@ export function resolveStorefrontCartValidationFromRows(
     // A bundle's add-ons, once every line of it is priced: one fee per bundle
     // unit (a share of the bundle unit's price: each line's item price times
     // what it holds per unit; a kit's lines' prices are its price), on the
-    // anchor at the fee over the anchor's units per bundle unit. A fee that
-    // does not divide evenly refuses checkout.
+    // anchor at the fee over the anchor's units per bundle unit, the fee
+    // rounded to the step that divides (`bundleFeeMinor`): never refused for it.
     for (const anchor of bundleAnchors) {
         const lines = validatedItems.filter((line) => line.bundle && line.bundle.id === anchor.validated.bundle?.id);
         const bundleUnitMinor = lines.reduce((total, line) =>
             total + (line.baseUnitPriceMinor + line.propertiesPriceMinor) * (line.quantity / Math.max(1, line.bundle!.units ?? line.quantity)), 0);
         const priced = anchor.addOns.map((addOn) => {
-            const perBundleUnit = "percent" in addOn ? addOnShareMinor(bundleUnitMinor, addOn.percent, money.incrementMinor) : addOn.amountMinor;
             const perUnit = addOn.bundle!.perUnit;
-            const perAnchorUnit = perBundleUnit / perUnit;
-            if (!Number.isSafeInteger(perAnchorUnit) || perAnchorUnit % money.incrementMinor !== 0) throw addOnUnavailable();
+            const perAnchorUnit = bundleFeeMinor(addOn, bundleUnitMinor, perUnit, money.incrementMinor) / perUnit;
+            if (!Number.isSafeInteger(perAnchorUnit)) throw addOnUnavailable();
             return lineAdjustmentProperty(addOn.title, perAnchorUnit, addOn.appId, addOn.details);
         });
         const line = anchor.validated;
@@ -1686,12 +1685,14 @@ export function presentStorefrontCartValidation(
             kitComponents: _kitComponents,
             kitItems,
             priceSource: _priceSource,
-            bundle: _bundle,
+            bundle,
             sourceIndex: _sourceIndex,
             shippingWeightGrams: _shippingWeightGrams,
             ...item
         }, position) => ({
             ...item,
+            // A kit or an app's bundle sold as one line: its add-ons are once per bundle unit.
+            bundle: bundle?.kind === "expand",
             // A kit line's items (the cart check's); null on any other line.
             kitItems: kitItems ?? null,
             lineInputs: item.lineInputs ?? [],

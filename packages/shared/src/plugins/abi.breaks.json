@@ -1954,5 +1954,161 @@
   "from": "43d11be555c837a3",
   "change": "sdk.packages/shared/src/plugins/ui.d.ts#TypeAliasDeclaration:PluginUiNode: an existing signature changed or gained a required member.",
   "reason": "Pre-release (private pages, beta 8): buyer UI gains a `mark` node (a tone's glyph) and an optional `tone` on `stack` (a toned row: an offer row, a status box), drawn on buyer pages only; the SDK gains `ui.mark`. An added union arm and an optional field; nothing an app used before changes meaning."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "functions.cart.transform input cart.lines[].addOns[].appId: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "functions.cart.transform input cart.lines[].addOns[].amountMinor: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "functions.cart.line_prices input cart.lines[].addOns[].appId: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "functions.cart.line_prices input cart.lines[].addOns[].amountMinor: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "functions.cart.validate input cart.lines[].addOns[].appId: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "functions.cart.validate input cart.lines[].addOns[].amountMinor: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "functions.checkout.discounts input cart.lines[].addOns[].appId: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "functions.checkout.discounts input cart.lines[].addOns[].amountMinor: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "functions.checkout.shipping_rates input cart.lines[].addOns[].appId: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "functions.checkout.shipping_rates input cart.lines[].addOns[].amountMinor: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "functions.checkout.payment_methods input cart.lines[].addOns[].appId: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "functions.checkout.payment_methods input cart.lines[].addOns[].amountMinor: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "extensions input cart.lines[].addOns[].appId: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "extensions input cart.lines[].addOns[].amountMinor: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "extensions input lines[].addOns[].appId: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.protocol.snapshot.json",
+  "from": "4a8ad1a20fde46f0",
+  "change": "extensions input lines[].addOns[].amountMinor: the response may now be null.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/events-representations.d.ts#variable:EVENT_REPRESENTATION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:BuyerUiInput: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:BuyerUiLine: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:FunctionCart: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#TypeAliasDeclaration:FunctionCartLine: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_EXTENSION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_FUNCTION_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/functions.d.ts#variable:PLUGIN_RUN_SCHEMAS: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontCartLine: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
+ },
+ {
+  "snapshot": "./abi.sdk.snapshot.txt",
+  "from": "73274f81298e2d40",
+  "change": "sdk.packages/shared/src/plugins/storefront-protocol.d.ts#InterfaceDeclaration:StorefrontIslandContext: an existing signature changed or gained a required member.",
+  "reason": "Pre-release (rc.1, before the freeze): one add-on shape everywhere an app or a theme reads one. A function's cart line, the cart's UI line and an order row carry `LineAddOn` `{ appId, title, totalMinor, amountMinor, per }`: `totalMinor` the exact amount on the line, `amountMinor` per unit or per bundle unit only when exact (else null), `per` unit or bundle; `appId` null only on an add-on frozen before apps were named. The order representation's `adjustments` becomes `addOns` in that shape; an island's cart line add-ons take it with `StorefrontMoney` (`total`, `amount` or null, `per`), and `onCart` hears `{ count, subtotal }`, an integer-summed items subtotal instead of an unnamed float `total`. Settled now because the seal forbids a field becoming nullable after the freeze."
  }
 ]

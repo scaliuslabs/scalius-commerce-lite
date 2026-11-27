@@ -71,7 +71,7 @@ export default definePlugin({
       for (const line of order.lines) {
         const text = line.properties.find((property) => property.key === TEXT)?.value;
         // Engrave only what checkout sold: your add-on is on the line (0 when it was free).
-        const sold = line.adjustments.some((adjustment) => adjustment.appId === APP_ID);
+        const sold = line.addOns.some((addOn) => addOn.appId === APP_ID);
         // Keyed by the order line: a redelivered event writes the same record again.
         if (text && sold) await ctx.objects.engravings.put(line.id, { order_id: order.id, text });
       }

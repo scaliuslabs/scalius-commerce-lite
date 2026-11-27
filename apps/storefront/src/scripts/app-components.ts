@@ -15,10 +15,9 @@
 //   data-scalius-signed-in>` follows the sign-in hint, global.css hides the
 //   other version.
 
-import type { StorefrontIslandContext, StorefrontIslandModule, StorefrontMoney } from "@scalius/shared/plugins/storefront-protocol";
+import type { StorefrontCartSummary, StorefrontIslandContext, StorefrontIslandModule, StorefrontMoney } from "@scalius/shared/plugins/storefront-protocol";
 import type { AppLineInputDeclaration } from "@scalius/shared/line-properties";
-import { toMinor } from "@scalius/shared/money";
-import { formatMinorMoney, getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
+import { formatMinorMoney, getCurrencyCode } from "@/lib/currency";
 import { productContext } from "./product-context";
 import { DEFERRED_REVEAL_EVENT } from "./browser-events";
 import { initQuickAddCards } from "@/components/cards/scripts/quick-add-card";
@@ -28,12 +27,9 @@ import { BUYER_EVENT_LIMITS, projectBuyerEvent } from "@scalius/shared/plugins/b
 import { emitBuyerEvent, onBuyerEvents } from "@/lib/buyer-events/bus";
 import { visitorId } from "@/lib/buyer-events/visitor";
 
-type CartSummary = { count: number; total: StorefrontMoney };
-
-/** The cart's total (decimal page-currency units in the cart store) as protocol money. */
-function cartTotal(total: number): StorefrontMoney {
-  const currency = getCurrencyCode();
-  const money = { amountMinor: toMinor(Math.max(0, total), getDecimalPlaces(currency)), currency };
+/** An amount in integer minor units of the page's currency as protocol money. */
+function pageMoney(amountMinor: number): StorefrontMoney {
+  const money = { amountMinor, currency: getCurrencyCode() };
   return { ...money, formatted: formatMinorMoney(money) };
 }
 
@@ -41,12 +37,12 @@ function cartTotal(total: number): StorefrontMoney {
 // no namespace object holding every export of the store.
 function cartStoreModule() {
   return loadLazyScript(async () => {
-    const { cartStore, hydrateCartFromStorage } = await import("@/store/cart");
-    return { cartStore, hydrateCartFromStorage };
+    const { cartStore, cartItemsSubtotalMinor, hydrateCartFromStorage } = await import("@/store/cart");
+    return { cartStore, cartItemsSubtotalMinor, hydrateCartFromStorage };
   });
 }
 
-function onCart(listener: (cart: CartSummary) => void): () => void {
+function onCart(listener: (cart: StorefrontCartSummary) => void): () => void {
   let unsubscribe: (() => void) | null = null;
   let stopped = false;
   const stopListening = () => {
@@ -55,12 +51,12 @@ function onCart(listener: (cart: CartSummary) => void): () => void {
     unsubscribe = null;
     stop?.();
   };
-  void cartStoreModule().then(({ cartStore, hydrateCartFromStorage }) => {
+  void cartStoreModule().then(({ cartStore, cartItemsSubtotalMinor, hydrateCartFromStorage }) => {
     if (stopped) return;
     hydrateCartFromStorage();
     const stop = cartStore.subscribe((state) => {
       if (stopped) return;
-      try { listener({ count: state.totalItems, total: cartTotal(state.totalAmount) }); }
+      try { listener({ count: state.totalItems, subtotal: pageMoney(cartItemsSubtotalMinor(state.items)) }); }
       catch (error) {
         stopListening();
         console.warn("App cart listener failed", error);

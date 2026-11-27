@@ -141,15 +141,22 @@ const orderLineSchema = z.object({
     confirmation: z.object({ text, revision: z.string().max(64).nullable() }).nullable().optional(),
   })).max(60)),
   /**
-   * Apps' add-ons to each unit of the line (`cart.line_prices` adjustments: a
-   * protection plan, gift wrap), already inside `unitPriceMinor`. `appId` is
-   * null for add-ons frozen before apps were named on them.
+   * Apps' add-ons on the line (`cart.line_prices` adjustments: a protection
+   * plan, gift wrap), frozen at checkout and already inside `unitPriceMinor`
+   * and `subtotalMinor`: the one add-on shape (`LineAddOn`) every app surface
+   * carries. `totalMinor` is what it added to the line in all, exactly;
+   * `amountMinor` what each unit (`per: "unit"`) or each bundle unit
+   * (`per: "bundle"`: an expanded bundle's or a kit's add-on, on its anchor
+   * line) paid, when one amount is exact for every one, else null (a bundle
+   * line whose `units` staff changed). `appId` is null for add-ons frozen
+   * before apps were named on them.
    */
-  adjustments: z.array(z.object({
+  addOns: z.array(z.object({
     appId: id.nullable(),
     title: text,
-    /** Added to each unit. */
-    amountMinor: minor,
+    totalMinor: minor,
+    amountMinor: minor.nullable(),
+    per: z.enum(["unit", "bundle"]),
   })).max(10),
   /**
    * The bundle the line was bought in (`cart.transform`), frozen at checkout:

@@ -7,9 +7,10 @@
 import { LINE_ADJUSTMENT_KEY } from "./line-identity";
 import { ADD_ON_DETAILS_MAX, ADD_ON_ROWS_MAX, ADD_ON_TITLE_MAX, addOnFoldLabel, readAddOnDetails, type AddOnTotalRow, type AddOnTotals } from "./add-on-totals";
 import { readOrderLineProperties } from "./line-properties";
+import type { LineAddOn } from "./plugins/functions";
 
 /** One add-on on each unit of a line, in minor units of the summary's currency. */
-export interface LineAddOn {
+export interface UnitAddOn {
   appId?: string | null;
   title: string;
   amountMinor: number;
@@ -28,7 +29,7 @@ function joinDetails(left: readonly string[] | undefined, right: readonly string
  * (`_adjustment`: value is the title, priceMinor each unit's amount). An
  * entry without a key is one of a list of add-ons (a stored cart line's).
  */
-export function lineAddOnsOf(entries: ReadonlyArray<{ key?: string; value?: string; displayValue?: string; priceMinor?: number; appId?: string | null; details?: unknown }> | null | undefined): LineAddOn[] {
+export function lineAddOnsOf(entries: ReadonlyArray<{ key?: string; value?: string; displayValue?: string; priceMinor?: number; appId?: string | null; details?: unknown }> | null | undefined): UnitAddOn[] {
   return (entries ?? []).flatMap((entry) => {
     if (entry.key !== undefined && entry.key !== LINE_ADJUSTMENT_KEY) return [];
     const amountMinor = entry.priceMinor;
@@ -46,7 +47,7 @@ export function lineAddOnsOf(entries: ReadonlyArray<{ key?: string; value?: stri
  * expanded bundle on its one anchor and refuses past `LINE_ADD_ONS_MAX`, so
  * the sum never holds more entries than that.
  */
-export function aggregateLineAddOns(entries: ReadonlyArray<LineAddOn & { perUnit?: number }>): AddOnTotalRow[] {
+export function aggregateLineAddOns(entries: ReadonlyArray<UnitAddOn & { perUnit?: number }>): AddOnTotalRow[] {
   const sums = new Map<string, AddOnTotalRow>();
   for (const entry of entries) {
     const appId = entry.appId ?? null;
@@ -108,7 +109,7 @@ export interface AddOnFolding {
  * display, so it shows the subtotal alone rather than fail.
  */
 export function addOnTotals(
-  lines: ReadonlyArray<{ quantity: number; addOns: readonly LineAddOn[] }>,
+  lines: ReadonlyArray<{ quantity: number; addOns: readonly UnitAddOn[] }>,
   subtotalMinor: number,
   folding: AddOnFolding,
 ): AddOnTotals {
@@ -151,27 +152,20 @@ export function frozenAddOnTotals(
   return addOnTotals(lines.map((line) => ({ quantity: line.quantity, addOns: lineAddOnsOf(line.properties) })), subtotalMinor, { foldLabel: addOnFoldLabel(language) });
 }
 
-/** One app add-on of a buyer's order row, as the receipt and the account order show it ("Protection ৳350"). */
-export interface BuyerLineAddOn {
-  appId: string | null;
-  title: string;
-  /** What the row's lines were charged for it, exactly: each line's amount times its units, summed. */
-  totalMinor: number;
-  /**
-   * `per: "unit"`: what each unit of the row pays, when every unit pays the
-   * same; `"bundle"`: what each bundle unit pays (an expanded bundle's or a
-   * kit's add-on, frozen on its anchor), when the row's bundle units are
-   * known. Null when no one amount is exact: show `totalMinor`.
-   */
-  amountMinor: number | null;
-  /** From what the line froze: `bundle` for an add-on on a line of an expanded bundle or a kit (its anchor), else `unit`. */
-  per: "unit" | "bundle";
-  details?: string[];
-}
+/**
+ * One app add-on of a line or a buyer's row in the one contract shape
+ * (`LineAddOn`: exact `totalMinor`, `amountMinor` per unit or per bundle
+ * unit when exact, `per`), with the app's detail lines where a surface
+ * shows them (the receipt, the account order, the order emails, the invoice).
+ */
+export type BuyerLineAddOn = LineAddOn & { details?: string[] };
 
 /**
- * A buyer row's add-ons from what its real lines froze (`_adjustment`
- * entries), never from a folded row's entries times its quantity. Each
+ * The add-ons of one line, or of a buyer row over its real lines, in the one
+ * contract shape (`LineAddOn`): what a function's cart line, the cart's and
+ * an order's UI slots, the order representation and the buyer's pages carry.
+ * Read from what the lines priced or froze (`_adjustment` entries, each per
+ * unit), never from a folded row's entries times its quantity. Each
  * add-on's `totalMinor` is its lines' amounts times their units, summed; its
  * `per` is what the line froze (an add-on on a line of an expanded bundle or
  * a kit is the bundle's, once per bundle unit: checkout freezes it on the

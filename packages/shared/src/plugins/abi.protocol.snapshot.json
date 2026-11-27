@@ -297,23 +297,51 @@
             "type": "object",
             "properties": {
              "appId": {
-              "type": "string",
-              "maxLength": 128
+              "anyOf": [
+               {
+                "type": "string",
+                "maxLength": 128
+               },
+               {
+                "type": "null"
+               }
+              ]
              },
              "title": {
               "type": "string",
               "maxLength": 80
              },
-             "amountMinor": {
+             "totalMinor": {
               "type": "integer",
-              "minimum": -9007199254740991,
+              "minimum": 0,
               "maximum": 9007199254740991
+             },
+             "amountMinor": {
+              "anyOf": [
+               {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "null"
+               }
+              ]
+             },
+             "per": {
+              "type": "string",
+              "enum": [
+               "unit",
+               "bundle"
+              ]
              }
             },
             "required": [
              "appId",
              "title",
-             "amountMinor"
+             "totalMinor",
+             "amountMinor",
+             "per"
             ],
             "additionalProperties": false
            }
@@ -1045,23 +1073,51 @@
             "type": "object",
             "properties": {
              "appId": {
-              "type": "string",
-              "maxLength": 128
+              "anyOf": [
+               {
+                "type": "string",
+                "maxLength": 128
+               },
+               {
+                "type": "null"
+               }
+              ]
              },
              "title": {
               "type": "string",
               "maxLength": 80
              },
-             "amountMinor": {
+             "totalMinor": {
               "type": "integer",
-              "minimum": -9007199254740991,
+              "minimum": 0,
               "maximum": 9007199254740991
+             },
+             "amountMinor": {
+              "anyOf": [
+               {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "null"
+               }
+              ]
+             },
+             "per": {
+              "type": "string",
+              "enum": [
+               "unit",
+               "bundle"
+              ]
              }
             },
             "required": [
              "appId",
              "title",
-             "amountMinor"
+             "totalMinor",
+             "amountMinor",
+             "per"
             ],
             "additionalProperties": false
            }
@@ -2009,23 +2065,51 @@
             "type": "object",
             "properties": {
              "appId": {
-              "type": "string",
-              "maxLength": 128
+              "anyOf": [
+               {
+                "type": "string",
+                "maxLength": 128
+               },
+               {
+                "type": "null"
+               }
+              ]
              },
              "title": {
               "type": "string",
               "maxLength": 80
              },
-             "amountMinor": {
+             "totalMinor": {
               "type": "integer",
-              "minimum": -9007199254740991,
+              "minimum": 0,
               "maximum": 9007199254740991
+             },
+             "amountMinor": {
+              "anyOf": [
+               {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "null"
+               }
+              ]
+             },
+             "per": {
+              "type": "string",
+              "enum": [
+               "unit",
+               "bundle"
+              ]
              }
             },
             "required": [
              "appId",
              "title",
-             "amountMinor"
+             "totalMinor",
+             "amountMinor",
+             "per"
             ],
             "additionalProperties": false
            }
@@ -2830,23 +2914,51 @@
             "type": "object",
             "properties": {
              "appId": {
-              "type": "string",
-              "maxLength": 128
+              "anyOf": [
+               {
+                "type": "string",
+                "maxLength": 128
+               },
+               {
+                "type": "null"
+               }
+              ]
              },
              "title": {
               "type": "string",
               "maxLength": 80
              },
-             "amountMinor": {
+             "totalMinor": {
               "type": "integer",
-              "minimum": -9007199254740991,
+              "minimum": 0,
               "maximum": 9007199254740991
+             },
+             "amountMinor": {
+              "anyOf": [
+               {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "null"
+               }
+              ]
+             },
+             "per": {
+              "type": "string",
+              "enum": [
+               "unit",
+               "bundle"
+              ]
              }
             },
             "required": [
              "appId",
              "title",
-             "amountMinor"
+             "totalMinor",
+             "amountMinor",
+             "per"
             ],
             "additionalProperties": false
            }
@@ -3655,23 +3767,51 @@
             "type": "object",
             "properties": {
              "appId": {
-              "type": "string",
-              "maxLength": 128
+              "anyOf": [
+               {
+                "type": "string",
+                "maxLength": 128
+               },
+               {
+                "type": "null"
+               }
+              ]
              },
              "title": {
               "type": "string",
               "maxLength": 80
              },
-             "amountMinor": {
+             "totalMinor": {
               "type": "integer",
-              "minimum": -9007199254740991,
+              "minimum": 0,
               "maximum": 9007199254740991
+             },
+             "amountMinor": {
+              "anyOf": [
+               {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "null"
+               }
+              ]
+             },
+             "per": {
+              "type": "string",
+              "enum": [
+               "unit",
+               "bundle"
+              ]
              }
             },
             "required": [
              "appId",
              "title",
-             "amountMinor"
+             "totalMinor",
+             "amountMinor",
+             "per"
             ],
             "additionalProperties": false
            }
@@ -4460,23 +4600,51 @@
             "type": "object",
             "properties": {
              "appId": {
-              "type": "string",
-              "maxLength": 128
+              "anyOf": [
+               {
+                "type": "string",
+                "maxLength": 128
+               },
+               {
+                "type": "null"
+               }
+              ]
              },
              "title": {
               "type": "string",
               "maxLength": 80
              },
-             "amountMinor": {
+             "totalMinor": {
               "type": "integer",
-              "minimum": -9007199254740991,
+              "minimum": 0,
               "maximum": 9007199254740991
+             },
+             "amountMinor": {
+              "anyOf": [
+               {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+               },
+               {
+                "type": "null"
+               }
+              ]
+             },
+             "per": {
+              "type": "string",
+              "enum": [
+               "unit",
+               "bundle"
+              ]
              }
             },
             "required": [
              "appId",
              "title",
-             "amountMinor"
+             "totalMinor",
+             "amountMinor",
+             "per"
             ],
             "additionalProperties": false
            }
@@ -5281,23 +5449,51 @@
              "type": "object",
              "properties": {
               "appId": {
-               "type": "string",
-               "maxLength": 128
+               "anyOf": [
+                {
+                 "type": "string",
+                 "maxLength": 128
+                },
+                {
+                 "type": "null"
+                }
+               ]
               },
               "title": {
                "type": "string",
                "maxLength": 80
               },
-              "amountMinor": {
+              "totalMinor": {
                "type": "integer",
-               "minimum": -9007199254740991,
+               "minimum": 0,
                "maximum": 9007199254740991
+              },
+              "amountMinor": {
+               "anyOf": [
+                {
+                 "type": "integer",
+                 "minimum": 0,
+                 "maximum": 9007199254740991
+                },
+                {
+                 "type": "null"
+                }
+               ]
+              },
+              "per": {
+               "type": "string",
+               "enum": [
+                "unit",
+                "bundle"
+               ]
               }
              },
              "required": [
               "appId",
               "title",
-              "amountMinor"
+              "totalMinor",
+              "amountMinor",
+              "per"
              ],
              "additionalProperties": false
             }
@@ -5575,23 +5771,51 @@
          "type": "object",
          "properties": {
           "appId": {
-           "type": "string",
-           "maxLength": 128
+           "anyOf": [
+            {
+             "type": "string",
+             "maxLength": 128
+            },
+            {
+             "type": "null"
+            }
+           ]
           },
           "title": {
            "type": "string",
            "maxLength": 80
           },
-          "amountMinor": {
+          "totalMinor": {
            "type": "integer",
-           "minimum": -9007199254740991,
+           "minimum": 0,
            "maximum": 9007199254740991
+          },
+          "amountMinor": {
+           "anyOf": [
+            {
+             "type": "integer",
+             "minimum": 0,
+             "maximum": 9007199254740991
+            },
+            {
+             "type": "null"
+            }
+           ]
+          },
+          "per": {
+           "type": "string",
+           "enum": [
+            "unit",
+            "bundle"
+           ]
           }
          },
          "required": [
           "appId",
           "title",
-          "amountMinor"
+          "totalMinor",
+          "amountMinor",
+          "per"
          ],
          "additionalProperties": false
         }

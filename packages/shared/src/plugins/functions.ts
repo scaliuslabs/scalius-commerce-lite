@@ -68,6 +68,34 @@ const addOnDetails = z.array(addOnLabel).max(ADD_ON_DETAILS_MAX).optional();
 /** Add-ons one line carries: the one bound the cart, the page and checkout share (`LINE_ADD_ONS_MAX`). */
 const LINE_ADJUSTMENTS_ON_LINE_MAX = LINE_ADD_ONS_MAX;
 
+/**
+ * How an add-on is counted (`LineAddOn.per`): `unit`, on each unit of its
+ * line; `bundle`, once per bundle unit (an expanded bundle's or a store kit's
+ * add-on, carried by the bundle's anchor line). The list only grows, at its end.
+ */
+export const LINE_ADD_ON_PER = ["unit", "bundle"] as const;
+
+/**
+ * One app add-on on a line: the one shape an app or a theme reads an add-on
+ * in, everywhere (a function's cart line, the cart's and an order's UI slots,
+ * the order representation and API). `totalMinor` is the number to trust:
+ * what the add-on adds to the line in all, exactly, in integer minor units of
+ * the line's currency (sum it, refund against it, show it when nothing else
+ * is exact). `amountMinor` is what one unit (`per: "unit"`) or one bundle
+ * unit (`per: "bundle"`) pays for it when one amount is exact for every one
+ * of them, else null: show `totalMinor` then. `appId` is the app that added
+ * it (null only on an add-on frozen before apps were named on them). A free
+ * extra is 0.
+ */
+export const lineAddOnSchema = z.object({
+  appId: z.string().max(128).nullable(),
+  title: z.string().max(80),
+  totalMinor: nonNegativeMinor,
+  amountMinor: nonNegativeMinor.nullable(),
+  per: z.enum(LINE_ADD_ON_PER),
+}).strict();
+export type LineAddOn = z.infer<typeof lineAddOnSchema>;
+
 /** One cart line as functions see it. */
 export const functionCartLineSchema = z.object({
   lineId: id,
@@ -157,14 +185,16 @@ export const functionCartLineSchema = z.object({
    */
   purchaseOptions: z.array(z.string().max(APP_SCOPED_KEY_MAX_LENGTH).regex(APP_SCOPED_KEY_PATTERN)).max(LINE_PURCHASE_OPTIONS_MAX).default([]),
   /**
-   * The apps' add-ons on each unit of the line (`cart.line_prices`
-   * adjustments, each with the app that added it), in `unitPriceMinor`, once
+   * The apps' add-ons on the line (`cart.line_prices` adjustments, each with
+   * the app that added it), in `unitPriceMinor` and `lineTotalMinor`, once
    * checkout has priced them: what a storefront extension draws as
-   * "Protection ৳350" (an app reads its own by `appId`). Like the price, every
-   * app sees them. Empty before pricing (in `cart.line_prices` and
-   * `cart.transform` themselves) and on a line without one.
+   * "Protection ৳350" (an app reads its own by `appId`). A bundle's add-on is
+   * on its anchor (a store kit's one line, an expanded bundle's anchor
+   * component) with `per: "bundle"`. Like the price, every app sees them.
+   * Empty before pricing (in `cart.line_prices` and `cart.transform`
+   * themselves) and on a line without one.
    */
-  addOns: z.array(z.object({ appId: z.string().max(128), title: z.string().max(80), amountMinor: minor }).strict()).max(LINE_ADJUSTMENTS_ON_LINE_MAX).default([]),
+  addOns: z.array(lineAddOnSchema).max(LINE_ADJUSTMENTS_ON_LINE_MAX).default([]),
 }).strict();
 
 /** Who places the order (`orders.channel`, `@scalius/shared/order-channel`). */
@@ -534,8 +564,10 @@ const percentOfUnit = z.number().finite().positive().max(LINE_ADJUSTMENT_PERCENT
  * component's unit price times what it holds per bundle unit), charged on
  * the component that holds the fewest per unit; the same app's add-on of
  * the same title on another component counts once, never per component.
- * One that does not divide evenly over that component's units per bundle
- * unit refuses checkout. Merged lines keep their own add-ons. The
+ * That component charges the fee over its units per bundle unit, so a
+ * bundle's fee rounds half-up to the market's increment times those units
+ * (৳351 over a pair is ৳352, ৳176 each): never refused for not dividing.
+ * Merged lines keep their own add-ons. The
  * buyer sees each as a line component ("Add-on: <title>") in the cart,
  * checkout, receipt and emails; tax, discounts, totals and refunds include it
  * as part of the unit price. An add-on may carry `details`: up to
@@ -663,8 +695,12 @@ export const buyerUiLineSchema = z.object({
   unitPriceMinor: nonNegativeMinor,
   /** A bundle the store sells as one line (`cart.transform` expands it): its add-ons are once per bundle unit. */
   bundle: z.boolean(),
-  /** Every app's add-ons on each unit, with the app that added it ("Protection ৳350"). */
-  addOns: z.array(z.object({ appId: z.string().max(128), title: z.string().max(80), amountMinor: minor }).strict()).max(LINE_ADJUSTMENTS_ON_LINE_MAX),
+  /**
+   * Every app's add-ons on the line, with the app that added it ("Protection
+   * ৳350"): a bundle's once per bundle unit (`per: "bundle"`, the line's
+   * quantity its bundle units).
+   */
+  addOns: z.array(lineAddOnSchema).max(LINE_ADJUSTMENTS_ON_LINE_MAX),
   /**
    * The app's own line inputs (`checkout.lineInputs`, keys without the app
    * id), every one it declares: whether the line takes it (`eligible`, the
@@ -720,17 +756,9 @@ export const buyerUiOrderLineSchema = z.object({
   }).strict().nullable(),
   /**
    * Every app's add-ons the row was charged ("Protection ৳350"), from its
-   * real lines: `totalMinor` exactly; `amountMinor` per unit (`per: "unit"`)
-   * or once per bundle unit (`per: "bundle"`, on a bundle's anchor row) when
-   * one amount is exact for every unit, else null. At most a line's.
+   * real lines (a bundle's on its anchor row, `per: "bundle"`). At most a line's.
    */
-  addOns: z.array(z.object({
-    appId: z.string().max(128).nullable(),
-    title: z.string().max(80),
-    totalMinor: nonNegativeMinor,
-    amountMinor: nonNegativeMinor.nullable(),
-    per: z.enum(["unit", "bundle"]),
-  }).strict()).max(LINE_ADJUSTMENTS_ON_LINE_MAX),
+  addOns: z.array(lineAddOnSchema).max(LINE_ADJUSTMENTS_ON_LINE_MAX),
   /** The app's own line answers frozen on the row (keys without the app id): what the buyer chose for it. */
   inputs: z.array(z.object({
     key: z.string().max(APP_SCOPED_KEY_MAX_LENGTH),

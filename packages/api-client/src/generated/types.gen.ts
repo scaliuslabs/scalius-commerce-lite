@@ -3837,10 +3837,12 @@ export type OrderResource = {
                 revision: string | null;
             } | null;
         }>;
-        adjustments: Array<{
+        addOns: Array<{
             appId: string | null;
             title: string;
-            amountMinor: number;
+            totalMinor: number;
+            amountMinor: number | null;
+            per: 'unit' | 'bundle';
         }>;
         bundle?: {
             id: string;
@@ -26342,6 +26344,10 @@ export type PostApiV1OrdersCartValidationResponses = {
                  * A kit line's items, in the kit's order: each one's name and option values in the page's language, its units in one kit and its picture. Null on any other line.
                  */
                 kitItems: Array<KitItem> | null;
+                /**
+                 * A kit or an app's bundle sold as one line: its quantity is bundle units and its `adjustments` are each once per bundle unit.
+                 */
+                bundle: boolean;
             }>;
             subtotal: number;
             /**

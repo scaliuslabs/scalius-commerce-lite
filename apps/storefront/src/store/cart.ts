@@ -71,6 +71,8 @@ export type CartLineAdjustment = {
   priceMinor: number;
   /** The app that added it (an island reads its own app's add-ons). */
   appId?: string;
+  /** Once per bundle unit: the line is a kit or an app's bundle sold as one line. Absent: on each unit. */
+  per?: "bundle";
 };
 
 export type CartItem = {
@@ -241,10 +243,15 @@ export function cartShippedSubtotal(items: Record<string, ShippingFeeCartItem>):
   return cartItemsSubtotal(Object.fromEntries(Object.entries(items).filter(([, item]) => shipsItem(item) && item.freeDelivery !== true)));
 }
 
-/** The items subtotal before discounts. */
-export function cartItemsSubtotal(items: Record<string, ShippingFeeCartItem>): number {
+/**
+ * The items subtotal before discounts, delivery and tax, in integer minor
+ * units of the page's currency: each line's unit price as the store last
+ * priced it (its add-ons included) times its quantity. An app island's
+ * `onCart` subtotal.
+ */
+export function cartItemsSubtotalMinor(items: Record<string, ShippingFeeCartItem>): number {
   const decimalPlaces = getDecimalPlaces(getCurrencyCode());
-  const totalMinor = Object.values(items).reduce(
+  return Object.values(items).reduce(
     (sum, item) => {
       const price = Number(item.price);
       const quantity = Number(item.quantity);
@@ -253,7 +260,11 @@ export function cartItemsSubtotal(items: Record<string, ShippingFeeCartItem>): n
     },
     0,
   );
-  return fromMinor(totalMinor, decimalPlaces);
+}
+
+/** The items subtotal before discounts (`cartItemsSubtotalMinor`), in decimal units. */
+export function cartItemsSubtotal(items: Record<string, ShippingFeeCartItem>): number {
+  return fromMinor(cartItemsSubtotalMinor(items), getDecimalPlaces(getCurrencyCode()));
 }
 
 /**
@@ -414,7 +425,7 @@ export function normalizeCartLineProperties(
 const MAX_LINE_ADJUSTMENTS = LINE_ADD_ONS_MAX;
 
 /** Add-ons from a server answer or a stored cart: display only, so bad entries are dropped, never the line. */
-export function normalizeCartLineAdjustments(value: unknown): CartLineAdjustment[] {
+export function normalizeCartLineAdjustments(value: unknown, bundle?: boolean): CartLineAdjustment[] {
   if (!Array.isArray(value)) return [];
   const adjustments: CartLineAdjustment[] = [];
   for (const entry of value.slice(0, MAX_LINE_ADJUSTMENTS)) {
@@ -424,7 +435,8 @@ export function normalizeCartLineAdjustments(value: unknown): CartLineAdjustment
     const priceMinor = toNumber(entry.priceMinor);
     if (!label || !displayValue || !Number.isSafeInteger(priceMinor) || priceMinor <= 0) continue;
     const appId = typeof entry.appId === "string" && entry.appId.length <= MAX_CART_ID_LENGTH ? entry.appId : null;
-    adjustments.push({ key: LINE_ADJUSTMENT_KEY, label, displayValue, priceMinor, ...(appId ? { appId } : {}) });
+    const per = bundle ?? entry.per === "bundle";
+    adjustments.push({ key: LINE_ADJUSTMENT_KEY, label, displayValue, priceMinor, ...(appId ? { appId } : {}), ...(per ? { per: "bundle" as const } : {}) });
   }
   return adjustments;
 }
@@ -549,10 +561,8 @@ function normalizeCartTotals(state: CartStore): CartStore {
     // An empty cart is no one's.
     ...(state.accountCart && totalItems > 0 ? { accountCart: true as const } : {}),
     totalItems,
-    totalAmount: items.reduce(
-      (total, item) => total + item.price * item.quantity,
-      0,
-    ),
+    // Summed in minor units: never a float sum of decimal prices.
+    totalAmount: cartItemsSubtotal(state.items),
     discountCodes: totalItems === 0 ? [] : state.discountCodes,
   };
 }
@@ -1118,14 +1128,14 @@ export function updateCartItemsByKeyAtomically(
  * when a line changed.
  */
 export function adoptCheckedLinePrices(
-  checked: ReadonlyArray<{ cartKey?: string | null; unitPrice: number; adjustments?: unknown }>,
+  checked: ReadonlyArray<{ cartKey?: string | null; unitPrice: number; adjustments?: unknown; bundle?: boolean }>,
 ): boolean {
   ensureCartHydrated();
   const { items } = cartStore.get();
   const updates: CartLineItemUpdate[] = checked.flatMap((line) => {
     const item = line.cartKey ? items[line.cartKey] : undefined;
     if (!item?.repricing || !Number.isFinite(line.unitPrice) || line.unitPrice < 0) return [];
-    return [{ lineKey: line.cartKey!, updates: { price: line.unitPrice, adjustments: normalizeCartLineAdjustments(line.adjustments) } }];
+    return [{ lineKey: line.cartKey!, updates: { price: line.unitPrice, adjustments: normalizeCartLineAdjustments(line.adjustments, line.bundle === true) } }];
   });
   return updates.length > 0 && updateCartItemsByKeyAtomically(updates);
 }
