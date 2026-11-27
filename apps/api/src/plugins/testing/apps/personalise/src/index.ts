@@ -53,9 +53,9 @@ interface Line {
 /** The printing fee on every line that carries a photo. */
 export function printingFees(lines: readonly Line[], settings: Record<string, unknown>) {
   const fee = typeof settings.fee === "number" && Number.isSafeInteger(settings.fee) && settings.fee >= 0 ? settings.fee : DEFAULT_FEE_MINOR;
-  if (fee === 0) return { adjustments: [] };
+  if (fee === 0) return { addOns: [] };
   return {
-    adjustments: lines
+    addOns: lines
       .filter((line) => Boolean(line.properties[PHOTO_INPUT]))
       .map((line) => ({ lineId: line.lineId, amountMinor: fee, title: "Photo printing" })),
   };

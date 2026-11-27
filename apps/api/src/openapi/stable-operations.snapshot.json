@@ -30431,7 +30431,7 @@
         "maxItems": 60,
         "x-scalius-app-owned": "items"
        },
-       "adjustments": {
+       "addOns": {
         "type": "array",
         "items": {
          "type": "object",
@@ -30444,17 +30444,39 @@
           },
           "title": {
            "type": "string",
-           "maxLength": 4000
+           "maxLength": 80
+          },
+          "totalMinor": {
+           "type": "integer",
+           "minimum": 0
           },
           "amountMinor": {
-           "type": "integer"
+           "type": "integer",
+           "nullable": true,
+           "minimum": 0
+          },
+          "per": {
+           "type": "string",
+           "enum": [
+            "unit",
+            "bundle"
+           ]
+          },
+          "units": {
+           "type": "integer",
+           "nullable": true,
+           "minimum": 1
           }
          },
          "required": [
           "appId",
           "title",
-          "amountMinor"
-         ]
+          "totalMinor",
+          "amountMinor",
+          "per",
+          "units"
+         ],
+         "additionalProperties": false
         },
         "maxItems": 10
        },
@@ -30541,7 +30563,7 @@
        "taxMinor",
        "purchaseOptions",
        "properties",
-       "adjustments"
+       "addOns"
       ]
      }
     },

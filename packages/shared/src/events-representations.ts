@@ -39,6 +39,7 @@ import { REVIEW_LIMITS, REVIEW_REJECTION_REASONS, REVIEW_STATUSES } from "./revi
 import { POINT_OF_SALE_TENDER_VIAS } from "./payment-terms";
 import { buyerText } from "./buyer-text";
 import { OBJECT_STATUSES } from "./plugins/object-status";
+import { lineAddOnSchema } from "./plugins/line-add-on";
 
 const id = z.string().min(1).max(128);
 const text = z.string().max(4000);
@@ -145,16 +146,15 @@ const orderLineSchema = z.object({
     confirmation: z.object({ text, revision: z.string().max(64).nullable() }).nullable().optional(),
   })).max(60)),
   /**
-   * Apps' add-ons to each unit of the line (`cart.line_prices` adjustments: a
-   * protection plan, gift wrap), already inside `unitPriceMinor`. `appId` is
-   * null for add-ons frozen before apps were named on them.
+   * Apps' add-ons on the line (`cart.line_prices` add-ons: a protection plan,
+   * gift wrap), frozen at checkout and already inside `unitPriceMinor` and
+   * `subtotalMinor`, in the one add-on shape every app surface carries
+   * (`LineAddOn`): `totalMinor` exact; `amountMinor` per unit (`per: "unit"`)
+   * or per bundle unit (`per: "bundle"`: an expanded bundle's or a kit's
+   * add-on, on its anchor line) when exact, else null; `units` how many of
+   * those the line holds (null once staff change a bundle line's quantity).
    */
-  adjustments: z.array(z.object({
-    appId: id.nullable(),
-    title: text,
-    /** Added to each unit. */
-    amountMinor: minor,
-  })).max(10),
+  addOns: z.array(lineAddOnSchema).max(10),
   /**
    * The bundle the line was bought in (`cart.transform`), frozen at checkout:
    * lines with the same `id` are one bought bundle. An expanded bundle's

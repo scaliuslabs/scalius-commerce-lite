@@ -27,7 +27,7 @@ function sameAdjustments(current: CartLineAdjustment[] | undefined, next: CartLi
   const left = current ?? [];
   return left.length === next.length && left.every((entry, index) =>
     entry.label === next[index]!.label && entry.displayValue === next[index]!.displayValue && entry.priceMinor === next[index]!.priceMinor
-    && entry.appId === next[index]!.appId);
+    && entry.appId === next[index]!.appId && entry.per === next[index]!.per);
 }
 
 function sameDisplay(
@@ -89,7 +89,7 @@ export function reconcileValidatedCartSnapshot(
       properties !== undefined &&
       properties.length === (currentItem.properties?.length ?? 0) &&
       !sameDisplay(currentItem.properties, properties);
-    const adjustments = normalizeCartLineAdjustments(validatedItem.adjustments);
+    const adjustments = normalizeCartLineAdjustments(validatedItem.adjustments, validatedItem.bundle === true);
     const adjustmentsChanged = !sameAdjustments(currentItem.adjustments, adjustments);
     if (
       currentItem.freeDelivery !== validatedItem.freeDelivery ||

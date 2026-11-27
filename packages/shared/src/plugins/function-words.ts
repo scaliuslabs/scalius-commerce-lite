@@ -1,6 +1,6 @@
 // An app's labels in a function's answer that the buyer reads beside the
 // store's money rows and actions: an add-on's title and detail lines
-// (`cart.line_prices` adjustments and offers), a discount's title
+// (`cart.line_prices` `addOns` and offers), a discount's title
 // (`checkout.discounts`), a bundle's title (`cart.transform`) and a payment
 // method's or shipping rate's new name (`rename`). One that passes for the
 // store's word (store-words.ts) is never allowed to stand, and never allowed to
@@ -38,15 +38,15 @@ export function adjustFunctionWords(point: string, value: unknown, language: str
   if (point === "cart.line_prices") {
     // Distinct add-ons whose titles gave way stay distinct rows: the summary groups rows by app and title,
     // so two "Add-on" rows would merge. With more than one, each is numbered by its own words ("Add-on 1").
-    const replaced = rows("adjustments").filter((row) => typeof row.title === "string" && storeWordsIssue(row.title, "add-on"));
+    const replaced = rows("addOns").filter((row) => typeof row.title === "string" && storeWordsIssue(row.title, "add-on"));
     const distinct = [...new Set(replaced.map((row) => row.title as string))];
     const numeral = (index: number) => [...String(index + 1)].map((digit) => (bangla ? BANGLA_DIGITS[Number(digit)] : digit)).join("");
     const neutral = (title: string) => (distinct.length > 1 ? `${words.lineAddOnText} ${numeral(distinct.indexOf(title))}` : words.lineAddOnText);
-    for (const [index, row] of rows("adjustments").entries()) {
+    for (const [index, row] of rows("addOns").entries()) {
       const title = row.title as string;
-      if (refused(title, "add-on", `adjustments.${index}.title`, `It was drawn as "${neutral(title)}".`)) row.title = neutral(title);
+      if (refused(title, "add-on", `addOns.${index}.title`, `It was drawn as "${neutral(title)}".`)) row.title = neutral(title);
       if (Array.isArray(row.details)) {
-        row.details = (row.details as string[]).filter((detail, at) => !refused(detail, "add-on-detail", `adjustments.${index}.details.${at}`, "It was left out."));
+        row.details = (row.details as string[]).filter((detail, at) => !refused(detail, "add-on-detail", `addOns.${index}.details.${at}`, "It was left out."));
       }
     }
     for (const [index, row] of rows("offers").entries()) {
