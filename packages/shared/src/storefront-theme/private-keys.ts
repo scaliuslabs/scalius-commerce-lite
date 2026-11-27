@@ -47,6 +47,8 @@ export const PRIVATE_PAGE_WORDS = {
   checkout: { labels: {}, icons: [] },
   receipt: { labels: {}, icons: [] },
   account: { labels: {}, icons: [] },
+  // The phone tab bar: its words are the theme's tabs (`blocks.mobileNav`), its look its tokens.
+  tabBar: { labels: {}, icons: [] },
 } as const satisfies Record<string, { labels: Readonly<Record<string, PrivateLabelSpec>>; icons: readonly string[] }>;
 
 export type PrivatePageKey = keyof typeof PRIVATE_PAGE_WORDS;
@@ -60,8 +62,9 @@ export const PRIVATE_PAGE_KEYS = Object.keys(PRIVATE_PAGE_WORDS) as PrivatePageK
  * every page file of the storefront to it. A key's tokens reach exactly these
  * routes, never more: pointing a key at another route would change what a
  * written theme looks like there. A route that should take a look of its own
- * later takes a new key. The drawer opens over public pages, so it has no
- * route of its own.
+ * later takes a new key. The drawer opens over public pages, and the phone
+ * tab bar is drawn on every page with the theme's `bottom-tabs` navigation,
+ * so neither has a route of its own.
  */
 export const PRIVATE_PAGE_ROUTES = {
   cart: ["/cart"],
@@ -75,6 +78,7 @@ export const PRIVATE_PAGE_ROUTES = {
     "/account/warranties", "/account/reviews", "/account/gift-cards", "/account/downloads",
     "/warranty-claims/[orderId]/[claimId]",
   ],
+  tabBar: [],
 } as const satisfies Record<PrivatePageKey, readonly string[]>;
 
 /**
@@ -122,7 +126,7 @@ export function privatePageOfPath(pathname: string): PrivatePageKey | null {
 /** The coverage as lines (`<key> <route>…`), as the theme authors' reference prints it. */
 export function privatePageRouteLines(): string[] {
   return [
-    ...PRIVATE_PAGE_KEYS.map((page) => `${page} ${PRIVATE_PAGE_ROUTES[page].length > 0 ? PRIVATE_PAGE_ROUTES[page].join(" ") : "(over public pages: no route of its own)"}`),
+    ...PRIVATE_PAGE_KEYS.map((page) => `${page} ${PRIVATE_PAGE_ROUTES[page].length > 0 ? PRIVATE_PAGE_ROUTES[page].join(" ") : page === "tabBar" ? "(every page that draws the phone tab bar: no route of its own)" : "(over public pages: no route of its own)"}`),
     `store-look ${PRIVATE_STORE_LOOK_ROUTES.join(" ")}`,
     `no-theme ${PRIVATE_UNTHEMED_ROUTES.join(" ")}`,
   ];

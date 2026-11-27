@@ -198,6 +198,10 @@ export const PRIVATE_TOKEN_SPECS: Record<PrivateTokenName, TokenSpec> = /* @__PU
   "height-wide": { schema: px(40, 320), write: (value: number) => `block-size:${value}px`, wide: true },
   fit: { ...choice({ contain: "object-fit:contain", cover: "object-fit:cover" }), on: [" img"] },
   "max-width": { schema: px(480, 1600), write: (value: number) => `max-inline-size:${value}px` },
+  // The phone tab bar's (written by private-tab-bar.ts, which knows the bar's own bounds).
+  backdrop: choice({ blur: "", solid: "" }),
+  lines: choice({ 1: "", 2: "" }),
+  "ring-width": { schema: px(0, 4) },
 }))();
 
 /** Where a phone ends (the store's `sm`). */

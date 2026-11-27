@@ -704,6 +704,38 @@ const HYGIENE_CASES = {
 };
 Object.assign(REGRESSIONS, HYGIENE_CASES);
 
+// ─── The phone tab bar (`tokens.tabBar`): one look on every page that draws it ───
+// Its look by tokens on the account (a buyer's page: no theme stylesheet loads) and on a public page, English and
+// Bangla, at 320 and 390, light and dark: every label whole (two lines at most, never cut), at its floor or above and
+// reading on the bar, the icons inside the bar, the current tab apart by more than its hue, and the page's reserve
+// under it as tall as the bar (`tabBarShown`).
+const TAB_BAR_VIEWPORTS = [{ width: 320, height: 640, scheme: "light" }, { width: 390, height: 844, scheme: "dark" }, { width: 320, height: 640, scheme: "dark" }, { width: 390, height: 844, scheme: "light" }];
+/** The outside theme's bar in tokens (private-tab-bar.test.ts `OUTSIDE_THEME_BAR`). */
+const OUTSIDE_BAR = {
+  bar: { background: "background", border: "border", height: 76, backdrop: "blur" },
+  label: { text: "muted-foreground", size: 10, weight: "700", case: "uppercase", tracking: "wide", lines: "2" },
+  icon: { size: 20, padding: 8, radius: 32, background: { light: "#ebebeb", dark: "#211c31" } },
+  current: { text: "foreground", padding: 12, background: { light: "#e6e6e6", dark: "#272436" }, ring: "#4f5fae", "ring-width": 2 },
+};
+/** A hostile look that saves: a solid bar per scheme, square edged chips, heavy wide capitals, a 3px ring, the bar at its least height. */
+const HOSTILE_BAR = {
+  bar: { background: { light: "#fffbe6", dark: "#06140f" }, border: { light: "#111111", dark: "#5ee9b5" }, height: 72, backdrop: "solid" },
+  label: { text: { light: "#4a3b00", dark: "#c9f2e3" }, size: 10, weight: "800", case: "uppercase", tracking: "wider", lines: "2" },
+  icon: { size: 24, padding: 6, radius: 0, background: { light: "#f1e6b3", dark: "#123528" }, border: { light: "#111111", dark: "#5ee9b5" }, "border-width": 2 },
+  current: { text: { light: "#000000", dark: "#ffffff" }, weight: "800", padding: 6, background: { light: "#fed700", dark: "#0b5d44" }, ring: { light: "#111111", dark: "#ffffff" }, "ring-width": 3 },
+  badge: { background: { light: "#111111", dark: "#fed700" }, text: { light: "#fed700", dark: "#111111" } },
+};
+const TAB_BAR_CASES = {
+  "the phone tab bar in the customer's look, on the account, English and Bangla": { states: ["base", "bn"], tabBar: true, viewports: TAB_BAR_VIEWPORTS, request: { ...REFERENCE, page: "account-profile", tabBar: OUTSIDE_BAR } },
+  "the phone tab bar in the customer's look, on a public page": { states: ["base", "bn"], tabBar: true, viewports: TAB_BAR_VIEWPORTS, request: { ...REFERENCE, page: "home", tabBar: OUTSIDE_BAR } },
+  "the phone tab bar in a hostile look, on the account and a public page": { states: ["base"], tabBar: true, viewports: TAB_BAR_VIEWPORTS, request: { tabs: true, toggle: true, scheme: "system", page: "account-profile", tabBar: HOSTILE_BAR } },
+  "the phone tab bar just above every floor": { states: ["base"], tabBar: true, viewports: TAB_BAR_VIEWPORTS, request: { tabs: true, toggle: true, scheme: "system", page: "account-profile", nearFloorTabBar: true } },
+  // The store's own bar (no tokens) under the customer's tabs: a long label wraps, never ends in "…".
+  "the store's own phone tab bar with the customer's tabs, English and Bangla": { states: ["base", "bn"], tabBar: "store", viewports: TAB_BAR_VIEWPORTS, request: { ...REFERENCE, page: "home" } },
+  "a phone tab bar label under its floor": { refused: "token_value", refusedFor: /label size/, request: { tabs: true, page: "home", tabBar: { label: { size: 8 } } }, states: ["base"] },
+};
+Object.assign(REGRESSIONS, TAB_BAR_CASES);
+
 // ─── PNG pixels (Chromium's 8-bit RGB or RGBA screenshots) ────────────────
 
 function decode(png) {
@@ -1609,6 +1641,73 @@ function drawerLinesShown() {
   return problems;
 }
 
+/**
+ * The phone tab bar as drawn: present; the theme's look written where it set one (`looked`); every label whole (not
+ * cut at its side or below, at most two lines, inside the bar) at 10px or more and reading 4.5:1 on the bar (its colour
+ * over the page's, at its lightest and darkest through a blurred bar); every icon inside the bar, its glyph at least
+ * 14px inside its chip; the current tab apart
+ * from the others by its weight, a ring or its words' lightness; the page's reserve as tall as the bar.
+ */
+function tabBarShown({ looked }) {
+  const problems = [];
+  // A computed colour (`rgb()`, `rgba()`, `color(srgb …)`) as [r, g, b, alpha] in 0 to 255 and 0 to 1.
+  const parseColour = (text) => {
+    const srgb = /color\(srgb ([\d.]+) ([\d.]+) ([\d.]+)(?: \/ ([\d.]+))?\)/.exec(text);
+    if (srgb) return [Number(srgb[1]) * 255, Number(srgb[2]) * 255, Number(srgb[3]) * 255, srgb[4] === undefined ? 1 : Number(srgb[4])];
+    const rgb = /rgba?\(([\d.]+), ([\d.]+), ([\d.]+)(?:, ([\d.]+))?\)/.exec(text);
+    return rgb ? [Number(rgb[1]), Number(rgb[2]), Number(rgb[3]), rgb[4] === undefined ? 1 : Number(rgb[4])] : null;
+  };
+  const bar = document.querySelector('[data-private="tab-bar"]');
+  if (!bar?.checkVisibility()) return ["the phone tab bar is not drawn"];
+  if (looked && !document.querySelector("style[data-tab-bar-look]")) problems.push("the theme's look for the bar is not written on the page");
+  if (!looked && document.querySelector("style[data-tab-bar-look]")) problems.push("a look for the bar is written where the theme set none");
+  const box = bar.getBoundingClientRect();
+  const reserve = Number.parseFloat(getComputedStyle(document.body).paddingBottom);
+  if (reserve + 0.5 < box.height) problems.push(`the page reserves ${reserve}px under its content for a ${Math.round(box.height)}px bar`);
+  const luminance = ([r, g, b]) => [r, g, b].map((channel) => { const value = channel / 255; return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4; }).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
+  const contrast = (a, b) => { const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  const page = parseColour(getComputedStyle(document.body).backgroundColor) ?? [255, 255, 255, 1];
+  const fill = parseColour(getComputedStyle(bar).backgroundColor) ?? [0, 0, 0, 0];
+  const over = (under) => [0, 1, 2].map((index) => fill[index] * fill[3] + under[index] * (1 - fill[3]));
+  const backs = [over([255, 255, 255]), over([0, 0, 0]), over(page)];
+  const words = (element) => element.textContent.replace(/\s+/g, " ").trim();
+  for (const label of bar.querySelectorAll('[data-part="tab-label"]')) {
+    const style = getComputedStyle(label);
+    const rect = label.getBoundingClientRect();
+    const name = words(label);
+    if (label.scrollHeight > label.clientHeight + 1 || label.scrollWidth > label.clientWidth + 1) problems.push(`the label "${name}" is cut (${label.scrollWidth}x${label.scrollHeight} in ${label.clientWidth}x${label.clientHeight})`);
+    const range = document.createRange();
+    range.selectNodeContents(label);
+    const lines = new Set([...range.getClientRects()].filter((each) => each.width > 1).map((each) => Math.round(each.top))).size;
+    if (lines > 2) problems.push(`the label "${name}" takes ${lines} lines`);
+    if (rect.top < box.top - 0.5 || rect.bottom > box.bottom + 0.5) problems.push(`the label "${name}" runs out of the bar`);
+    if (Number.parseFloat(style.fontSize) < 10) problems.push(`the label "${name}" is drawn at ${style.fontSize}, under the bar's 10px`);
+    const ink = parseColour(style.color);
+    if (ink) {
+      const least = Math.min(...backs.map((back) => contrast(ink, back)));
+      if (least < 4.45) problems.push(`the label "${name}" reads ${least.toFixed(2)}:1 on the bar`);
+    }
+  }
+  for (const icon of bar.querySelectorAll('[data-part="tab-icon"]')) {
+    const rect = icon.getBoundingClientRect();
+    if (rect.top < box.top - 0.5 || rect.bottom > box.bottom + 0.5) problems.push(`a tab's icon (${Math.round(rect.height)}px) runs out of the ${Math.round(box.height)}px bar`);
+    // The glyph itself, inside its chip's room and edge: never squeezed to a dot.
+    const style = getComputedStyle(icon);
+    const glyph = rect.width - ["paddingLeft", "paddingRight", "borderLeftWidth", "borderRightWidth"].reduce((sum, side) => sum + Number.parseFloat(style[side]), 0);
+    if (glyph < 14) problems.push(`a tab's icon is drawn ${glyph.toFixed(1)}px wide inside its chip`);
+  }
+  const current = bar.querySelector('[data-part="tab"][aria-current]');
+  const other = bar.querySelector('[data-part="tab"]:not([aria-current])');
+  if (current && other) {
+    const [a, b] = [getComputedStyle(current), getComputedStyle(other)];
+    const icon = current.querySelector('[data-part="tab-icon"]');
+    const ringed = icon && getComputedStyle(icon).boxShadow !== "none";
+    const apart = contrast(parseColour(a.color), parseColour(b.color)) >= 1.45;
+    if (Number(a.fontWeight) <= Number(b.fontWeight) && !ringed && !apart) problems.push("the current tab differs from the others by its hue alone");
+  }
+  return problems;
+}
+
 /** Every line inside `scope` reads its title first: no detail, price, stepper or action comes before it in the markup. */
 function lineReadingOrder(scope) {
   const problems = [];
@@ -2156,6 +2255,7 @@ async function open(context, id, width, server5xx, height = 900) {
 async function draw({ context, id, state, width, height, focus, hover, interact, rows, controls, request, drawn, entry }) {
   const problems = [];
   const server5xx = [];
+  if (entry?.tabBar) return drawTabBar({ context, id, width, height, entry, request });
   if (request?.page === "home") return drawDrawer({ context, id, width, height, problems, server5xx, rows, state, request, entry });
   if (request?.page === "sample-checkout") return drawCheckout({ context, id, width, height, request, entry });
   if (entry?.blockLazy) await context.route(entry.blockLazy, (route) => route.abort());
@@ -2460,6 +2560,22 @@ async function drawCheckout({ context, id, width, height = 900, request, entry }
   return problems;
 }
 // ─── end of the payment step ───
+
+/** The phone tab bar on the page its case names, at a phone's width: `tabBarShown`. */
+async function drawTabBar({ context, id, width, height = 844, entry, request }) {
+  const problems = [];
+  const server5xx = [];
+  const page = await context.newPage();
+  page.on("response", (answer) => { if (answer.status() >= 500) server5xx.push(`${answer.status()} ${answer.request().method()} ${new URL(answer.url()).pathname}`); });
+  await page.setViewportSize({ width, height });
+  await timed("load", () => page.goto(`${gallery.url}/__gallery/e/${id}`, { waitUntil: "load" }));
+  await page.waitForSelector('[data-private="tab-bar"]', { timeout: 20_000 }).catch(() => {});
+  await settle(page);
+  problems.push(...(await page.evaluate(tabBarShown, { looked: entry.tabBar !== "store" && Boolean(request.tabBar || request.nearFloorTabBar) })).map((problem) => `tab bar: ${problem}`));
+  problems.push(...server5xx.map((answer) => `server: ${answer}`));
+  await page.close();
+  return problems;
+}
 
 async function drawDrawer({ context, id, width, height = 900, problems, server5xx, state, request, entry }) {
   const at = (label, list) => problems.push(...list.map((problem) => `${label}: ${problem}`));

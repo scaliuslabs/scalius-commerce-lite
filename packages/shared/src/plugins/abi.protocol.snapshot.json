@@ -24396,6 +24396,7 @@
      "/account/downloads",
      "/warranty-claims/[orderId]/[claimId]"
     ],
+    "tabBar": [],
     "store-look": [
      "/track-order",
      "/checkout/quick",

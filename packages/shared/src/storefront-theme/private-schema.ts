@@ -47,8 +47,10 @@ export type PrivateTokens = Partial<Record<PrivatePageKey, Record<string, Partia
  * messages, review stars, an order's payment choices, the menu's count pill, a
  * filled button that removes something), underlines hovered controls where a
  * box has no hover surface, and gives `action` only to real buttons and links.
+ * Version 12: the phone tab bar's look (`tokens.tabBar`, private-tab-bar.ts), one
+ * look on every page that draws the bar.
  */
-export const PRIVATE_CHECKER_VERSION = 11;
+export const PRIVATE_CHECKER_VERSION = 12;
 
 /**
  * Two versions of the private pages' compile, because they fail differently:
@@ -115,7 +117,7 @@ const name = z.string().regex(/^[a-z][a-z0-9_.-]{0,63}$/);
  * receipt and the account draw their parts in the store's order; an
  * arrangement other than the default is refused (`not_available`).
  */
-export const PRIVATE_LOOK_ONLY_PAGES: readonly PrivatePageKey[] = ["receipt", "account"];
+export const PRIVATE_LOOK_ONLY_PAGES: readonly PrivatePageKey[] = ["receipt", "account", "tabBar"];
 
 /** Refused with this reason and plain words: what a theme cannot set on a private page in this release. */
 export const PRIVATE_NOT_AVAILABLE = "not_available";

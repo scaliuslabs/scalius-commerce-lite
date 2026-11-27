@@ -262,6 +262,14 @@ account style dialog-text [data-private="dialog"] [data-part="dialog-text"] toke
 account style dialog-agree [data-private="dialog"] [data-part="dialog-agree"] tokens=background,text,border,border-width,radius,padding
 account style dialog-back [data-private="dialog"] [data-part="dialog-back"] tokens=text,border,border-width,radius,ring,inset,weight boundary=edge
 account style dialog-confirm [data-private="dialog"] [data-part="dialog-confirm"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill outranks=dialog-back:size+weight
+tabBar root data-private=tab-bar
+tabBar part bar hooks=tab-bar,tab,tab-label,tab-icon,tab-badge
+tabBar layouts 
+tabBar style bar [data-private="tab-bar"] tokens=background,border,height,backdrop
+tabBar style label [data-private="tab-bar"] [data-part="tab-label"] tokens=text,size,weight,case,tracking,lines
+tabBar style current [data-private="tab-bar"] [data-part="tab"][aria-current] tokens=text,weight,background,padding,ring,ring-width
+tabBar style icon [data-private="tab-bar"] [data-part="tab-icon"] tokens=size,background,border,border-width,radius,padding graphic
+tabBar style badge [data-private="tab-bar"] [data-part="tab-badge"] tokens=background,text
 dialog root data-private=dialog hooks=sign-in,dialog-title,dialog-text,dialog-agree,dialog-actions,dialog-back,dialog-confirm,field-label
 buyer-ui attributes=data-buyer-ui-target,data-buyer-ui-app,data-ui
 chrome roots data-private=core-header|core-footer controls=header|footer|none
@@ -310,3 +318,6 @@ token width-wide {"$schema":"https://json-schema.org/draft/2020-12/schema","type
 token height-wide {"$schema":"https://json-schema.org/draft/2020-12/schema","type":"integer","minimum":40,"maximum":320}
 token fit {"$schema":"https://json-schema.org/draft/2020-12/schema","type":"string","enum":["contain","cover"]}
 token max-width {"$schema":"https://json-schema.org/draft/2020-12/schema","type":"integer","minimum":480,"maximum":1600}
+token backdrop {"$schema":"https://json-schema.org/draft/2020-12/schema","type":"string","enum":["blur","solid"]}
+token lines {"$schema":"https://json-schema.org/draft/2020-12/schema","type":"string","enum":["1","2"]}
+token ring-width {"$schema":"https://json-schema.org/draft/2020-12/schema","type":"integer","minimum":0,"maximum":4}

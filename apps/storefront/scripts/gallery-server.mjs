@@ -347,7 +347,14 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
           const { nearFloorAccountTokens } = await vite.ssrLoadModule("/src/gallery/near-floor.ts");
           body.privatePages = { tokens: { account: nearFloorAccountTokens({ ...shared.privatePagesContextOf(theme), themeApp: null }) } };
         }
-        const parsed = shared.storefrontPrivatePagesSchema.safeParse({ ...shared.storefrontPrivatePagesDefault(), ...structuredClone(body.privatePages ?? reference?.REFERENCE_PRIVATE_PAGES ?? {}) });
+        // The phone tab bar's look (`tabBar`, or `nearFloorTabBar`: generated just above every floor), beside the rest.
+        const source = structuredClone(body.privatePages ?? reference?.REFERENCE_PRIVATE_PAGES ?? {});
+        if (body.nearFloorTabBar === true) {
+          const { nearFloorTabBarTokens } = await vite.ssrLoadModule("/src/gallery/near-floor.ts");
+          body.tabBar = nearFloorTabBarTokens({ ...shared.privatePagesContextOf(theme), themeApp: null });
+        }
+        if (body.tabBar) source.tokens = { ...source.tokens, tabBar: structuredClone(body.tabBar) };
+        const parsed = shared.storefrontPrivatePagesSchema.safeParse({ ...shared.storefrontPrivatePagesDefault(), ...source });
         if (!parsed.success) {
           const named = parsed.error.issues.find((issue) => typeof issue.params?.reason === "string") ?? parsed.error.issues[0];
           return sendJson(response, 422, { issues: [{ path: named.path, reason: named.params?.reason ?? "schema", message: named.message }] });

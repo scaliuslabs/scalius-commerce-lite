@@ -33,6 +33,7 @@
 // (`readStoredPrivatePages`): they are dropped and its private pages draw
 // the store's default look until the next save; nothing on the render path
 // draws one.
+import { compileTabBarTokens } from "./private-tab-bar";
 import { STORE_ACTION_AND_AMOUNT_WORDS, foldStoreWords } from "../store-words";
 import { parsePluginSurfaceKey } from "../plugins/storefront";
 import { storefrontDarkPalette, type StorefrontThemeTokens } from "./tokens";
@@ -273,6 +274,13 @@ export function compileStorefrontPrivatePages(value: StorefrontPrivatePages, con
   const painted = context.palettes.some((palette) => palette.pagePaint);
   for (const page of PRIVATE_PAGE_KEYS) {
     const own = value.tokens[page];
+    // The phone tab bar: one look on every page that draws it, written and checked on its own (private-tab-bar.ts).
+    if (page === "tabBar") {
+      const bar = compileTabBarTokens(own, context.palettes);
+      report(page, bar.issues);
+      if (bar.issues.length === 0 && bar.css) tokenCss[page] = bar.css;
+      continue;
+    }
     const tokens = Object.keys(own ?? {}).length > 0 ? own! : painted && privatePageHasOwnPage(page) && privatePageNamed({ pages, tokens: value.tokens }, page) ? {} : null;
     if (!tokens) continue;
     const arrangement = privatePageArrangement({ pages }, page) ?? context.defaults?.[page];

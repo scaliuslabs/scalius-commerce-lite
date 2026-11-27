@@ -499,6 +499,18 @@ export const MUTATIONS = {
     cases: ["five lines in the customer's drawer on a phone"],
     expect: /drawer lines: an app block in the drawer's footer .*pane of its own/,
   },
+  "H-m a tab's long name ends in an ellipsis": {
+    why: "the store's own bar keeps each tab's name on one line, so \"Gaming News\" at 320px is cut to \"Gaming…\"",
+    rewrites: [rewrite("apps/storefront/src/components/header/MobileTabBar.astro", "    overflow-wrap: anywhere;\n    white-space: normal;", "    text-overflow: ellipsis;\n    white-space: nowrap;")],
+    cases: ["the store's own phone tab bar with the customer's tabs, English and Bangla"],
+    expect: /tab bar: the label "[^"]+" is cut/,
+  },
+  "H-n a tab's icon squeezed inside its chip": {
+    why: "the bar's icon box is the icon's size alone, so its chip's room is taken from the glyph",
+    rewrites: [rewrite("packages/shared/src/storefront-theme/private-tab-bar.ts", "inline-size:${size + 2 * padding + 2 * edge}px;block-size:${size + 2 * padding + 2 * edge}px", "inline-size:${size}px;block-size:${size}px")],
+    cases: ["the phone tab bar in the customer's look, on the account, English and Bangla"],
+    expect: /tab bar: a tab's icon is drawn/,
+  },
   "H-i the dialog's actions stack with Confirm on top": {
     why: "Confirm comes first in the dialog's markup: where its large Confirm and Go back do not fit side by side, Confirm stacks on top, away from the thumb",
     rewrites: [rewrite(DIALOG, "  actions.append(back, confirm);", "  actions.append(confirm, back);")],

@@ -22,6 +22,7 @@ import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
 import { getLayoutData } from "@/lib/api";
 import { privateAssetUrls } from "@/lib/private-pages/html";
+import { privatePagesCss } from "@scalius/shared/storefront-theme";
 import { readStorefrontExtensions } from "@scalius/shared/plugins/storefront-components";
 import type { STOREFRONT_MOBILE_TAB_ICONS } from "@scalius/shared/storefront-theme";
 import { PHONE_OFFERS_HREF, phoneTabCurrent, shownPhoneTabs, type PhoneTab } from "./phone-navigation";
@@ -42,7 +43,10 @@ interface Props {
 type Icon = (typeof STOREFRONT_MOBILE_TAB_ICONS)[number];
 
 const { tabs, compare = false, menu = "core" } = Astro.props;
-const { language } = await currentRequestTheme(Astro.locals);
+const { language, theme } = await currentRequestTheme(Astro.locals);
+// The theme's look for the bar (`privatePages.tokens.tabBar`, compiled at save: private-tab-bar.ts), the same on every
+// page: after the store's own rules below, so it replaces them; a theme's own stylesheet outranks both on a public page.
+const look = theme ? privatePagesCss(theme.privatePages, "tabBar") : "";
 const copy = storefrontCopy(language).chrome;
 const shown = shownPhoneTabs(tabs, compare);
 // A link tab's own image: a file of the theme's app while that app is active, else the store's link icon.
@@ -59,7 +63,7 @@ const iconOf = (tab: PhoneTab): { name: Icon } | { src: string } => {
 const labelOf = (tab: PhoneTab): string => (tab.kind === "link" ? tab.label : copy.tabs[tab.kind]);
 ---
 
-<nav id="mobile-tab-bar" class="mobile-tab-bar" data-part="tab-bar" aria-label={copy.tabs.label} data-tab-menu={menu}>
+<nav id="mobile-tab-bar" class="mobile-tab-bar" data-part="tab-bar" data-private="tab-bar" aria-label={copy.tabs.label} data-tab-menu={menu}>
   <ul style={`--mobile-tab-count: ${shown.length}`}>
     {
       shown.map((tab) => {
@@ -119,6 +123,7 @@ const labelOf = (tab: PhoneTab): string => (tab.kind === "link" ? tab.label : co
     }
   </ul>
 </nav>
+{look && <style is:inline data-tab-bar-look set:html={look} />}
 
 <script>
   import { pagePath } from "@/lib/presence-url";
@@ -147,14 +152,15 @@ const labelOf = (tab: PhoneTab): string => (tab.kind === "link" ? tab.label : co
 </script>
 
 <style is:global>
-  :root {
+  /* The store's own bar. Every rule here has zero specificity (`:where`), so the theme's tokens (written after it)
+     replace it and any rule of a theme's own stylesheet outranks it on a public page, whatever loads first. */
+  :where(:root) {
     --mobile-tabs-height: 3.5rem;
     --mobile-tabs-reserve: calc(var(--mobile-tabs-height) + 1px + env(safe-area-inset-bottom, 0px));
   }
 
-  /* Reserve the bar's height (zero specificity, so the product buy bar's own
-     reserve wins while it replaces the tabs), only where the bar is drawn: an
-     app header skin draws its own phone navigation and no tab bar. */
+  /* Reserve the bar's height (the product buy bar's own reserve wins while it replaces the tabs), only where the bar
+     is drawn: an app header skin draws its own phone navigation and no tab bar. */
   @media (max-width: 63.999rem) {
     :where(html[data-mobile-nav="tabs"]:has(#mobile-tab-bar)) {
       scroll-padding-bottom: calc(var(--mobile-tabs-reserve) + 0.5rem);
@@ -164,10 +170,8 @@ const labelOf = (tab: PhoneTab): string => (tab.kind === "link" ? tab.label : co
       padding-bottom: var(--mobile-tabs-reserve);
     }
   }
-</style>
 
-<style>
-  .mobile-tab-bar {
+  :where(.mobile-tab-bar) {
     position: fixed;
     inset-inline: 0;
     bottom: 0;
@@ -183,12 +187,12 @@ const labelOf = (tab: PhoneTab): string => (tab.kind === "link" ? tab.label : co
   }
 
   @media (min-width: 64rem) {
-    .mobile-tab-bar {
+    :where(.mobile-tab-bar) {
       display: none;
     }
   }
 
-  :global(html[data-sticky-buy-visible]) .mobile-tab-bar {
+  :where(html[data-sticky-buy-visible] .mobile-tab-bar) {
     transform: translateY(100%);
     visibility: hidden;
     transition:
@@ -196,7 +200,7 @@ const labelOf = (tab: PhoneTab): string => (tab.kind === "link" ? tab.label : co
       visibility 0s linear 200ms;
   }
 
-  ul {
+  :where(.mobile-tab-bar > ul) {
     display: grid;
     grid-template-columns: repeat(var(--mobile-tab-count, 5), minmax(0, 1fr));
     height: var(--mobile-tabs-height);
@@ -204,7 +208,7 @@ const labelOf = (tab: PhoneTab): string => (tab.kind === "link" ? tab.label : co
     margin-inline: auto;
   }
 
-  .mobile-tab {
+  :where(.mobile-tab) {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -222,43 +226,48 @@ const labelOf = (tab: PhoneTab): string => (tab.kind === "link" ? tab.label : co
     -webkit-tap-highlight-color: transparent;
   }
 
-  .mobile-tab[aria-current] {
+  :where(.mobile-tab[aria-current]) {
     color: var(--foreground);
     font-weight: 600;
   }
 
-  /* One line: a long name ends in an ellipsis inside its column. */
-  .mobile-tab > span:last-child {
+  /* A label is never cut: a long name ("Gaming News" at 320px, in English or Bangla) takes a second line. */
+  :where(.mobile-tab [data-part="tab-label"]) {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
     min-width: 0;
     max-width: 100%;
     padding-inline: 0.125rem;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.15;
   }
 
-  .mobile-tab:active > :first-child {
+  :where(.mobile-tab:active > :first-child) {
     transform: scale(0.92);
   }
 
-  .mobile-tab:focus-visible {
+  :where(.mobile-tab:focus-visible) {
     outline: 2px solid var(--foreground);
     outline-offset: -4px;
     border-radius: var(--radius);
   }
 
-  .mobile-tab-icon {
+  :where(.mobile-tab-icon) {
     position: relative;
     display: inline-flex;
   }
 
-  img {
+  :where(.mobile-tab img[data-part="tab-icon"]) {
     width: 1.375rem;
     height: 1.375rem;
     object-fit: contain;
   }
 
-  .mobile-tab :global(svg) {
+  :where(.mobile-tab svg[data-part="tab-icon"]) {
     width: 1.375rem;
     height: 1.375rem;
     fill: none;
@@ -269,15 +278,15 @@ const labelOf = (tab: PhoneTab): string => (tab.kind === "link" ? tab.label : co
     transition: transform 120ms ease;
   }
 
-  .mobile-tab[aria-current] :global(svg) {
+  :where(.mobile-tab[aria-current] svg[data-part="tab-icon"]) {
     stroke-width: 2;
   }
 
-  .mobile-tab-badge:empty {
+  :where(.mobile-tab-badge:empty) {
     display: none;
   }
 
-  .mobile-tab-badge {
+  :where(.mobile-tab-badge) {
     position: absolute;
     top: -0.375rem;
     inset-inline-end: -0.625rem;
@@ -301,9 +310,7 @@ const labelOf = (tab: PhoneTab): string => (tab.kind === "link" ? tab.label : co
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .mobile-tab-bar,
-    .mobile-tab :global(svg),
-    .mobile-tab-badge {
+    :where(.mobile-tab-bar, .mobile-tab svg, .mobile-tab-badge) {
       transition: none;
     }
   }

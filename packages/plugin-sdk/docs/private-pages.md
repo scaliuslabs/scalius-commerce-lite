@@ -340,6 +340,33 @@ A label that names an action or an amount takes one of the store's **variants**,
 
 The words a part's variant draws are the store's: "Remove" (সরান) for `remove: words`, "Items" (পণ্য) for `summary: with-items`. Icons: `cart.empty`, `drawer.empty`.
 
+## The phone tab bar
+
+The store's phone bar (`blocks.mobileNav` with `bottom-tabs`, [themes.md](themes.md)) is drawn on public pages and on the buyer's receipt and account, where no theme stylesheet loads. Its look is one set of tokens, `tokens.tabBar`, that draws it the same on every page: the store compiles and checks it with the other private pages (`compiled.css.tabBar`; refused on its own: the bar then keeps the store's own look and your other pages keep theirs). It takes no arrangement (`pages.tabBar` is refused, `not_available`). Without it the bar is the store's: the page colour at 94% under a blur, 56px, its labels 12px in the muted words and wrapping to a second line, never cut to "…".
+
+| Target | Tokens | What it draws |
+| --- | --- | --- |
+| `bar` | `background`, `border` (its top edge), `height` (56 to 96 px; the page reserves it under its content), `backdrop` (`blur`, the default: the colour at 94% over a blur; or `solid`) | The bar. |
+| `label` | `text` (every tab's words and icon), `size` (10 to 16 px), `weight`, `case`, `tracking`, `lines` (`2`, the default: a long label wraps; `1`: one line, a label longer than its column ends in "…") | Each tab's label. |
+| `current` | `text`, `weight`, `background` and `padding` (0 to 16 px) of its icon's chip, `ring` and `ring-width` (0 to 4 px) around that chip | The tab of the page the buyer is on. |
+| `icon` | `size` (16 to 32 px), `background` (a chip behind it; none without), `border` and `border-width` (0 to 2 px), `radius`, `padding` (0 to 16 px) | Each tab's icon, in its tab's colour. |
+| `badge` | `background`, `text` | The cart's count. |
+
+What the save checks, in every palette buyers see: a label and the current tab's label read 4.5:1 on the bar (under a blur, on the bar's colour with what shows through it at its lightest and its darkest); an icon reads 3:1 on its chip (or on the bar); the cart count reads 4.5:1 on its badge and the badge 3:1 on the bar; the current tab differs from the others by more than its hue: a heavier weight, words at least 1.5:1 apart from theirs, or a ring that reads 3:1 on the bar; and the bar is as tall as a tab needs (its largest icon box with its chip and ring, 3px, and its label's lines at 1.15), so no label is cut. A label's floor is 10px, a phone tab bar's own label size (a page's words keep 12px). Refusals: `token_value` (a value outside its bounds, a bar too short), `contrast`, `unknown_style`, `unknown_token`.
+
+Precedence: every rule the tokens write has zero specificity (`:where`) and comes after the store's own bar rules (also zero specificity), so the tokens replace the store's look; on a public page any rule of your own stylesheet outranks both, whatever loads first. On the buyer's own pages your stylesheet never loads: the tokens are the bar's look there. The same holds for the bar's height: `--mobile-tabs-height` (and the page's reserve under it, `--mobile-tabs-reserve`) are the store's at zero specificity, so `bar.height` sets them, and a plain `:root` rule of your stylesheet outranks them on a public page with no specificity trick.
+
+A bar like a dark game store's, 76px with two-line capitals and round chips:
+
+```json
+{
+  "bar": { "background": "background", "border": "border", "height": 76, "backdrop": "blur" },
+  "label": { "text": "muted-foreground", "size": 10, "weight": "700", "case": "uppercase", "tracking": "wide", "lines": "2" },
+  "icon": { "size": 20, "padding": 8, "radius": 32, "background": { "light": "#ebebeb", "dark": "#211c31" } },
+  "current": { "text": "foreground", "padding": 12, "background": { "light": "#e6e6e6", "dark": "#272436" }, "ring": "#4f5fae", "ring-width": 2 }
+}
+```
+
 ## The receipt and the account
 
 The receipt (`/order-success`: the confirmation and the order's status view, and the theme editor's sample receipt) and every page of the account (its orders, an order, the profile with its addresses and saved cards, the inbox and a thread, warranties, reviews, gift cards and downloads, and a guest's warranty claim thread) take **tokens** (`tokens.receipt`, `tokens.account`), checked by the same colour table and floors as the cart: contrast per scheme, and the total never drawn smaller than another money row. They are not arranged yet: an arrangement other than the store's own for `pages.receipt` or `pages.account` is refused (`not_available`). Their parts are named in the [anatomy](#anatomy-reference) so the names stay when arranging comes.
@@ -383,6 +410,7 @@ cartDrawer (over public pages: no route of its own)
 checkout /checkout
 receipt /order-success
 account /account /account/orders/[id] /account/profile /account/inbox /account/inbox/[id] /account/warranties /account/reviews /account/gift-cards /account/downloads /warranty-claims/[orderId]/[claimId]
+tabBar (every page that draws the phone tab bar: no route of its own)
 store-look /track-order /checkout/quick /checkout/continue/[continuationId] /agent/continue/[continuationId] /cart/recover/[token] /payment-recovery /gift-card-balance /newsletter /newsletter/confirm /newsletter/unsubscribe
 no-theme /account/licence-key /account/delivery-message
 ```
@@ -1169,6 +1197,7 @@ What the save proves is checked again by drawing. `pnpm test:private-pages` (in 
 - a store that asks for its terms to be ticked: the required box and its words on a details form coloured per scheme;
 - lines, summary and details in one `columns` with twenty empty groups beside them: refused at save, or drawn with every part at its floor;
 - the default look and the customer's look with one, twenty and ninety-nine lines on a 390×700 phone, a 768×1024 tablet and a 1280×800 laptop;
+- the phone tab bar's look (`tokens.tabBar`) on the account and a public page: the customer's, a hostile one and one just above every floor, and the store's own bar with the customer's tabs;
 - the customer's cart (the reference above), offered and protected, at 390 and 1280, light and dark, and its protected cart in the drawer with the add-on row open;
 - the store's controls in its header, in the strip at the page's end and nowhere, in a store with the light or dark switch and two markets;
 - a stored document forged past the save (a stylesheet, the theme's chrome and search, content blocks in the page and a line): the store reads it with all of them dropped and its private pages' compile refused, so the theme stays (its light or dark switch is drawn) and its cart draws the default look with none of them;
@@ -1217,6 +1246,7 @@ In every draw: the first screen, the store's controls, prominence, apps and add-
 | Drawer lines | Five lines in the drawer on a 390x844 phone show fewer than two whole lines, or on a 320x568 one no whole line (the customer's five lines too: four options each, one protected), the total or Check out is not wholly on screen, or an app block in the drawer's footer is squeezed or lies in a pane of its own shorter than it. |
 | Dialog actions | A confirmation dialog's Go back or Confirm says other words than the theme's `dialog.goBack` and `dialog.confirm`, runs out of the dialog or cuts its words, where the two do not fit side by side stacks with Confirm on top (it belongs at the bottom, nearest the thumb), or reads its actions in another order than it draws them (Go back, then Confirm). |
 | Empty cart | An empty cart shows no heading or no link back to the shop, with its lazy file refused (they are the page's own markup). |
+| Phone tab bar | On the account and a public page at 320 and 390 px, light and dark, English and Bangla (the customer's look, a hostile look, one just above every floor, the store's own): a label is cut, takes more than two lines, runs out of the bar, is drawn under 10px or reads under 4.5:1 on the bar; an icon runs out of the bar or its glyph is under 14px inside its chip; the current tab differs by its hue alone; the page reserves less than the bar's height; the theme's look is not written where it set one. |
 | Drawer line block | A line's app block in the drawer lies elsewhere than the cart page's line puts it: under the whole line from the image's edge, or in the text column. |
 | Layout shift | The customer's cart, at 390 and 1280 px, scores 0.05 or more in layout shift (as Chrome counts it, no input) from its first paint until it is still; behind an 800ms cart check, 0.1 or more on a first view or 0.05 or more on the next. |
 | Server | Any request answers 5xx. |
@@ -1228,7 +1258,7 @@ In every draw: the first screen, the store's controls, prominence, apps and add-
 | The gate (named cases and the fast seed set) | `pnpm test:private-pages` |
 | A longer run | `pnpm test:private-pages --seeds 30 --from 100` (`--no-named` for seeds only, `--all-states` for every state of each) |
 | One seed or case | `--seed 7`, `--case "B4"` (a failing seed prints its document) |
-| The gate's own test | `pnpm test:private-pages --mutations`: the cases the mutations name draw clean unmutated first, in the same run; then every known-bad change of the store's code, as the test gallery serves it, must fail the check it names (67 today: among them a colour checked in one scheme only, rows inside an app's box checked on the target, the add-on bar without its row, prominence off, the total ranked by size only, a filled button's fill unchecked, an edge read by a border it does not draw, Go back filled, the switch drawn under `controls: none`, a nested control's cells left to the row around it, shape tokens at zero specificity, Place order's dialog in the store's words, the empty cart's words left to its lazy file, the action row reaching the filled actions, an edge's solid style at zero specificity with the action row reaching it, the drawer's line block in its text column, outline buttons on their surface radius, the radius steps rounding a square theme, a dialog's actions stacking with Confirm on top, a line reading its details before its title, the drawer's footer never yielding to its lines, and its blocks in a pane shorter than they are). A rule of the store's stylesheet is undone by CSS the gallery draws after the store's sheets (Tailwind reads the stylesheet's imports from disk), naming the source text it takes back |
+| The gate's own test | `pnpm test:private-pages --mutations`: the cases the mutations name draw clean unmutated first, in the same run; then every known-bad change of the store's code, as the test gallery serves it, must fail the check it names (69 today: among them a colour checked in one scheme only, rows inside an app's box checked on the target, the add-on bar without its row, prominence off, the total ranked by size only, a filled button's fill unchecked, an edge read by a border it does not draw, Go back filled, the switch drawn under `controls: none`, a nested control's cells left to the row around it, shape tokens at zero specificity, Place order's dialog in the store's words, the empty cart's words left to its lazy file, the action row reaching the filled actions, an edge's solid style at zero specificity with the action row reaching it, the drawer's line block in its text column, outline buttons on their surface radius, the radius steps rounding a square theme, a dialog's actions stacking with Confirm on top, a line reading its details before its title, the drawer's footer never yielding to its lines, its blocks in a pane shorter than they are, a tab's long name cut to an ellipsis, and a tab's icon squeezed inside its chip). A rule of the store's stylesheet is undone by CSS the gallery draws after the store's sheets (Tailwind reads the stylesheet's imports from disk), naming the source text it takes back |
 
 The gate checks the cart page with the fixture store's data, not every store's data.
 
@@ -1501,6 +1531,14 @@ account style dialog-text [data-private="dialog"] [data-part="dialog-text"] toke
 account style dialog-agree [data-private="dialog"] [data-part="dialog-agree"] tokens=background,text,border,border-width,radius,padding
 account style dialog-back [data-private="dialog"] [data-part="dialog-back"] tokens=text,border,border-width,radius,ring,inset,weight boundary=edge
 account style dialog-confirm [data-private="dialog"] [data-part="dialog-confirm"] tokens=background,gradient,text,border,border-width,border-style,radius,shadow,ring,inset,font,weight,size,case,tracking boundary=fill outranks=dialog-back:size+weight
+tabBar root data-private=tab-bar
+tabBar part bar hooks=tab-bar,tab,tab-label,tab-icon,tab-badge
+tabBar layouts 
+tabBar style bar [data-private="tab-bar"] tokens=background,border,height,backdrop
+tabBar style label [data-private="tab-bar"] [data-part="tab-label"] tokens=text,size,weight,case,tracking,lines
+tabBar style current [data-private="tab-bar"] [data-part="tab"][aria-current] tokens=text,weight,background,padding,ring,ring-width
+tabBar style icon [data-private="tab-bar"] [data-part="tab-icon"] tokens=size,background,border,border-width,radius,padding graphic
+tabBar style badge [data-private="tab-bar"] [data-part="tab-badge"] tokens=background,text
 dialog root data-private=dialog hooks=sign-in,dialog-title,dialog-text,dialog-agree,dialog-actions,dialog-back,dialog-confirm,field-label
 buyer-ui attributes=data-buyer-ui-target,data-buyer-ui-app,data-ui
 chrome roots data-private=core-header|core-footer controls=header|footer|none

@@ -8,6 +8,8 @@
 // where a comfortable theme hides them. The save's own check settles each value.
 import {
   compilePrivateTokens,
+  compileTabBarTokens,
+  PRIVATE_TAB_BAR_DEFAULTS,
   compileStorefrontPrivatePages,
   PRIVATE_PAGES,
   storefrontPrivatePagesDefault,
@@ -122,4 +124,34 @@ export function nearFloorAccountTheme(context: PrivatePagesCompileContext): Near
 
 export function nearFloorAccountTokens(context: PrivatePagesCompileContext): Record<string, Record<string, unknown>> {
   return nearFloorAccountTheme(context).tokens;
+}
+
+/**
+ * The phone tab bar's look just above every floor against the store's palettes (`tokens.tabBar`): the store's blurred
+ * bar on its page colour, every tab's words and the current tab's at 4.5:1 on it at its lightest and darkest (the
+ * current one heavier, so its weight tells it apart), each icon at 3:1 on a chip, the cart count at 4.5:1 on a badge
+ * that reads 3:1 on the bar, a 10px label (the bar's floor) and the bar exactly as tall as a tab needs. Each colour
+ * starts a hair above its floor and moves out only while the save refuses it.
+ */
+export function nearFloorTabBarTokens(context: PrivatePagesCompileContext): Record<string, Record<string, unknown>> {
+  const icon = 20;
+  const padding = 6;
+  const height = Math.ceil(icon + 2 * padding + PRIVATE_TAB_BAR_DEFAULTS.gap + 2 * 10 * PRIVATE_TAB_BAR_DEFAULTS.leading);
+  for (const margin of NEAR_FLOOR_MARGINS) {
+    const scheme = (pick: (colors: (typeof context.palettes)[number]["colors"]) => string) => Object.fromEntries(context.palettes.map((palette) => [palette.scheme, pick(palette.colors)]));
+    const under = (colors: (typeof context.palettes)[number]["colors"]) => [storefrontThemeMix(colors.background, "#ffffff", 0.06), storefrontThemeMix(colors.background, "#000000", 0.06)];
+    const per = (values: Record<string, string>) => (context.palettes.length === 1 ? Object.values(values)[0]! : values);
+    const label = scheme((colors) => justAbove(under(colors), 4.5, margin));
+    const chipOf = (words: string) => justAbove([words], 3, margin);
+    const badge = scheme((colors) => justAbove(under(colors), 3, margin));
+    const tokens = {
+      bar: { background: "background", height, backdrop: "blur" },
+      label: { text: per(label), size: 10, weight: "500", lines: "2" },
+      icon: { size: icon, padding, radius: 4, background: per(Object.fromEntries(Object.entries(label).map(([key, words]) => [key, chipOf(words)]))) },
+      current: { text: per(label), weight: "700", padding },
+      badge: { background: per(badge), text: per(Object.fromEntries(Object.entries(badge).map(([key, fill]) => [key, justAbove([fill], 4.5, margin)]))) },
+    };
+    if (compileTabBarTokens(tokens as never, context.palettes).issues.length === 0) return tokens;
+  }
+  throw new Error("the near-floor tab bar does not save");
 }
