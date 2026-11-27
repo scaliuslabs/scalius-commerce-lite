@@ -203,13 +203,14 @@ export const MUTATIONS = {
   },
   // M9 once left out, for every nested row, the cells its parent has (`inherited` for controls and fields too). A
   // nested row's element sits inside its parent's (`nested`), so a cell equal to the parent's is the one it inherits:
-  // that mutation drew the same page and could not fail (it survived). The property it guarded, a filled button's
-  // words in its own row's colours and not the row around it, is guarded here on today's code.
-  "M9 a filled button's words left to the row around it": {
-    why: "a nested control's row writes no cells: Place order's palette class (text-primary-foreground) reads its dock's dark words on its purple fill",
+  // that mutation drew the same page and could not fail (it survived). The property it guarded, a control's palette
+  // classes reading its own row's cells and not the row around it, is guarded here on today's code. (Place order's
+  // words survive it: its row writes their colour itself; the stepper's edge, a palette class, does not.)
+  "M9 a nested control's cells left to the row around it": {
+    why: "a nested control's row writes no cells of its own: the stepper's border-border class reads its line's border colour, 1.3:1 on the line",
     rewrites: [rewrite(TOKENS, "    ...CELL_PROPERTIES.map(([cell, property]) => row[cell] && (row[cell] !== inherited?.[cell] || also.has(property)) ? `${property}:${row[cell]}` : \"\"),", "    ...CELL_PROPERTIES.map(([cell, property]) => row[cell] && !(row.nested && row.kind === \"control\") && (row[cell] !== inherited?.[cell] || also.has(property)) ? `${property}:${row[cell]}` : \"\"),")],
     cases: [WORDS_APART],
-    expect: /"Place order" .*(?:reads [\d.]+:1|is none of its row's colours \(submit)/,
+    expect: /line-quantity: its border reads [\d.]+:1 on what is behind it|"Place order" .*(?:reads [\d.]+:1|is none of its row's colours \(submit)/,
   },
   "M10 a title's clamp on its heading": {
     why: "the line title's heading clips its link's focus ring",
@@ -437,10 +438,10 @@ export const MUTATIONS = {
     expect: /\[data-part="cart-empty"\] h2: (?:not visible|missing)/,
   },
   "H-d the action row reaches the filled actions": {
-    why: "the cart's action row (every .bg-primary) no longer leaves out Place order and Confirm: its yellow, reading 1.4:1 on the dock, paints them",
+    why: "the cart's action row (every .bg-primary) no longer leaves out Place order and Confirm: its yellow gradient paints over their own rows' fill",
     rewrites: [rewrite(ANATOMY, '  styles: actionApart("cart", CART_STYLES),', "  styles: CART_STYLES,")],
     cases: [YELLOW_ACTION],
-    expect: /(?:Place order|Confirm): its fill reads [\d.]+:1|"(?:Place order|Confirm)[^"]*" .*is none of its row's colours \((?:submit|dialog-confirm)/,
+    expect: /paints an image its row \((?:submit|dialog-confirm)\) does not|(?:Place order|Confirm): its fill reads [\d.]+:1|"(?:Place order|Confirm)[^"]*" .*is none of its row's colours \((?:submit|dialog-confirm)/,
   },
   // With the action row kept apart nothing a theme writes reaches a filled action's border style, so the solid edge's
   // prefix guards in depth: undone alone it draws the same page. Undone with the action row reaching Place order (H-d),
@@ -471,7 +472,8 @@ export const MUTATIONS = {
   "H-h the radius steps add a pixel to a square theme": {
     why: "rounded-lg and rounded-xl draw the theme's radius plus 1px and 2px: a square theme's fields draw rounded corners",
     rewrites: [],
-    css: ":root,:host{--radius-lg:calc(var(--radius) + 1px);--radius-xl:calc(var(--radius) + 2px)}",
+    // The steps are `@theme inline`: the utilities carry their values, so the old ones are written on the utilities.
+    css: ".rounded-lg{border-radius:calc(var(--radius) + 1px)}.rounded-xl{border-radius:calc(var(--radius) + 2px)}",
     undoes: { file: FOUNDATION, find: "  --radius-lg: calc(var(--radius) + min(1px, var(--radius) * 1000));" },
     cases: [SQUARE_CART],
     expect: /corners where the theme's (?:fields|buttons) are square/,

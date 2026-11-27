@@ -605,12 +605,12 @@ const HYGIENE_CASES = {
   // On a phone its large Confirm and Go back do not fit side by side: they stack, Confirm first, neither cut.
   "the theme's words in both confirmation dialogs": { states: ["lines", "decide"], dialogWords: { back: "Cancel", confirm: "Agree and continue" }, privatePages: {
     labels: { "dialog.goBack": "cancel", "dialog.confirm": "agree-and-continue" },
-    tokens: { cart: { "dialog-confirm": { size: 18, inset: 32, weight: "700" } } },
+    tokens: { cart: { "dialog-confirm": { size: 24, inset: 32, weight: "700" } } },
   } },
   // An empty cart says so and leads back to the shop with its lazy file refused: the words are the page's own.
   "an empty cart whose lazy file does not load": { states: ["empty"], blockLazy: /empty-state/, privatePages: {} },
-  // The action row in a yellow that reads 1.4:1 on the dock: Place order and Confirm keep their own rows' fill.
-  "a yellow action row beside Place order and Confirm in their own look": { states: ["lines"], request: { scheme: "light" }, privatePages: { tokens: { cart: { action: { background: "#fed700", text: "#111111", radius: 24 } } } } },
+  // The action row in a yellow gradient (a gradient once painted Pay out): Place order and Confirm keep their own rows' fill.
+  "a yellow action row beside Place order and Confirm in their own look": { states: ["lines"], request: { scheme: "light" }, privatePages: { tokens: { cart: { action: { gradient: { shape: "linear", angle: 90, from: "#fed700", to: "#fde047" }, text: "#111111", radius: 24 } } } } },
   // An edged Place order with no border style of its own, and an action row that takes every border away.
   "an edged Place order beside an action row with no border": { states: ["base"], request: { scheme: "light" }, privatePages: { tokens: { cart: { dock: { background: "#ffffff" }, submit: { background: "#fed700", text: "#111111", border: "#111111", "border-width": 2, radius: 0, weight: "700" }, action: { "border-style": "none" } } } } },
   // Place order's words in its own row's colour where its dock's words differ (a white dock with dark words).
