@@ -13,11 +13,15 @@
 //            landing page is read against. A new member refuses an app or theme that passes
 //            today, so after the lock it is a security entry, never growth.
 //
+//   fixed    which routes each private page key reaches (private-keys.ts):
+//            a new key is growth; a key never starts or stops reaching a route.
+//
 // A table's rule is part of what is sealed: changing it is a break too.
 import { WEBHOOK_API_VERSION_HEADER, WEBHOOK_EVENT_ID_HEADER, WEBHOOK_SECRET_PREFIX, WEBHOOK_SIGNATURE_HEADER, WEBHOOK_SIGNATURE_TOLERANCE_SECONDS, WEBHOOK_TOPIC_HEADER } from "../events";
 import { LINE_ENTRY_WORDS_BN, LINE_ENTRY_WORDS_EN } from "../line-entry-words";
 import { STORE_ACTION_AND_AMOUNT_WORDS, STORE_WORD_LABEL_KINDS, STORE_WORD_SLOT_PATTERNS, STORE_WORDS_REASON } from "../store-words";
-import { growOnlyBreaks, loosenOnlyBreaks, refusalListBreaks, type SealedLimit } from "../contract/rules";
+import { fixedPerKeyBreaks, growOnlyBreaks, loosenOnlyBreaks, refusalListBreaks, type SealedLimit } from "../contract/rules";
+import { PRIVATE_PAGE_ROUTES, PRIVATE_STORE_LOOK_ROUTES, PRIVATE_UNTHEMED_ROUTES } from "../storefront-theme/private-keys";
 import { STOREFRONT_HOST_CSS_VARIABLES, STOREFRONT_HOST_HOOKS } from "../storefront-theme/host-contract";
 import { PRIVATE_LABEL_AMOUNT_WORDS } from "../storefront-theme/private-layout";
 import { LANDING_HANDLES_NEVER_VALID } from "../storefront-theme/pages";
@@ -25,7 +29,7 @@ import { MARKET_SUBFOLDER_PATTERN } from "../markets";
 import { appSealedLimits } from "./app-limits";
 import { STOREFRONT_SKIN_HTML_ALLOW_LIST } from "./html";
 
-export type ContractTableRule = "grow" | "loosen" | "refuse";
+export type ContractTableRule = "grow" | "loosen" | "refuse" | "fixed";
 export interface ContractTable {
   rule: ContractTableRule;
   value: unknown;
@@ -71,6 +75,8 @@ export function contractTables(): Record<string, ContractTable> {
     // What a stored landing page's handle is read against (read-lists.test.ts): a new handle or a wider form fails a stored theme's read.
     landingHandlesNeverValid: table("refuse", [...LANDING_HANDLES_NEVER_VALID].sort()),
     marketSubfolderPattern: table("refuse", MARKET_SUBFOLDER_PATTERN.source),
+    // Which routes each private page key reaches, the store's look and no theme at all (private-keys.ts): a key never starts or stops reaching a route.
+    privateRoutes: table("fixed", { ...PRIVATE_PAGE_ROUTES, "store-look": PRIVATE_STORE_LOOK_ROUTES, "no-theme": PRIVATE_UNTHEMED_ROUTES }),
     // What the store draws over an app's label that passed for its word (function-words.ts).
     neutralWords: table("grow", { addOn: { en: LINE_ENTRY_WORDS_EN.lineAddOnText, bn: LINE_ENTRY_WORDS_BN.lineAddOnText }, discount: STORE_ACTION_AND_AMOUNT_WORDS.discountText }),
   };
@@ -87,6 +93,7 @@ export function contractTableBreaks(before: unknown, after: unknown): string[] {
     if (next.rule !== entry.rule) return [`${path}: its rule changed from ${entry.rule} to ${next.rule}.`];
     if (entry.rule === "loosen") return loosenOnlyBreaks(path, entry.value as Record<string, SealedLimit>, next.value as Record<string, SealedLimit>);
     if (entry.rule === "refuse") return refusalListBreaks(path, entry.value, next.value);
+    if (entry.rule === "fixed") return fixedPerKeyBreaks(path, entry.value, next.value);
     return growOnlyBreaks(path, entry.value, next.value);
   });
 }

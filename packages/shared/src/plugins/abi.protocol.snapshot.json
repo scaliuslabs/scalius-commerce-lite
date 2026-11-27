@@ -23871,6 +23871,49 @@
    "rule": "refuse",
    "value": "^[a-z]{2}(?:-[a-z]{2})?$"
   },
+  "privateRoutes": {
+   "rule": "fixed",
+   "value": {
+    "cart": [
+     "/cart"
+    ],
+    "cartDrawer": [],
+    "checkout": [
+     "/checkout"
+    ],
+    "receipt": [
+     "/order-success"
+    ],
+    "account": [
+     "/account",
+     "/account/orders/[id]",
+     "/account/profile",
+     "/account/inbox",
+     "/account/inbox/[id]",
+     "/account/warranties",
+     "/account/reviews",
+     "/account/gift-cards",
+     "/account/downloads",
+     "/warranty-claims/[orderId]/[claimId]"
+    ],
+    "store-look": [
+     "/track-order",
+     "/checkout/quick",
+     "/checkout/continue/[continuationId]",
+     "/agent/continue/[continuationId]",
+     "/cart/recover/[token]",
+     "/payment-recovery",
+     "/gift-card-balance",
+     "/newsletter",
+     "/newsletter/confirm",
+     "/newsletter/unsubscribe"
+    ],
+    "no-theme": [
+     "/account/licence-key",
+     "/account/delivery-message"
+    ]
+   }
+  },
   "neutralWords": {
    "rule": "grow",
    "value": {

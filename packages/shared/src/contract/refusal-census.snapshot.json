@@ -51,7 +51,7 @@
    "unknown_token",
    "unknown_variant"
   ],
-  "constants": "d262f9d0f1e00eb3"
+  "constants": "d6acd2f1f82bd323"
  },
  "appTemplates": {
   "at": "an app's templates and page presets at install, in the theme library and when applied (checkStorefrontAppTemplateTheme, then the theme save)",

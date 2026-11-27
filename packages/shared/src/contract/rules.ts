@@ -9,6 +9,8 @@
 //   refuse   a list a check refuses by (the store's words): a member may go
 //            (fewer refusals), never come; a new one refuses an app that
 //            passes today, so it is a security change, never growth.
+//   fixed    a set per key (which routes a private page key reaches): a new
+//            key is growth, an existing key's set never gains or loses a member.
 
 type Json = Record<string, unknown>;
 
@@ -64,4 +66,17 @@ export function refusalListBreaks(path: string, before: unknown, after: unknown)
     return Object.entries(after).flatMap(([key, value]) => key in was ? refusalListBreaks(`${path}.${key}`, was[key], value) : [`${path}.${key}: ${text(value)} was added: a new refusal.`]);
   }
   return text(before) === text(after) ? [] : [`${path}: the value changed from ${text(before)} to ${text(after)}: a new refusal.`];
+}
+
+/** Fixed per key: a key may be added; an existing key keeps exactly its set (order aside). */
+export function fixedPerKeyBreaks(path: string, before: unknown, after: unknown): string[] {
+  const was = isObject(before) ? before : {};
+  const now = isObject(after) ? after : {};
+  const set = (value: unknown) => (Array.isArray(value) ? [...value].map(text).sort() : [text(value)]);
+  return Object.entries(was).flatMap(([key, value]) => {
+    if (!(key in now)) return [`${path}.${key}: the key was removed.`];
+    const before = set(value);
+    const after = set(now[key]);
+    return before.join(",") === after.join(",") ? [] : [`${path}.${key}: the set changed from [${before.join(", ")}] to [${after.join(", ")}].`];
+  });
 }
