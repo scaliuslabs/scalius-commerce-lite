@@ -651,8 +651,12 @@ const afterOrderLineStyles = (on: string, { imageBox }: { imageBox: boolean }): 
   "line-price": { ...CART_STYLES["line-price"]!, item: undefined, part: undefined, on: "line" },
 });
 
-/** An order's or a request's state as a pill: words on a surface of their own (the receipt's order and payment states, the account's). */
-const STATUS_BADGE_TOKENS = ["background", "text", "border", "border-width", "radius"] as const satisfies readonly PrivateTokenName[];
+/**
+ * An order's or a request's state as a pill (the receipt's order and payment states, a review's, the account's), wherever
+ * the page draws one (in a card, beside an order's heading, on a line): words on a surface of their own, so they read
+ * wherever the pill stands.
+ */
+const STATUS_BADGE: PrivateStyleSpec = { selector: '[data-part="status-badge"]', tokens: ["background", "text", "border", "border-width", "radius"], kind: "text", surface: "muted", ink: "foreground" };
 
 /** A message's tokens: a box of words (its photos and product cards inside), never a gradient or a shadow. */
 const MESSAGE_TOKENS = ["background", "text", "muted", "link", "error", "border", "border-width", "radius", "padding"] as const satisfies readonly PrivateTokenName[];
@@ -691,7 +695,7 @@ const RECEIPT_STYLES: Record<string, PrivateStyleSpec> = {
   // The order card: its facts (the order number and its state among them), then the money rows and the total.
   order: { selector: '[data-part="order"]', tokens: [...BOX_TOKENS], kind: "box", surface: "background", ink: "foreground", part: "summary" },
   "order-facts": { selector: '[data-part="order-facts"]', tokens: ["text", "muted", "size"], kind: "text", surface: "under", ink: "foreground", on: "order" },
-  "status-badge": { selector: '[data-part="status-badge"]', tokens: [...STATUS_BADGE_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "order-facts" },
+  "status-badge": STATUS_BADGE,
   // The money block inside the order card; the total and its label drawn at the card's 16px.
   ...privateSummaryStyles({ on: "order", rows: { size: 16, weight: 500 }, total: { size: 16, weight: 600 }, label: { size: 16, weight: 600 }, over: { "line-price": ["size"] } }),
   // Where it goes: the buyer's own name, address and contact.
@@ -772,9 +776,7 @@ const ACCOUNT_STYLES: Record<string, PrivateStyleSpec> = {
   content: { selector: '[data-part="content"]', tokens: [], kind: "box", surface: "under", ink: "foreground", part: "content", targets: ["account.overview", "account.order", "account.profile"] },
   card: { selector: '[data-part="card"]', tokens: [...BOX_TOKENS, "gap"], kind: "box", surface: "card", ink: "foreground", on: "content", fields: true },
   "card-title": { selector: '[data-part="card-title"]', tokens: [...TEXT_TOKENS], kind: "text", surface: "under", ink: "foreground", on: "card" },
-  // A state's pill, wherever the account draws one (in a card, beside an order's heading, on a saved address): words
-  // on a surface of their own, so they read wherever it stands.
-  "status-badge": { selector: '[data-part="status-badge"]', tokens: [...STATUS_BADGE_TOKENS], kind: "text", surface: "muted", ink: "foreground" },
+  "status-badge": STATUS_BADGE,
   // An order's totals inside its card, drawn at the card's 14px; what is left to pay (`due`) ranks with the total.
   ...privateSummaryStyles({ on: "card", rows: { size: 14, weight: 400 }, total: { size: 14, weight: 600 }, label: { size: 14, weight: 600 }, due: true, over: { "line-price": ["size"] } }),
   ...afterOrderLineStyles("card", { imageBox: true }),

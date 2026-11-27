@@ -342,7 +342,7 @@ A thing that is the same thing as on the cart has the cart's name: `page`, `fram
 | --- | --- | --- | --- |
 | Receipt | `status`, `status-mark`, `status-title`, `status-message`, `status-steps` | The order's state: its mark, its title (the page's `h1`), its message and next steps | box, text on its own surface, text, text (muted), box |
 | Receipt | `tracking` | Where the order is (the status view) | box (`background`) |
-| Receipt | `order`, `order-facts`, `status-badge` | The order card; its facts (the order number, placed, state, payment); a state's pill | box (`background`), text, text on its own surface |
+| Receipt | `order`, `order-facts`, `status-badge` | The order card; its facts (the order number, placed, state, payment); a state's pill, wherever the page draws one (the order's and payment's states, a review's under its line): its words read on its own surface | box (`background`), text, text on its own surface (`muted`) |
 | Receipt | `delivery`, `section-heading`, `delivery-contact` | Where it goes, its heading, the buyer's own name, address and contact | box, text, text |
 | Receipt | `lines`, `lines-heading` | What was bought, its heading; each line under it | box, text |
 | Receipt | `conversation`, `message`, `message-own` | The order's conversation with the store (it holds the reply form); each of the store's messages, and each of the buyer's own | box (`card`), box (`muted`), box (`primary`) |
@@ -351,7 +351,7 @@ A thing that is the same thing as on the cart has the cart's name: `page`, `fram
 | Account | `heading-title`, `heading-intro`, `heading-back` | The page's `h1`, its intro, the way back | text, text (muted), control |
 | Account | `content` | The page's content; it holds the apps' targets `account.overview`, `account.order`, `account.profile`. It takes no tokens: most account pages draw no box around it, so what stands in it stands on the page | box (no tokens) |
 | Account | `card`, `card-title` | Every account card (an order, a warranty, a review, a gift card, a download, an inbox row, a profile section; an edit dialog is a card over the page), its heading | box (`card`), text |
-| Account | `status-badge` | A state's pill wherever the account draws one (in a card, beside an order's heading, on a saved address): its words read on its own surface, so it reads wherever it stands | text on its own surface (`muted`) |
+| Account | `status-badge` | A state's pill wherever the account draws one (in a card, beside an order's heading, on a saved address, a review's): its words read on its own surface, so it reads wherever it stands | text on its own surface (`muted`) |
 | Account | `action-critical` | Every filled button that removes something (Remove an address, Remove a saved card): found by its fill or a drawn edge, as `action` is | filled control (`destructive`) |
 | Account | `conversation`, `message`, `message-own` | An order's conversation, an inbox thread and a guest's claim thread (each holds its reply form); the store's messages and the buyer's own, as on the receipt | box (`card`), box (`muted`), box (`primary`) |
 | Account | `delivery-message`, `delivery-reveal` | A line's delivery message and the button that reveals it (with no border drawn, its fill reads 3:1 on the message, as Sign out's does) | box, control |

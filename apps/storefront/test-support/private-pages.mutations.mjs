@@ -337,7 +337,7 @@ export const MUTATIONS = {
   },
   "F2 an edged action's fill distance unchecked": {
     why: "the save takes an edged Place order whose fill is the dock's own colour: a black frame around nothing a buyer reads as a button",
-    rewrites: [rewrite(TOKENS, "      && surface.every((point) => around.every((back) => storefrontThemeColorDistance(point, back) >= PRIVATE_EDGE_FILL_DISTANCE));\n", ";\n")],
+    rewrites: [rewrite(TOKENS, " && surface.every((point) => storefrontThemeColorDistance(point, back) >= PRIVATE_EDGE_FILL_DISTANCE));\n", ");\n")],
     cases: ["Place order the dock's colour behind a dark edge"],
     expect: /^base: Place order: .*its fill is [\d.]+ from what is behind it, under 40/,
   },

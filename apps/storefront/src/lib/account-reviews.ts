@@ -446,7 +446,7 @@ const STATUS_TONE: Record<BuyerReviewStatus, string> = {
 };
 
 export function reviewStatusBadgeMarkup(status: BuyerReviewStatus, copy: ReviewFormCopy): string {
-  return `<span class="${CLASS.badge} ${STATUS_TONE[status]}" data-review-status="${status}">${escapeHtml(statusText(status, copy))}</span>`;
+  return `<span data-part="status-badge" class="${CLASS.badge} ${STATUS_TONE[status]}" data-review-status="${status}">${escapeHtml(statusText(status, copy))}</span>`;
 }
 
 function field(name: string, value: string): string {
