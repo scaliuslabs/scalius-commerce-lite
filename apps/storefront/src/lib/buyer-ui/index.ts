@@ -42,9 +42,11 @@ const ACTION_FAILED = {
 const controlClass ="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const toneClasses = {
   neutral: "border-border bg-muted/40", info: "border-border bg-muted/40",
-  // A tinted surface; the words stay in the text colour, readable in the light and the dark colours.
+  // A tinted surface; the words stay in the text colour, readable in the light and the dark colours. The critical tone too:
+  // the palette's error colour is checked on the page (`destructive` on `background`), never on its own tint over a card,
+  // where a legal palette's reads 3.9:1 (#cd3140 on #f1f1f1 under a 10% tint): its border and mark say it is critical.
   success: "border-success/40 bg-success/10 text-foreground", warning: "border-warning/50 bg-warning/10 text-foreground",
-  critical: "border-destructive/30 bg-destructive/10 text-destructive",
+  critical: "border-destructive/30 bg-destructive/10 text-foreground",
 } as const;
 /** A tone's mark: its glyph, and the circle's border in the tone's colour. */
 const marks = {
@@ -228,6 +230,8 @@ function drawNode(node: PluginUiNode, block: BuyerUiBlock, options: BuyerUiOptio
         if (horizontal && child.type === "stack" && child.direction !== "horizontal") rendered.className += ` ${ROW_FILL}`;
         container.append(rendered);
       }
+      // On the critical tint the error colour is not read (only on the page): its pieces' words take the text colour.
+      if (tone === "critical") for (const piece of container.querySelectorAll(".text-destructive")) piece.classList.replace("text-destructive", "text-foreground");
       return container;
     }
     case "heading": return element("h3", "text-base font-semibold text-foreground", node.text);

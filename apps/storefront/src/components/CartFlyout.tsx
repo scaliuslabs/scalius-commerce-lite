@@ -1113,6 +1113,34 @@ export default function CartFlyout({ onReady }: Props) {
       />
     </div>
   );
+  /**
+   * A theme's arrangement of the drawer, with the same guarantee as the host's: what it places after its scrolling region
+   * is the bottom group, whose total, Check out and View cart stay pinned at the bottom (a host box) while the rest
+   * (money rows, the apps' footer blocks, offers) scrolls in it where it would leave the lines less than their share.
+   */
+  const themeDrawer = (layout: readonly CartDrawerNode[]) => {
+    const hosts = { target: (name: string) => (name === "cart_drawer.footer" ? footerTarget : null), scroll: scrollRegion };
+    const at = layout.findIndex((node) => node.type === "layout" && node.layout === "scroll");
+    const after = at < 0 ? [] : layout.slice(at + 1);
+    const total = drawerHas(after, "summary");
+    const buttons = drawerHas(after, "actions");
+    if (at < 0 || cart.totalItems === 0 || (!total && !buttons && after.length === 0)) return drawerNodes(layout, pageParts, hosts);
+    const extraParts = { ...pageParts, ...(total ? { summary: summaryRows } : {}), ...(buttons ? { actions: null } : {}) };
+    return (
+      <>
+        {drawerNodes(layout.slice(0, at + 1), pageParts, hosts)}
+        <div className="flex min-h-0 shrink-0 flex-col bg-card" style={groupMax === null ? undefined : { maxHeight: `${groupMax}px` }} data-drawer-bottom data-drawer-compact={compact ? "" : undefined}>
+          <div className={compact ? "min-h-0 shrink overflow-y-auto overscroll-contain" : ""} data-drawer-extras>{drawerNodes(after, extraParts, hosts)}</div>
+          {(total || buttons) && (
+            <div className="shrink-0 space-y-3 border-t border-border bg-card p-3 sm:p-5 safe-area-pb" data-drawer-pinned>
+              {total && summaryTotal}
+              {buttons && <>{mainAction}{secondaryActions}</>}
+            </div>
+          )}
+        </div>
+      </>
+    );
+  };
   const pageParts: Record<string, React.ReactNode> = {
     header,
     added,
@@ -1163,7 +1191,7 @@ export default function CartFlyout({ onReady }: Props) {
           <ChevronDown className="w-3 h-3 text-muted-foreground animate-bounce mt-0.5 opacity-60" />
         </div>
 
-        {plan.layout ? drawerNodes(plan.layout, pageParts, { target: (name) => (name === "cart_drawer.footer" ? footerTarget : null), scroll: scrollRegion }) : (
+        {plan.layout ? themeDrawer(plan.layout) : (
         <>
         {/* 1. HEADER */}
         {header}

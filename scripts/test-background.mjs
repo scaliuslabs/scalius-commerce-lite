@@ -47,3 +47,7 @@ export function unsettledBackground() {
   registry.work = [];
   return { pending, rejected };
 }
+
+// The API's detached contexts (apps/api/src/utils/execution-context.ts `detachedExecutionContext`) hand their work here
+// under tests: work started with no request's context is tracked like any other.
+globalThis[Symbol.for("scalius.test.background.track")] = trackBackground;

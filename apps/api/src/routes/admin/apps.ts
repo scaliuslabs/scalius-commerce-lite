@@ -10,6 +10,7 @@
 // never call these (the `apps` resource is reserved, and they are
 // security-class operations).
 
+import { detachedExecutionContext } from "../../utils/execution-context";
 import { createRoute, z } from "@hono/zod-openapi";
 import { adminRouter } from "./admin-router";
 import type { Context } from "hono";
@@ -777,7 +778,7 @@ function lifecycleContext(c: Context<{ Bindings: Env }>) {
   try {
     ctx = c.executionCtx as unknown as ExecutionContext;
   } catch {
-    ctx = { waitUntil: () => undefined, passThroughOnException: () => undefined, props: {} } as unknown as ExecutionContext;
+    ctx = detachedExecutionContext();
   }
   return { db: c.get("db"), env: c.env, ctx };
 }

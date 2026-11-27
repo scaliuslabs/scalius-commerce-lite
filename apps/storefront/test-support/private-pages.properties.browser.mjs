@@ -639,6 +639,14 @@ const HYGIENE_CASES = {
   // 1px and 2px to every radius, a square one included).
   "a square theme's public page": { states: ["base"], publicSquare: true, request: { style: SQUARE, page: "home" }, privatePages: {} },
   "five lines in the drawer on a phone": { states: ["five"], drawerLines: true, viewports: [{ width: 390, height: 844, scheme: "light" }, { width: 320, height: 568, scheme: "dark" }], request: { page: "home" }, privatePages: {} },
+  // A theme that arranges its drawer (its own bottom group after the lines) gets the same guarantee.
+  "five lines in a theme's arranged drawer on a phone": { states: ["five"], drawerLines: true, viewports: [{ width: 390, height: 844, scheme: "light" }, { width: 320, height: 568, scheme: "dark" }], request: { ...REFERENCE, page: "home" }, privatePages: { pages: { cartDrawer: { layout: [
+    { type: "part", part: "header" }, { type: "part", part: "added" },
+    { type: "layout", layout: "scroll", children: [{ type: "part", part: "lines" }, { type: "part", part: "recommendations" }] },
+    { type: "part", part: "undo" }, { type: "part", part: "offers" },
+    { type: "layout", layout: "group", children: [{ type: "part", part: "summary" }, { type: "target", target: "cart_drawer.footer" }, { type: "part", part: "actions" }] },
+  ] } } } },
+  "five lines in the customer's drawer on a phone": { states: ["five"], drawerLines: true, viewports: [{ width: 390, height: 844, scheme: "dark" }, { width: 320, height: 568, scheme: "light" }], request: { ...REFERENCE, page: "home" } },
   // The customer's cart arrives without moving under the buyer: what shifts from the first paint until the page is
   // still (`layoutShift`: the layout-shift score, as Chrome counts it) stays under 0.05, on a phone and a wide screen.
   "the customer's cart arrives without moving": { states: ["customer"], layoutShift: 0.05, request: REFERENCE },
@@ -1427,7 +1435,8 @@ function drawnAsWritten({ scope, style, radius, defaults }) {
 
 /**
  * In an open confirmation dialog: its two actions say the theme's words (`words`, where the case names them), each
- * lies inside the dialog whole, and when they do not fit side by side they stack with Confirm, the main action, first.
+ * lies inside the dialog whole, they read in the order they are drawn (Go back, then Confirm), and when they do not fit
+ * side by side they stack with Confirm, the main action, at the bottom.
  */
 function dialogActions({ scope, words }) {
   const problems = [];
@@ -1445,7 +1454,7 @@ function dialogActions({ scope, words }) {
   }
   const [b, c] = [back.getBoundingClientRect(), confirm.getBoundingClientRect()];
   const sideBySide = b.top < c.bottom - 2 && c.top < b.bottom - 2;
-  if (!sideBySide && c.top > b.top) problems.push("the actions stack with Go back first: the main action, Confirm, comes first");
+  if (!sideBySide && c.top < b.top) problems.push("the actions stack with Confirm on top: Confirm, the main action, comes last, nearest the thumb");
   // Tab and a screen reader follow the markup: it reads as the actions are drawn (top to bottom, then start to end).
   const confirmFirst = Boolean(back.compareDocumentPosition(confirm) & Node.DOCUMENT_POSITION_PRECEDING);
   const drawnFirst = sideBySide ? (getComputedStyle(dialog).direction === "rtl" ? c.right > b.right : c.left < b.left) : c.top < b.top;
@@ -1548,11 +1557,13 @@ async function textContrast(page, texts) {
   // No focus ring of an earlier check lies over a text.
   await page.evaluate(() => document.activeElement instanceof HTMLElement && !document.activeElement.closest("dialog,[role=dialog]") && document.activeElement.blur());
   const pending = new Map(texts.map((text) => [text.id, text]));
+  /** Screens retaken because what was read moved before the screen was taken. */
+  let moving = 0;
   // A screen at a time: as many as a long cart's texts need.
   for (let guard = 0, most = Math.max(80, texts.length + 20); pending.size > 0 && guard < most; guard += 1) {
     const first = pending.keys().next().value;
     // Scroll the first text left to the middle; every pending text's boxes now, and whether it is drawn on top there.
-    const boxes = await page.evaluate(({ first, ids }) => {
+    const boxes = await page.evaluate(({ first, ids, scroll }) => {
       // The page was replaced since the walk (a navigation): nothing left to measure here.
       if (!window.__ptTexts?.[first]) return null;
       const boxesOf = (id) => {
@@ -1580,19 +1591,21 @@ async function textContrast(page, texts) {
           }).filter((rect) => rect.w >= 2 && rect.h >= 4),
         };
       };
-      window.__ptTexts[first].element.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
+      if (scroll) window.__ptTexts[first].element.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
       return ids.flatMap((id) => {
         const { element, rects } = boxesOf(id);
-        if (rects.length === 0) return id === first ? [{ id, rects, whole: false, top: false }] : [];
+        if (rects.length === 0) return id === first ? [{ id, rects, whole: false, top: false, anchor: null }] : [];
         const whole = rects.every((rect) => rect.x >= 0 && rect.y >= 0 && rect.x + rect.w <= innerWidth && rect.y + rect.h <= innerHeight);
+        // Where its box is now, read again after the screen is taken (it must not have moved).
+        const at = (() => { const target = window.__ptTexts[id].field; if (target) { const box = target.getBoundingClientRect(); return [Math.round(box.left), Math.round(box.top)]; } const range = document.createRange(); range.selectNodeContents(window.__ptTexts[id].node); const box = range.getBoundingClientRect(); return [Math.round(box.left), Math.round(box.top)]; })();
         // Drawn on top all over (a docked bar or a sticky header over part of it is not what it is read on).
         const top = whole && rects.every((rect) => [[0.5, 0.5], [0.05, 0.03], [0.95, 0.03], [0.05, 0.97], [0.95, 0.97]].every(([fx, fy]) => {
           const hit = document.elementFromPoint(rect.x + rect.w * fx, rect.y + rect.h * fy);
           return !hit || element.contains(hit) || hit.contains(element);
         }));
-        return whole || id === first ? [{ id, rects, whole, top }] : [];
+        return whole || id === first ? [{ id, rects, whole, top, anchor: at }] : [];
       });
-    }, { first, ids: [...pending.keys()] });
+    }, { first, ids: [...pending.keys()], scroll: true });
     if (boxes === null) { problems.push(`the page navigated away (${page.url()}) while its texts were measured`); break; }
     // The boxes were read after the scroll; if it is still moving, read them again once it is still.
     if (!(await page.evaluate(() => { const at = `${scrollX},${scrollY}`; return new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(at === `${scrollX},${scrollY}`)))); }))) {
@@ -1600,6 +1613,31 @@ async function textContrast(page, texts) {
       continue;
     }
     const shot = await page.screenshot({ animations: "disabled", caret: "hide" });
+    // The page moved under the reading (a box above grew or went, inside a scrolling region the window's scroll does
+    // not show): a text whose boxes are not where they were read is measured again on a later screen, never read on
+    // pixels it was not drawn on.
+    const after = await page.evaluate(({ ids }) => ids.map((id) => {
+      const { node, field } = window.__ptTexts[id] ?? {};
+      const target = field ?? node;
+      if (!target) return null;
+      let rect;
+      if (field) rect = field.getBoundingClientRect();
+      else { const range = document.createRange(); range.selectNodeContents(node); rect = range.getBoundingClientRect(); }
+      return [Math.round(rect.left), Math.round(rect.top)];
+    }), { ids: boxes.map((box) => box.id) });
+    const moved = new Set();
+    boxes.forEach((box, index) => {
+      const now = after[index];
+      const was = box.anchor;
+      if (now && was && (Math.abs(now[0] - was[0]) > 1 || Math.abs(now[1] - was[1]) > 1)) moved.add(box.id);
+    });
+    if (moved.size > 0) {
+      moving += 1;
+      if (moving > 5) problems.push(`${moved.size} texts kept moving while they were measured (${[...moved].slice(0, 3).map((id) => texts[id].label).join("; ")})`);
+      if (moving > 5) for (const id of moved) pending.delete(id);
+      await still(page);
+      continue;
+    }
     const image = decode(shot);
     let kept = false;
     for (const { id, rects, whole, top } of boxes) {
@@ -2329,10 +2367,7 @@ async function drawDrawer({ context, id, width, height = 900, problems, server5x
   const drawer = await page.waitForSelector('[data-private="cart-drawer"]', { state: "visible", timeout: 10_000 }).catch(() => null);
   if (!drawer) at("drawer", ["the drawer did not open"]);
   else {
-    // The drawer reads its suggestions once open, 400ms after it opens (their own chunk first): their rail lands before
-    // anything is measured, so no line moves under a reading (a title measured over the image beside it).
-    await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => {});
-    await page.waitForTimeout(700);
+    // The drawer reads its suggestions once open: their rail lands before anything is measured, so no line moves under a reading.
     await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => {});
     await settle(page);
     const scope = '[data-private="cart-drawer"]';

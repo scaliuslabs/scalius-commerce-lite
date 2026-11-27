@@ -488,14 +488,14 @@ export const MUTATIONS = {
   "H-k the drawer's footer never yields to its lines": {
     why: "the drawer's bottom group keeps its money rows, the apps' footer blocks and View cart however little room they leave the lines",
     rewrites: [rewrite("apps/storefront/src/components/CartFlyout.tsx", "const LINES_SHARE = 0.45;", "const LINES_SHARE = 0;")],
-    cases: ["five lines in the drawer on a phone"],
+    cases: ["five lines in the drawer on a phone", "five lines in a theme's arranged drawer on a phone"],
     expect: /drawer lines: .*whole line|Check out is not wholly on screen/,
   },
-  "H-i the dialog's actions wrap with Go back first": {
-    why: "Go back comes first in the dialog's markup again: where its large Confirm and Go back do not fit side by side, Go back stacks on top",
-    rewrites: [rewrite(DIALOG, "  actions.append(confirm, back);", "  actions.append(back, confirm);")],
+  "H-i the dialog's actions stack with Confirm on top": {
+    why: "Confirm comes first in the dialog's markup: where its large Confirm and Go back do not fit side by side, Confirm stacks on top, away from the thumb",
+    rewrites: [rewrite(DIALOG, "  actions.append(back, confirm);", "  actions.append(confirm, back);")],
     cases: [DIALOG_WORDS],
-    expect: /the actions stack with Go back first/,
+    expect: /the actions stack with Confirm on top/,
   },
 };
 

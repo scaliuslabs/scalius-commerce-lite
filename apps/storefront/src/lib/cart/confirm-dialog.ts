@@ -99,9 +99,9 @@ export function confirmLineChoice(words: ConfirmChoiceWords, doc: Document = doc
     items.append(heading, list);
   }
   const actions = doc.createElement("div");
-  // Confirm, the main action, first in reading order and on screen: side by side where both fit (on a phone sharing
-  // the dialog's width), stacked with Confirm on top where they do not. Their words wrap, never cut; Tab follows what
-  // is drawn. Focus still starts on the tick box, else Go back.
+  // Go back, then Confirm, in the markup and on screen: side by side where both fit, stacked where they do not, each
+  // across the dialog on a phone with Confirm at the bottom, nearest the thumb. No reordering: Tab reads what is drawn.
+  // Their words wrap, never cut. Focus still starts on the tick box, else Go back.
   actions.className = "flex flex-wrap justify-end gap-2";
   actions.dataset.part = "dialog-actions";
   const back = doc.createElement("button");
@@ -116,7 +116,7 @@ export function confirmLineChoice(words: ConfirmChoiceWords, doc: Document = doc
   confirm.className = "min-h-11 rounded-md bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50 max-sm:grow";
   confirm.textContent = themeLabel(doc, "dialog.confirm") ?? words.confirm;
   confirm.dataset.part = "dialog-confirm";
-  actions.append(confirm, back);
+  actions.append(back, confirm);
   form.append(title, text);
   if (items) form.append(items);
   if (label) form.append(label);
