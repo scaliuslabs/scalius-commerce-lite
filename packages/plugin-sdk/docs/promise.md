@@ -26,7 +26,7 @@ Within a supported contract version, a release only adds to these:
 - **Inline style in app markup**: a `style` attribute that calls only the functions listed in [Storefront security](storefront.md#security) (`STOREFRONT_STYLE_FUNCTIONS`) is a permanent part of the contract. That list only grows.
 - **The private-page model**: page keys, part and target names, variants, style targets, tokens and their types, label keys and refusal reasons ([Design the buyer's private pages](private-pages.md)).
 
-"Only adds" means a new optional field, operation, event, function point, slot, token, error code or list value. A list the reference marks open may gain values, so handle a value you do not know as that list says. Removing, renaming or retyping something, making an output nullable, adding a required input, changing a default, or refusing at save, install or run something that passes today is a break.
+"Only adds" means a new optional field, operation, event, function point, slot, token, error code or list value. Every list you read is open and may gain values, so handle a value you do not know as that list says ([commerce hooks](commerce-hooks.md#value-lists-you-read-are-open), [storefront](storefront.md#value-lists-you-read)); a list you send is closed. Removing, renaming or retyping something, making an output nullable, adding a required input, changing a default, or refusing at save, install or run something that passes today is a break.
 
 ## What is not covered
 

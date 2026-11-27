@@ -14,6 +14,8 @@
 import { fieldPhone, pagePhone } from "@/lib/checkout-text";
 import StoreContact from "@/components/StoreContact.astro";
 import Layout from "@/layouts/Layout.astro";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { privateRouteLook } from "@/lib/private-pages/look";
 import AccountShell from "@/components/account/AccountShell.astro";
 import AccountDialog from "@/components/account/AccountDialog.astro";
 import AccountAddressForm from "@/components/account/AccountAddressForm.astro";
@@ -199,6 +201,8 @@ const [layoutData, read, summary, marketingRead, addressesRead, paymentMethodsRe
   readAccountPaymentMethods(Astro.request),
   getCheckoutConfig(),
 ]);
+// The account's look (`PRIVATE_PAGE_ROUTES`), only where the theme set it: else the page draws as without a theme.
+const look = privateRouteLook(Astro, (await resolveRequestTheme(Astro, layoutData)).theme);
 // The whole page speaks the store's language: the account's words, News and offers, notifications.
 const words = accountCopy().profile;
 const offlineText = accountOfflineMessage();
@@ -257,7 +261,7 @@ const offline = (locations: { cities: LocationData[] | null; zones: LocationData
 const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
 ---
 
-<Layout title={words.title} layoutData={layoutData}>
+<Layout title={words.title} layoutData={layoutData} {...look}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
   <AccountShell
     current="profile"
@@ -271,8 +275,8 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
       <div class="grid gap-6">
         {savedFlag && <p role="status" class={ui.notice}>{profileSavedText(savedFlag)}</p>}
 
-        <section class={ui.card} aria-labelledby="profileDetailsHeading">
-          <h2 id="profileDetailsHeading" class={`${ui.cardTitle} flex min-h-12 items-center border-b border-border px-4 sm:px-5`}>{words.details}</h2>
+        <section data-part="card" class={ui.card} aria-labelledby="profileDetailsHeading">
+          <h2 id="profileDetailsHeading" data-part="card-title" class={`${ui.cardTitle} flex min-h-12 items-center border-b border-border px-4 sm:px-5`}>{words.details}</h2>
           <div class={`${ui.cardBody} divide-y divide-border`}>
             <div class={row}>
               <div class="min-w-0">
@@ -326,7 +330,7 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
                 <p class={ui.muted}>{words.phone}</p>
                 <p class="mt-0.5 flex flex-wrap items-center gap-2 text-foreground">
                   <span class="tabular-nums">{customer.phone ? pagePhone(customer.phone) : words.notAdded}</span>
-                  {customer.phone && <span class={accountPill(customer.phoneVerified ? "success" : "neutral")} data-phone-verified={customer.phoneVerified ? "true" : "false"}>{customer.phoneVerified ? words.verified : words.notVerified}</span>}
+                  {customer.phone && <span data-part="status-badge" class={accountPill(customer.phoneVerified ? "success" : "neutral")} data-phone-verified={customer.phoneVerified ? "true" : "false"}>{customer.phoneVerified ? words.verified : words.notVerified}</span>}
                 </p>
               </div>
               {/* The change takes two codes in the browser: without JavaScript the button stays hidden. */}
@@ -340,9 +344,9 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
           <StoreContact layoutData={layoutData} id="phoneChangeContact" hidden class="mt-2 text-sm text-muted-foreground" />
         </AccountDialog>
 
-        <section class={ui.card} aria-labelledby="addressesHeading">
+        <section data-part="card" class={ui.card} aria-labelledby="addressesHeading">
           <div class="flex min-h-12 items-center justify-between gap-3 border-b border-border px-4 sm:px-5">
-            <h2 id="addressesHeading" class={ui.cardTitle}>{words.addresses}</h2>
+            <h2 id="addressesHeading" data-part="card-title" class={ui.cardTitle}>{words.addresses}</h2>
             {addresses && addresses.length > 0 && !addForm?.failed && (
               <button type="button" popovertarget="addAddress" class={ui.textButton}>{words.addAddress}</button>
             )}
@@ -363,8 +367,8 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
                   <article class="rounded-lg border border-border p-4" aria-label={address.isDefault ? words.defaultAddress : words.address}>
                     {(address.isDefault || address.isDefaultBilling) && (
                       <div class="flex flex-wrap gap-1.5">
-                        {address.isDefault && <span class={accountPill("neutral")}>{words.default}</span>}
-                        {address.isDefaultBilling && <span class={accountPill("neutral")}>{words.defaultBilling}</span>}
+                        {address.isDefault && <span data-part="status-badge" class={accountPill("neutral")}>{words.default}</span>}
+                        {address.isDefaultBilling && <span data-part="status-badge" class={accountPill("neutral")}>{words.defaultBilling}</span>}
                       </div>
                     )}
                     <div class:list={["space-y-0.5 break-words text-sm text-foreground", (address.isDefault || address.isDefaultBilling) && "mt-3"]}>
@@ -431,8 +435,8 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
         </section>
 
         {showPaymentMethods && (
-          <section id={ACCOUNT_PAYMENT_METHODS_ANCHOR} class={ui.card} aria-labelledby="paymentMethodsHeading" data-account-payment-methods>
-            <h2 id="paymentMethodsHeading" class={`${ui.cardTitle} flex min-h-12 items-center border-b border-border px-4 sm:px-5`}>{paymentWords.heading}</h2>
+          <section id={ACCOUNT_PAYMENT_METHODS_ANCHOR} data-part="card" class={ui.card} aria-labelledby="paymentMethodsHeading" data-account-payment-methods>
+            <h2 id="paymentMethodsHeading" data-part="card-title" class={`${ui.cardTitle} flex min-h-12 items-center border-b border-border px-4 sm:px-5`}>{paymentWords.heading}</h2>
             <div class={ui.cardBody}>
               {paymentMethodFlag && <p role="status" class={`${ui.notice} mb-4`}>{paymentWords.removed}</p>}
               {paymentMethodFailure && <p role="alert" class={`${ui.errorNotice} mb-4`}>{paymentMethodRemoveFailureText(paymentMethodFailure)}</p>}
@@ -482,8 +486,8 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
           </section>
         )}
 
-        <section id={ACCOUNT_MARKETING_ANCHOR} class={ui.card} aria-labelledby="marketingHeading" lang={marketingLanguage} data-account-marketing>
-          <h2 id="marketingHeading" class={`${ui.cardTitle} flex min-h-12 items-center border-b border-border px-4 sm:px-5`}>{marketingCopy.heading}</h2>
+        <section id={ACCOUNT_MARKETING_ANCHOR} data-part="card" class={ui.card} aria-labelledby="marketingHeading" lang={marketingLanguage} data-account-marketing>
+          <h2 id="marketingHeading" data-part="card-title" class={`${ui.cardTitle} flex min-h-12 items-center border-b border-border px-4 sm:px-5`}>{marketingCopy.heading}</h2>
           <div class={ui.cardBody}>
             {marketingFlag && (
               <p role="status" class={`${ui.notice} mb-4`}>{marketingFlag === "confirm" ? marketingCopy.confirmRequested : marketingCopy.saved}</p>
@@ -532,8 +536,8 @@ const row = "flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0";
           </div>
         </section>
 
-        <section id="notifications" class={ui.card} aria-labelledby="pushHeading" lang={marketingLanguage} data-account-push data-copy={JSON.stringify(pushCopy)} hidden>
-          <h2 id="pushHeading" class={`${ui.cardTitle} flex min-h-12 items-center border-b border-border px-4 sm:px-5`}>{pushCopy.heading}</h2>
+        <section id="notifications" data-part="card" class={ui.card} aria-labelledby="pushHeading" lang={marketingLanguage} data-account-push data-copy={JSON.stringify(pushCopy)} hidden>
+          <h2 id="pushHeading" data-part="card-title" class={`${ui.cardTitle} flex min-h-12 items-center border-b border-border px-4 sm:px-5`}>{pushCopy.heading}</h2>
           <div class={ui.cardBody}>
             <p class={ui.muted}>{pushCopy.text}</p>
             <p class="mt-3 text-sm font-medium text-foreground" role="status" aria-live="polite" data-push-status></p>

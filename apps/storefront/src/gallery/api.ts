@@ -11,7 +11,8 @@ import {
   type StorefrontSection,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
-import type { GalleryEntry } from "./entries";
+import { GALLERY_ACCOUNT_PAGES, type GalleryEntry } from "./entries";
+import { galleryAccountAnswer } from "./account";
 import { fixtureProductSoldOut, GALLERY_CUSTOMER, GALLERY_KIT } from "./cart-seed";
 import {
   BANGLA_STORE_NAME,
@@ -453,6 +454,11 @@ const PROTECTION_INPUTS = {
 export const unansweredReads = new Map<string, Set<string>>();
 
 function answer(entry: GalleryEntry, path: string, search: URLSearchParams): unknown {
+  // The account's pages: the signed-in buyer's own reads (gallery/account.ts).
+  if ((GALLERY_ACCOUNT_PAGES as readonly string[]).includes(entry.page)) {
+    const own = galleryAccountAnswer(path.replace(/^\/api\/v1/, ""));
+    if (own !== undefined) return own;
+  }
   const theme = entryTheme(entry);
   if (path === "/api/v1/storefront/layout") return layout(entry);
   if (path === "/api/v1/storefront/homepage") {

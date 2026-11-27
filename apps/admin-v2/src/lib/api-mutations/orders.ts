@@ -173,6 +173,7 @@ export function isOrderConflict(error: unknown): boolean {
 function reasonMessage(error: unknown): string | null {
   const details = readAdminApiError(error)?.details as { reason?: unknown; collectedBy?: unknown } | undefined;
   if (details?.reason === "order_already_returned") return msg("error.alreadyReturned");
+  if (details?.reason === "courier_report_changed") return msg("error.courierReportChanged");
   if (details?.reason === "cod_already_collected" && typeof details.collectedBy === "string") {
     return msg("error.codAlreadyCollectedBy", { name: details.collectedBy });
   }
@@ -474,9 +475,12 @@ export function useReconcileRefundAttempt() {
 export function useReconcileShipment() {
   const queryClient = useQueryClient();
   return useOrderCommand({
-    mutationFn: ({ orderId, shipmentId }: OrderShipmentRef) =>
+    // `courierReport`: staff's decision on a courier's report the shipment is held for.
+    // `report`: the courier's report staff saw (its state and words); a different one is refused as changed.
+    mutationFn: ({ orderId, shipmentId, courierReport, report }: OrderShipmentRef & { courierReport?: "apply" | "keep"; report?: { status: string; rawStatus: string } }) =>
       apiData(postApiV1AdminOrdersByIdShipmentsByShipmentIdReconcile({
         path: { id: orderId, shipmentId },
+        body: courierReport && report ? { courierReport, report } : {},
       })),
     onSuccess: () => {
       invalidateOrderInventoryQueries(queryClient);

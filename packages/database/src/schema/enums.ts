@@ -66,7 +66,6 @@ export type DeliveryProviderType = (typeof DeliveryProvider)[keyof typeof Delive
 
 export const PaymentRecordStatus = {
     PENDING: "pending",
-    CONFIRMED: "confirmed",
     SUCCEEDED: "succeeded",
     FAILED: "failed",
     REFUNDED: "refunded",
@@ -115,7 +114,6 @@ export const ShipmentStatus = {
     FAILED: "failed",
     RETURNED: "returned",
     CANCELLED: "cancelled",
-    PROCESSING: "processing",
     RECONCILE_REQUIRED: "reconcile_required",
     UNKNOWN: "unknown",
 } as const;

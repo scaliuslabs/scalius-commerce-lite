@@ -246,6 +246,9 @@ function selectGateway(gateway: string): void {
     button.setAttribute("aria-checked", String(selected));
     button.classList.toggle("border-primary", selected);
     button.classList.toggle("bg-primary/10", selected);
+    button.classList.toggle("border-border", !selected);
+    button.classList.toggle("bg-background", !selected);
+    button.querySelector("[data-choice-dot]")?.classList.toggle("hidden", !selected);
   });
   setRecoveryMessage(null);
   setRecoveryButton(recoveryButtonLabel(gateway));
@@ -272,7 +275,9 @@ function renderPaymentRecovery(detail: AccountOrderDetail): void {
   if (methods) {
     methods.innerHTML = gateways.map((gateway) => {
       const selected = gateway === selectedGateway;
-      return `<button type="button" role="radio" aria-checked="${selected}" data-recovery-gateway="${escapeHtml(gateway)}" class="min-h-11 rounded-lg border px-3 py-2 text-start text-sm text-foreground transition-colors hover:bg-muted ${selected ? "border-primary bg-primary/10" : "border-border bg-background"}">${gatewayMarkup(gateway)}</button>`;
+      // The chosen method is marked by a dot in its round mark as well as by its colour (as on the payment step).
+      const mark = `<span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-input" aria-hidden="true"><span data-choice-dot class="h-2.5 w-2.5 rounded-full bg-current text-primary${selected ? "" : " hidden"}"></span></span>`;
+      return `<button type="button" role="radio" aria-checked="${selected}" data-recovery-gateway="${escapeHtml(gateway)}" class="flex min-h-11 items-center gap-3 rounded-lg border px-3 py-2 text-start text-sm text-foreground transition-colors hover:bg-muted ${selected ? "border-primary bg-primary/10" : "border-border bg-background"}">${mark}${gatewayMarkup(gateway)}</button>`;
     }).join("");
   }
   container.classList.remove("hidden");
@@ -715,9 +720,10 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
   const summary = byId("orderSummary");
   if (summary) {
     const cell = (value: string, className = "") => `<span${className ? ` class="${className}"` : ""}>${escapeHtml(value)}</span>`;
-    // Rows of label and amount, as on every money summary (an add-on row may open to its app's lines).
+    // Rows of label and amount, as on every money summary (an add-on row may open to its app's lines, a
+    // <details>: so the summary is plain rows, never a <dl>, which holds only its terms and descriptions).
     const row = (label: string, valueHtml: string, kind: MoneySummaryRow) =>
-      `<div class="flex justify-between gap-4 ${kind === "total" ? "border-t border-border pt-2 font-semibold text-foreground" : "text-muted-foreground"}" data-summary-row="${kind}"><dt${kind === "total" ? ' data-part="summary-total-label"' : ""}>${escapeHtml(label)}</dt><dd class="text-end tabular-nums">${valueHtml}</dd></div>`;
+      `<div class="flex justify-between gap-4 ${kind === "total" ? "border-t border-border pt-2 font-semibold text-foreground" : "text-muted-foreground"}" data-summary-row="${kind}"><span${kind === "total" ? ' data-part="summary-total-label"' : ""}>${escapeHtml(label)}</span><span class="text-end tabular-nums">${valueHtml}</span></div>`;
     const major = (value: number) => fromMinor(value, places);
     const money = (value: number) => accountMoney(value, order.currencyCode);
     const tax = order.taxAmountMinor ?? 0;
@@ -885,8 +891,8 @@ export function renderOrderDetail(detail: AccountOrderDetail, checkoutConfig: Ch
   const status = byId("orderStatus");
   // A finished pickup order reads "Picked up"; a service/digital-only one "Completed", never "Delivered".
   if (status) {
+    // Beside the heading, on the page: it reads the page's row (the account's pill row is its cards').
     status.className = accountPill(orderStatusTone(detail.buyerView.status));
-    status.dataset.part = "status-badge";
     status.textContent = buyerOrderStatusText(detail.buyerView.status, copy);
   }
   renderReturnNotice();

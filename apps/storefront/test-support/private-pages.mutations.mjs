@@ -142,7 +142,7 @@ export const MUTATIONS = {
     rewrites: [
       rewrite(TOKENS, "        ui([node.target], parent);\n", "\n"),
       rewrite(TOKENS, "{color:inherit;--focus-ring-color:var(--pt-r)}", "{--focus-ring-color:var(--pt-r)}"),
-      rewrite(TOKENS, '...["text-foreground", "text-card-foreground", "text-primary-foreground"].map(', '...["text-card-foreground", "text-primary-foreground"].map('),
+      rewrite(TOKENS, '...["text-foreground", "text-card-foreground", "text-primary-foreground", "text-destructive-foreground"].map(', '...["text-card-foreground", "text-primary-foreground", "text-destructive-foreground"].map('),
     ],
     cases: [B2],
     expect: /an app's node at cart\.line\.after has no row of its own/,
@@ -303,7 +303,7 @@ export const MUTATIONS = {
     why: "the summary's add-on bar (its <summary>) has no row, and the save's no_row guard is off: it reads the summary rows' row",
     rewrites: [
       rewrite(TOKENS, "      place(name, style, out ? beside! : key);\n", "      if (name === \"summary-add-on\") continue;\n      place(name, style, out ? beside! : key);\n"),
-      rewrite(TOKENS, "    if (keys.has(name) || (style.element", "    if (name === \"summary-add-on\" || keys.has(name) || (style.element"),
+      rewrite(TOKENS, "    if (keys.has(name) || ((style.element || style.within)", "    if (name === \"summary-add-on\" || keys.has(name) || ((style.element || style.within)"),
     ],
     cases: [PROTECTED],
     expect: /the style target summary-add-on names it and no row of the table is its/,
@@ -337,7 +337,7 @@ export const MUTATIONS = {
   },
   "F2 an edged action's fill distance unchecked": {
     why: "the save takes an edged Place order whose fill is the dock's own colour: a black frame around nothing a buyer reads as a button",
-    rewrites: [rewrite(TOKENS, "      && surface.every((point) => around.every((back) => storefrontThemeColorDistance(point, back) >= PRIVATE_EDGE_FILL_DISTANCE));\n", ";\n")],
+    rewrites: [rewrite(TOKENS, " && surface.every((point) => storefrontThemeColorDistance(point, back) >= PRIVATE_EDGE_FILL_DISTANCE));\n", ");\n")],
     cases: ["Place order the dock's colour behind a dark edge"],
     expect: /^base: Place order: .*its fill is [\d.]+ from what is behind it, under 40/,
   },
@@ -392,6 +392,25 @@ export const MUTATIONS = {
     rewrites: [rewrite("apps/storefront/src/components/account/AccountShell.astro", 'data-part="sign-out"', 'data-part="sign-out" hidden')],
     cases: ["the account in the customer's look"],
     expect: /^account: \[data-part="sign-out"\]: not visible/,
+  },
+  // Round three: the after-order draws' forced states.
+  "after-order: the account's tabs ring outside the strip": {
+    why: "a tab's focus ring drawn outside its edge: the strip that scrolls sideways clips it, and a keyboard buyer loses their place",
+    rewrites: [rewrite("apps/storefront/src/components/account/AccountShell.astro", "focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring", "focus-visible:ring-2 focus-visible:ring-ring")],
+    cases: ["the account's account-inbox in a hostile look"],
+    expect: /^account focus: control .*nav-item\]: its focus ring reads at 3:1 on \d+ pixels/,
+  },
+  "after-order: an edit dialog drawn through to its backdrop": {
+    why: "a card in the top layer paints nothing where the page beneath paints the same: its words stand on the dialog's backdrop",
+    rewrites: [rewrite(TOKENS, "row.paint !== null && (row.opaque || also.has", "row.paint !== null && (also.has")],
+    cases: ["the account's account-profile-dialog just above every floor"],
+    expect: /^account: ".*" .*editDetails.*reads \d+\.\d+:1 on what is behind it/,
+  },
+  "after-order: a hover nobody sees": {
+    why: "a hover surface a step from a near-white surface: the pointer changes nothing visible, and no underline stands in",
+    rewrites: [rewrite(TOKENS, "storefrontThemeColorDistance(point, hover) >= PRIVATE_HOVER_DISTANCE) ? hover", "storefrontThemeColorDistance(point, hover) >= 0) ? hover")],
+    cases: ["the account's account-order just above every floor"],
+    expect: /^account hover: control .*: shows no hover/,
   },
 };
 

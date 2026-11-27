@@ -130,7 +130,7 @@ function paymentRecoveryFilterCondition(filter: OrderPaymentRecoveryFilter) {
     const hostedMethod = onlinePaymentMethod(orders.paymentMethod);
     const needsAttention = sql`(
         ${hostedMethod}
-        AND ${paymentRecoveryLifecycleCondition()} = 1
+        AND ${paymentRecoveryLifecycleCondition()} > 0
         AND (
           ${orders.paymentStatus} = ${PaymentStatus.FAILED}
           OR ${staleOrFailedAttempt}

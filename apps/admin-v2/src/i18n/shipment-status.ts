@@ -7,7 +7,6 @@ type ShipmentWords = Record<`shipment.${ShipmentStatus}`, string>;
 const SHIPMENT_WORDS = {
   en: {
     "shipment.creating": "Booking",
-    "shipment.processing": "Booking",
     "shipment.reconcile_required": "Needs checking",
     "shipment.pending": "Booked",
     "shipment.pickup_assigned": "Pickup assigned",
@@ -26,7 +25,6 @@ const SHIPMENT_WORDS = {
   } satisfies ShipmentWords,
   bn: {
     "shipment.creating": "বুক করা হচ্ছে",
-    "shipment.processing": "বুক করা হচ্ছে",
     "shipment.reconcile_required": "যাচাই করা দরকার",
     "shipment.pending": "বুক হয়েছে",
     "shipment.pickup_assigned": "পিকআপ নির্ধারিত",

@@ -88,7 +88,7 @@ function protectionLoader(): () => PluginLoader {
       const cart = (invocation.input as { cart: { lines: Array<{ lineId: string; productId: string }> } }).cart;
       return ok({
         prices: [],
-        adjustments: cart.lines.filter((line) => line.productId === "p_linen").map((line) => ({ lineId: line.lineId, amountMinor: 15_000, title: "Protection plan, 12 months" })),
+        addOns: cart.lines.filter((line) => line.productId === "p_linen").map((line) => ({ lineId: line.lineId, amountMinor: 15_000, title: "Protection plan, 12 months" })),
       });
     },
   };

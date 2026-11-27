@@ -5,6 +5,8 @@
 // only. A refused download comes back here with `?download=<flag>` and the
 // file's anchor.
 import Layout from "@/layouts/Layout.astro";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { privateRouteLook } from "@/lib/private-pages/look";
 import AccountShell from "@/components/account/AccountShell.astro";
 import { getLayoutData } from "@/lib/api";
 import {
@@ -25,6 +27,8 @@ const [layoutData, downloads, summary] = await Promise.all([
   readAccountDownloads(Astro.request),
   readAccountSummaryForRequest(Astro.request),
 ]);
+// The account's look (`PRIVATE_PAGE_ROUTES`), only where the theme set it: else the page draws as without a theme.
+const look = privateRouteLook(Astro, (await resolveRequestTheme(Astro, layoutData)).theme);
 const notice = readDownloadNotice(Astro.url.search);
 // The store's language (the layout read set it).
 const copy = downloadCopy();
@@ -35,7 +39,7 @@ const shellState = downloads.ok ? "ok" : downloads.reason === "signed_out" ? "si
 const listMarkup = downloads.ok ? renderDownloadLines(lines, { returnTo: "/account/downloads" }) : "";
 ---
 
-<Layout title={copy.pageTitle} layoutData={layoutData}>
+<Layout title={copy.pageTitle} layoutData={layoutData} {...look}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
   <AccountShell
     current="downloads"

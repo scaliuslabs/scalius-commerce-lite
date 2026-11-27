@@ -4,7 +4,8 @@
 // for a column that is gone fails too.
 //
 // - MACHINES: the moves are declared once (`@scalius/shared/machine`) and the
-//   writers go through the declaration.
+//   writers go through the declaration. A column holding two kinds of record
+//   (a payment record: a charge or a refund) has one machine per kind.
 // - IMPLICIT: the column moves between states, but its legal moves live only
 //   in its writers (scattered `if`s and WHERE clauses). This list is the open
 //   work: it only shrinks. To take a column off it, declare its machine, send
@@ -17,6 +18,10 @@ import { COD_MACHINE, ORDER_MACHINE } from "@scalius/shared/order-state";
 import { INVENTORY_TRANSFER_MACHINE, RETURN_MACHINE } from "@scalius/shared/record-lifecycles";
 import { REVIEW_MACHINE } from "@scalius/shared/reviews";
 import { CONVERSATION_MACHINE } from "@scalius/shared/conversation";
+import { SHIPMENT_MACHINE } from "@scalius/shared/shipment-state";
+import { PAYMENT_MACHINE, REFUND_RECORD_MACHINE } from "@scalius/shared/payment-record-state";
+import { WARRANTY_CLAIM_MACHINE } from "@scalius/shared/warranty";
+import { OBJECT_RECORD_MACHINE } from "@scalius/shared/plugins/object-status";
 import { INVITATION_MACHINE } from "./auth/invitation-state";
 import { META_PURCHASE_QUEUE } from "./integrations/meta/purchase-outbox";
 import { TRACKING_QUEUE } from "./integrations/tracking/deliveries";
@@ -31,8 +36,13 @@ import { PLUGIN_DELIVERY_QUEUE } from "./modules/plugins";
 
 type StateColumn = `${string}.${string}`;
 
-export const MACHINES: Readonly<Record<StateColumn, AnyMachine>> = {
+export const MACHINES: Readonly<Record<StateColumn, AnyMachine | readonly AnyMachine[]>> = {
     "orders.status": ORDER_MACHINE,
+    "delivery_shipments.status": SHIPMENT_MACHINE,
+    // A charge (`full`, `deposit`, `balance`) or a refund record (`refund`), by its type.
+    "order_payments.status": [PAYMENT_MACHINE, REFUND_RECORD_MACHINE],
+    "warranty_claims.status": WARRANTY_CLAIM_MACHINE,
+    "object_records.status": OBJECT_RECORD_MACHINE,
     "cod_tracking.cod_status": COD_MACHINE,
     "product_reviews.status": REVIEW_MACHINE,
     "conversations.status": CONVERSATION_MACHINE,
@@ -76,7 +86,6 @@ export const NOT_MACHINES: Readonly<Record<StateColumn, string>> = {
 /** What is known about each column's unwritten rules, for whoever declares its machine. */
 export const IMPLICIT: Readonly<Record<StateColumn, string>> = {
     // Orders and delivery
-    "delivery_shipments.status": "17 states, about 20 writers, most unguarded; couriers report in any order, so it needs settled/open rules more than an edge table",
     "order_return_commands.status": "idempotency claim: processing, committed",
     "order_support_requests.status": "admin moves are a table (orders/order-support-requests.ts ADMIN_SUPPORT_REQUEST_TRANSITIONS); `withdrawn` has no writer",
     "order_fulfillments.status": "active, voided; guarded writes in fulfilment/ledger.ts",
@@ -86,7 +95,6 @@ export const IMPLICIT: Readonly<Record<StateColumn, string>> = {
     "tax_document_commands.status": "leased command with a sweep (tax/documents.ts)",
     "payment_plans.status": "`deposit_paid` never moves on a refund; only the stale-checkout sweep cancels",
     // Money
-    "order_payments.status": "about 20 writers in 9 files; `confirmed` has no writer; the money-in-flight set is retyped in 8 places",
     "payouts.status": "forward-only by rank (payouts/payouts.ts) and a trigger",
     "payout_reversals.status": "forward-only by rank and a trigger",
     "customer_payment_methods.status": "active, removed; a re-saved method returns to active",
@@ -94,7 +102,6 @@ export const IMPLICIT: Readonly<Record<StateColumn, string>> = {
     // Stock and supply
     "inventory_locations.status": "active, archived",
     "product_low_stock_alerts.alert_status": "two implementations in inventory/alerts.ts and a third derivation in the list read",
-    "warranty_claims.status": "any status to any, by design, guarded by version",
     "digital_assets.status": "draft, ready, archived; guarded by version",
     "digital_asset_uploads.status": "`aborted` means both cancelled and replaced; two writers name the row by id only",
     "digital_licence_keys.status": "available to assigned or revoked, both final",
@@ -105,7 +112,6 @@ export const IMPLICIT: Readonly<Record<StateColumn, string>> = {
     "sales_channels.status": "mirrors its app's status",
     "categories.status": "publication state with a trash flag",
     "brands.status": "publication state with a trash flag",
-    "object_records.status": "two vocabularies in one column: `active`, or draft and published for storefront types",
     "order_review_requests.status": "scheduled to queued or skipped, by trigger and drain",
     // Queues and jobs not yet on the queue kernel (utils/leased-queue.ts)
     "notification_delivery_receipts.status": "receipt per channel; `delivered` has no writer",

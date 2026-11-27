@@ -79,6 +79,14 @@ export const ORDER_EVENT_KINDS = [
      * order in its commit batch; its time is when they agreed.
      */
     "terms_accepted",
+    /**
+     * A courier reported another state for a settled parcel and no move of
+     * the shipment machine allows it (delivery/courier-report.ts): the
+     * shipment waits for staff with the report. `data`: `shipmentId`,
+     * `courierName`, `previousStatus`, `reportedStatus` and the courier's
+     * own words, `rawStatus`.
+     */
+    "courier_report",
 ] as const;
 export type OrderEventKind = (typeof ORDER_EVENT_KINDS)[number];
 
