@@ -24,10 +24,3 @@ export function focusMainHeading(root: ParentNode = document): boolean {
   heading.focus();
   return document.activeElement === heading;
 }
-
-/** Only when focus was lost (on <body>, or on something now hidden): the main heading. */
-export function focusMainHeadingIfLost(): boolean {
-  const active = document.activeElement;
-  const lost = !active || active === document.body || (active instanceof HTMLElement && !isShown(active));
-  return lost ? focusMainHeading() : false;
-}

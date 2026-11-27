@@ -395,7 +395,8 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
           const { installGalleryProbeChromeApp } = await vite.ssrLoadModule("/src/gallery/chrome-app-extension.ts");
           probe = installGalleryProbeChromeApp(String(body.id), typeof body.sheet === "string" ? body.sheet : new Uint8Array(Buffer.from(body.sheetBase64, "base64"))).pluginId;
         }
-        return sendJson(response, 200, { id: registerBuyerChromeEntry(String(body.id), probe ? "forged" : chrome, probe).id });
+        const page = ["account", "account-order", "account-order-paid"].includes(body.page) ? body.page : "account";
+        return sendJson(response, 200, { id: registerBuyerChromeEntry(String(body.id), probe ? "forged" : chrome, probe, page).id });
       }
       // The cart page's style targets (the rendered tests' coverage walk claims by them with no tokens), and the
       // app node kinds that have rows (their selectors inside a block).
@@ -431,6 +432,9 @@ export async function startStorefrontGallery({ port = DEFAULT_GALLERY_PORT, host
         const plan = gallery.galleryRenderPlan(id, origin);
         if (!plan) return sendJson(response, 404, { error: `unknown entry ${id}` });
         const pageModule = await vite.ssrLoadModule(plan.page);
+        // A theme's chrome on the account renders for the browser's own session cookie (signed in or not), as the
+        // store renders a buyer's page: the gate reads the server's sign-in hint with scripts off.
+        if (plan.entry.family === "buyer-chrome" && request.headers.cookie) plan.headers = { ...plan.headers, cookie: String(request.headers.cookie) };
         // Read before the render: the layout payload resets the request's platform origins.
         const fixtureApiUrl = plan.runtime.PUBLIC_API_URL;
         const rendered = await currentEntry.run(plan.entry, () =>

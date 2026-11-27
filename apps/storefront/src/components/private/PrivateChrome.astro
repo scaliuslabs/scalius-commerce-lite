@@ -8,10 +8,12 @@
 // (lib/private-pages/chrome-style.ts): it imports the store's reading of the
 // theme's sheet from the store's own path under the store's guard. The host
 // carries only the page's colour scheme and sign-in hint, and has no child of
-// its own: the server renders the scheme `<html>` carries (`colorScheme`, so
-// a theme's `:host([data-color-scheme])` rule holds with scripts off too),
-// and the inline script after it copies both from `<html>` as the page's
-// scheme settles.
+// its own. The server renders both, so a theme's `:host([data-color-scheme])`
+// rules and its `whenSignedIn()` / `whenSignedOut()` parts hold with scripts
+// off too: the scheme `<html>` carries (`colorScheme`), and the hint from the
+// buyer's session cookie (these pages are per-buyer and never stored, and the
+// hint is one boolean). The inline script after it copies both from `<html>`
+// as the page's scheme settles, and scripts/buyer-chrome.ts keeps the hint.
 //
 // Nothing the theme styles is ever in the top layer. Each popover of its
 // markup (a menu drawer, a dropdown) was lifted out as a panel (`InertPanel`)
@@ -19,7 +21,11 @@
 // (`[data-buyer-chrome-panel]`, its kind's geometry, backdrop, title bar and
 // close button the store's own CSS below), in a frame and shadow root of its
 // own. The theme's button for it opens the store's panel (`data-buyer-panel-open`,
-// scripts/buyer-chrome.ts); without the store's script it opens nothing. No
+// scripts/buyer-chrome.ts); without the store's script it opens nothing, so
+// with scripts off the store draws its own "Menu" button after the frame for
+// each drawer panel (inside <noscript>: with scripts on it is never parsed),
+// a light-DOM `popovertarget` the browser opens with no script. A dropdown
+// (`menu` panel) has no such button: with scripts off it stays closed. No
 // app runtime, island or file base: nothing of the app runs here.
 import type { StorefrontColorScheme } from "@scalius/shared/storefront-theme";
 import type { BuyerChrome } from "@/lib/extensions";
@@ -27,6 +33,7 @@ import { BUYER_CHROME_FRAME_STYLE, buyerChromeShadowStyle } from "@/lib/private-
 import { BUYER_CHROME_STATE_SCRIPT } from "@/lib/inline-boot-scripts";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import { storefrontCopy } from "@/lib/storefront-copy";
+import { getCustomerSessionTokenFromCookie } from "@/lib/customer-session-cookie";
 import baseHref from "@/styles/buyer-chrome.css?url";
 
 interface Props {
@@ -42,9 +49,23 @@ const { target, chrome, storeName, colorScheme } = Astro.props;
 const style = buyerChromeShadowStyle(baseHref, chrome.sheet);
 const copy = storefrontCopy((await currentRequestTheme(Astro.locals)).language).chrome;
 const title = [storeName?.trim(), copy.nav.menu].filter(Boolean).join(" · ");
+const drawers = chrome.panels.flatMap((panel, index) => (panel.kind === "drawer" ? [index] : []));
+const signedIn = getCustomerSessionTokenFromCookie(Astro.request.headers.get("cookie")) !== null ? "" : undefined;
 ---
 
-<div data-buyer-chrome-frame={target} style={BUYER_CHROME_FRAME_STYLE[target]}><scalius-chrome data-chrome={target} data-color-scheme={colorScheme ?? undefined}><template shadowrootmode="open"><style is:inline set:html={style}></style><Fragment set:html={chrome.html} /></template></scalius-chrome><script is:inline set:html={BUYER_CHROME_STATE_SCRIPT}></script></div>
+<div data-buyer-chrome-frame={target} style={BUYER_CHROME_FRAME_STYLE[target]}><scalius-chrome data-chrome={target} data-color-scheme={colorScheme ?? undefined} data-scalius-signed-in={signedIn}><template shadowrootmode="open"><style is:inline set:html={style}></style><Fragment set:html={chrome.html} /></template></scalius-chrome><script is:inline set:html={BUYER_CHROME_STATE_SCRIPT}></script></div>
+{drawers.length > 0 && (
+  <noscript>
+    <div class="buyer-chrome-noscript-bar">
+      {drawers.map((index) => (
+        <button type="button" popovertarget={`buyer-panel-${target}-${index}`}>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+          <span>{copy.nav.menu}</span>
+        </button>
+      ))}
+    </div>
+  </noscript>
+)}
 {chrome.panels.map((panel, index) => (
   <div
     id={`buyer-panel-${target}-${index}`}
@@ -59,7 +80,7 @@ const title = [storeName?.trim(), copy.nav.menu].filter(Boolean).join(" · ");
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
       </button>
     </div>
-    <div data-buyer-chrome-frame="panel" style={BUYER_CHROME_FRAME_STYLE.panel}><scalius-chrome data-chrome="panel" data-color-scheme={colorScheme ?? undefined}><template shadowrootmode="open"><style is:inline set:html={style}></style><Fragment set:html={panel.html} /></template></scalius-chrome><script is:inline set:html={BUYER_CHROME_STATE_SCRIPT}></script></div>
+    <div data-buyer-chrome-frame="panel" style={BUYER_CHROME_FRAME_STYLE.panel}><scalius-chrome data-chrome="panel" data-color-scheme={colorScheme ?? undefined} data-scalius-signed-in={signedIn}><template shadowrootmode="open"><style is:inline set:html={style}></style><Fragment set:html={panel.html} /></template></scalius-chrome><script is:inline set:html={BUYER_CHROME_STATE_SCRIPT}></script></div>
   </div>
 ))}
 
@@ -103,6 +124,28 @@ const title = [storeName?.trim(), copy.nav.menu].filter(Boolean).join(" · ");
     gap: 0.5rem;
     padding: 0.25rem 0.25rem 0.25rem 1rem;
     border-block-end: 1px solid var(--border, currentColor);
+    font-weight: 600;
+    font-size: 0.875rem;
+  }
+  /* With scripts off: the store's own button for a theme's drawer, after its frame (the theme's opens nothing then). */
+  .buyer-chrome-noscript-bar {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.25rem 0.75rem;
+    border-block-end: 1px solid var(--border, currentColor);
+    background: var(--background, Canvas);
+    color: var(--foreground, CanvasText);
+  }
+  .buyer-chrome-noscript-bar button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-block-size: 44px;
+    padding-inline: 0.75rem;
+    border: 1px solid var(--border, currentColor);
+    border-radius: 0.5rem;
+    color: inherit;
+    background: transparent;
     font-weight: 600;
     font-size: 0.875rem;
   }

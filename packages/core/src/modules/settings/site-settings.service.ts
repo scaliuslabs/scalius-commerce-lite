@@ -45,6 +45,11 @@ import {
   checkStorefrontThemeSave,
   compileStorefrontPrivatePages,
   privatePagesPolicyCurrent,
+  privatePagesCompiledCurrent,
+  privatePagesPending,
+  PRIVATE_ANATOMY_VERSION,
+  PRIVATE_CHECKER_VERSION,
+  PRIVATE_POLICY_VERSION,
   storedRowWithCompiled,
   privatePagesContextOf,
   privateTokenApps,
@@ -465,6 +470,46 @@ export async function recompilePublishedPrivatePages(db: Database): Promise<Priv
   const refused = Object.entries(privatePages.compiled.refused ?? {}) as Array<[PrivatePageKey, PrivatePageRefusal[]]>;
   if (refused.length === 0) return { outcome: "recompiled" };
   return { outcome: "refused", pages: refused.map(([page]) => page), reasons: [...new Set(refused.flatMap(([, issues]) => issues.map((issue) => issue.reason)))] };
+}
+
+/** The refusal a page records when no maintenance run finished its compile for this build. */
+export const PRIVATE_COMPILE_UNFINISHED = "compile_unfinished";
+
+/**
+ * When no maintenance run finished the compile in its tries (it threw, raced
+ * a publish, or ran past a run's CPU), the pages still waiting for this
+ * build's compile are recorded as refused, with why, where the theme page
+ * shows refusals (`compiled.refused`): each keeps drawing the store's default
+ * look, as it did while waiting, and the merchant's next publish compiles it.
+ * Nothing is compiled here: one read and one write at the same revision. A
+ * compile this build still serves (only an older policy passed it) is left
+ * as it is. Returns the pages it recorded.
+ */
+export async function refuseUnfinishedPrivatePages(db: Database): Promise<PrivatePageKey[]> {
+  const row = (await selectThemeSettingsRows(db))[0];
+  if (!row) return [];
+  const read = readStoredStorefrontThemeDocument(row.colors);
+  if (!read.ok || privatePagesCompiledCurrent(read.document.privatePages)) return [];
+  const pages = privatePagesPending(read.document.privatePages);
+  if (pages.length === 0) return [];
+  const refusal: PrivatePageRefusal = {
+    path: "privatePages",
+    reason: PRIVATE_COMPILE_UNFINISHED,
+    message: "The store could not finish checking this page's design after its update. Publish the theme to check it again.",
+  };
+  const compiled = {
+    anatomy: PRIVATE_ANATOMY_VERSION,
+    sanitizer: PRIVATE_CHECKER_VERSION,
+    policy: PRIVATE_POLICY_VERSION,
+    css: {},
+    refused: Object.fromEntries(pages.map((page) => [page, [refusal]])),
+  };
+  const stored = storedRowWithCompiled(upgradeStorefrontThemeDocument(JSON.parse(row.colors) as unknown), compiled, read.document.privatePages);
+  const written = await db.update(themeSettings)
+    .set({ colors: JSON.stringify(stored), updatedAt: sql`unixepoch()` })
+    .where(and(eq(themeSettings.id, THEME_SETTINGS_ID), eq(themeSettings.revision, row.revision)))
+    .returning({ id: themeSettings.id });
+  return written.length === 0 ? [] : pages;
 }
 
 /** The live document, the shared draft (the live one until a draft is saved) and who published last. */
