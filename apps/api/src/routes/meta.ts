@@ -1,6 +1,6 @@
 // apps/api/src/routes/meta.ts
 // `GET /api/v1/meta`: the compatibility discovery document for automated and
-// managed deployments. It reports the runtime release, the API majors, the
+// managed deployments. It reports the platform release (SCALIUS_PLATFORM_VERSION), the API majors, the
 // database provider, the schema revision this build expects, the revision the
 // database has actually applied, and which opt-in automation contracts are
 // active. It is a probe: it answers while the master secret is missing and
@@ -18,10 +18,10 @@ import {
   dashboardBasePathFromUrl,
 } from "@scalius/shared/platform-config";
 import { FRONT_PROXY_SIGNATURE_VERSION } from "@scalius/shared/trusted-front-proxy";
+import { SCALIUS_PLATFORM_VERSION } from "@scalius/shared/plugins/api-version";
 import {
   API_CURRENT_MAJOR,
   API_RELEASE_NAME,
-  API_RELEASE_VERSION,
   API_SUPPORTED_MAJORS,
 } from "../release";
 import { ok } from "../utils/api-response";
@@ -166,7 +166,7 @@ app.openapi(metaRoute, async (c) => {
 
   c.header("Cache-Control", "no-store");
   return ok(c, {
-    platform: { name: API_RELEASE_NAME, version: API_RELEASE_VERSION },
+    platform: { name: API_RELEASE_NAME, version: SCALIUS_PLATFORM_VERSION },
     api: {
       current: API_CURRENT_MAJOR,
       supportedMajors: [...API_SUPPORTED_MAJORS],

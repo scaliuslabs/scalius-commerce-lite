@@ -94,7 +94,7 @@ const createBody = z.object({
   variants: z.array(variantInput).min(1).max(MAX_PRODUCT_OPTION_COMBINATIONS)
     .openapi({ description: "With options, one SKU per combination, each using every option's value; without options, exactly one." }),
   mediaIds: z.array(z.string().trim().min(8).max(160)).max(50).default([])
-    .openapi({ description: "Ready media library files (`dashboard.media.import_url`), in gallery order; the first is featured." }),
+    .openapi({ description: "Ready media library files (`media.import_url`), in gallery order; the first is featured." }),
   salesChannelIds: z.array(z.string().min(1).max(160)).max(50).optional()
     .openapi({ description: "The sales channels to publish it to. Omit to publish it to every channel." }),
 }).strict();
@@ -187,7 +187,7 @@ function editorCreateInput(body: CreateBody, places: number): unknown {
 
 function issuesError(error: z.ZodError): ValidationError {
   return new ValidationError(error.issues[0]?.message ?? "Check the product.", {
-    issues: error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })),
+    issues: error.issues.map((issue) => ({ path: issue.path.filter((key) => typeof key !== "symbol"), message: issue.message })),
   });
 }
 

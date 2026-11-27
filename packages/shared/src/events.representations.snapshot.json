@@ -3887,11 +3887,6 @@
       "minLength": 1,
       "maxLength": 128
      },
-     "operationId": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 128
-     },
      "method": {
       "type": "string",
       "enum": [
@@ -3906,7 +3901,6 @@
     },
     "required": [
      "appOperation",
-     "operationId",
      "method",
      "path"
     ]

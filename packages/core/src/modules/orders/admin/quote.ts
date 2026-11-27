@@ -483,7 +483,7 @@ export async function prepareManualOrderQuote(
         ? normalizeMarketCountry(data.shippingCountryCode)
         : DELIVERY_HIERARCHY_COUNTRY;
     if (!submittedCountry || !addressRulesFor(submittedCountry)) {
-        throw new ValidationError("We can't take addresses in that country.", { reason: "address_invalid", issues: [{ field: "countryCode", code: "unknown_country" }] });
+        throw new ValidationError("We can't take addresses in that country.", { reason: "address_invalid", issues: [{ field: "countryCode", code: "unknown_country", path: ["shippingAddress", "countryCode"], message: "We can't take addresses in that country." }] });
     }
     const inDeliveryHierarchy = usesDeliveryHierarchy(submittedCountry);
     const submittedCity = inDeliveryHierarchy ? data.city?.trim() : undefined;
@@ -569,7 +569,7 @@ export async function prepareManualOrderQuote(
             const override = submitted?.unitPriceMinor;
             if (override !== undefined && !isIncrementMultipleMinor(override, currency.priceIncrementMinor)) {
                 throw new ValidationError(priceIncrementMessage(currency.code, currency.priceIncrementMinor), {
-                    issues: [{ index: requestRow(item, index), field: "unitPriceMinor", code: "price_increment" }],
+                    issues: [{ index: requestRow(item, index), field: "unitPriceMinor", code: "price_increment", path: ["items", requestRow(item, index), "unitPriceMinor"], message: priceIncrementMessage(currency.code, currency.priceIncrementMinor) }],
                 });
             }
             return {
@@ -596,7 +596,7 @@ export async function prepareManualOrderQuote(
     const outOfRange = trackedItems.findIndex((item) => !isLineAmountInRange(item.unitPriceMinor, item.quantity));
     if (outOfRange >= 0) {
         throw new ValidationError("That line comes to more than one order can hold. Lower its quantity.", {
-            issues: [{ index: requestRow(trackedItems[outOfRange]!, outOfRange), code: "quantity_unavailable" }],
+            issues: [{ index: requestRow(trackedItems[outOfRange]!, outOfRange), code: "quantity_unavailable", path: ["items", requestRow(trackedItems[outOfRange]!, outOfRange), "quantity"], message: "That line comes to more than one order can hold. Lower its quantity." }],
         });
     }
     const money = calculateManualOrderMoney(

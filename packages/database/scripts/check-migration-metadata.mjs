@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, rmSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
+import { migrationWriteFindings } from "./migration-writes.mjs";
 
 const databaseRoot = resolve(import.meta.dirname, "..");
 const migrationsDir = join(databaseRoot, "migrations");
@@ -209,6 +210,11 @@ for (let index = 0; index < upgradeFiles.length; index += 1) {
       errors.push(`${file} PostgreSQL sidecar contains a transaction-unsafe statement`);
     }
   }
+}
+
+// A new migration declares the existing rows it rewrites (migration-writes.mjs).
+for (const file of sqlFiles) {
+  errors.push(...migrationWriteFindings(file, readFileSync(join(migrationsDir, file), "utf8")));
 }
 
 for (const file of postgresSqlFiles) {

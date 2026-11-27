@@ -102,6 +102,7 @@ export interface PluginApiResult<T = unknown> {
     error: {
         code: string;
         message: string;
+        details?: Record<string, unknown>;
     } | null;
 }
 export interface PluginApi {
@@ -455,7 +456,7 @@ export { APP_ERROR_CODES, isAppErrorCode, type AppErrorCode, type AppErrorCodeEn
 export { PLUGIN_SCOPES, PLUGIN_SCOPE_NAMES, isPluginScope, type PluginScope } from "@scalius/shared/plugins/scopes";
 export * from "./machines";
 export type { CourierFind, CourierRecipient, CourierShipment, CourierShipmentInput, CourierRatesInput, CourierRates, CourierShipmentStatus, CourierTracking, CourierWebhook, CourierWebhookReply, EmailSend, EmailSendInput, CourierHistory, CourierHistoryInput, MessageStatus, PaymentCapability, PaymentCapture, PaymentCaptureInput, PaymentCharge, PaymentChargeInput, PaymentDeleteSavedMethod, PaymentDeleteSavedMethodInput, PaymentEvent, PaymentVoid, PaymentVoidInput, SavedPaymentMethod, PaymentQuery, PaymentQueryInput, PaymentRefund, PaymentRefundInput, PaymentRefundProbe, PaymentRefundProbeInput, PaymentSession, PaymentSessionInput, PaymentSettlement, PaymentVerification, ProviderConnection, ProviderHttpRequest, ProviderImplementation, ProviderKind, ProviderOperationInput, ProviderOperationOutput, ProviderWireAmount, SmsSend, SmsSendInput, TaxAddress, TaxCalculateInput, TaxCalculation, TaxCalculationLine, } from "@scalius/shared/plugins/providers";
-export type { PluginFeature, PluginFeatureInput, PluginManifest, PluginManifestInput, PluginUiAction, PluginUiActionResult, PluginUiDocument, PluginUiNode, PluginUiSurface, PluginUiTarget, } from "@scalius/shared/plugins";
+export type { PluginFeature, PluginFeatureInput, PluginManifest, PluginManifestInput, PluginUiAction, PluginUiActionResult, PluginUiDocument, PluginUiNode, PluginUiSpan, PluginUiSurface, PluginUiTarget, } from "@scalius/shared/plugins";
 export { adminContext, adminLocale, adminNumber, ui, wantsPage, type PluginAdminContext, type PluginAdminLocale } from "./ui";
 export { moneyFor, textFor } from "./text";
 export type { BuyerUiLine, BuyerUiOrderLine, FunctionCart, FunctionCartLine, FunctionLineOffer, FunctionLinePriceFacts, LineInputChange } from "@scalius/shared/plugins";
@@ -2282,7 +2283,7 @@ export interface PluginInvocationResult {
     droppedLogs: number;
 }
 export interface PluginRuntimeBridge {
-    apiCall(operationId: string, input?: unknown): Promise<unknown>;
+    apiCall(operation: string, input?: unknown): Promise<unknown>;
     objectsGet(object: string, id: string): Promise<unknown>;
     objectsGetByHandle(object: string, handle: string): Promise<unknown>;
     objectsWrite(operations: unknown[]): Promise<Array<number | null>>;
@@ -2704,9 +2705,9 @@ export interface StableContractParameter {
     description?: string;
 }
 export interface StableContractOperation {
-    operationId: string;
     method: string;
     path: string;
+    statuses: number[];
     risk: string;
     idempotency: "none" | "supported" | "required" | string;
     revision: "none" | "optional" | "required" | string;
@@ -2729,8 +2730,8 @@ export interface StableContract {
 }
 export declare const stableContract: StableContract;
 export interface ContractCall {
-    operationId: string;
-    operation: StableContractOperation;
+    operation: string;
+    contract: StableContractOperation;
     path: Record<string, string | number>;
     query: Record<string, string | number | boolean | null>;
     body: unknown;
@@ -2744,11 +2745,11 @@ export interface ContractApiOptions {
     contract?: StableContract;
 }
 export interface ContractApi {
-    (operationId: string, input: PluginApiCallInput | undefined, call?: {
+    (operation: string, input: PluginApiCallInput | undefined, call?: {
         scopes?: readonly string[];
     }): Promise<PluginApiResult>;
     readonly calls: Array<{
-        operationId: string;
+        operation: string;
         input: PluginApiCallInput | undefined;
         result: PluginApiResult;
     }>;
@@ -2824,7 +2825,7 @@ export interface PluginTestHarnessOptions {
     language?: string;
     features?: string[];
     store?: Partial<PluginStoreInfo>;
-    api?: (operationId: string, input: PluginApiCallInput | undefined, call: {
+    api?: (operation: string, input: PluginApiCallInput | undefined, call: {
         scopes: readonly string[];
     }) => PluginApiResult | Promise<PluginApiResult>;
     riskHistory?: (orderId: string) => {
@@ -4381,7 +4382,7 @@ export declare function moneyFor(language: string | null | undefined, money: {
 }): string;
 
 // packages/plugin-sdk/src/ui.d.ts
-import type { PluginUiAction, PluginUiActionResult, PluginUiButton, PluginUiDocument, PluginUiImageSource, PluginUiNode, PluginUiRouteAction, PluginUiTarget, PluginUiTone } from "@scalius/shared/plugins";
+import type { PluginUiAction, PluginUiActionResult, PluginUiButton, PluginUiDocument, PluginUiImageSource, PluginUiNode, PluginUiRouteAction, PluginUiSpan, PluginUiTarget, PluginUiTone } from "@scalius/shared/plugins";
 import type { PluginRouteRequest } from "./context";
 type NodeOf<T extends PluginUiNode["type"]> = Extract<PluginUiNode, {
     type: T;
@@ -4395,7 +4396,7 @@ export declare const ui: {
     stack: (children: PluginUiNode[], options?: Options<"stack", "children">) => PluginUiNode;
     columns: (children: PluginUiNode[]) => PluginUiNode;
     heading: (text: string, level?: 2 | 3 | 4) => PluginUiNode;
-    text: (text: string, options?: Options<"text", "text">) => PluginUiNode;
+    text: (text: string | readonly PluginUiSpan[], options?: Options<"text", "text">) => PluginUiNode;
     badge: (text: string, tone?: PluginUiTone) => PluginUiNode;
     banner: (tone: PluginUiTone, text: string, options?: Options<"banner", "tone" | "text">) => PluginUiNode;
     keyValue: (items: NodeOf<"key-value">["items"]) => PluginUiNode;
@@ -5834,7 +5835,12 @@ export declare const PLUGIN_API_VERSION: "2026-10";
 export declare const APP_ERROR_CODES: {
     readonly validation_error: {
         readonly status: 400;
-        readonly meaning: "A path, query or body value the operation's schema refuses; details.issues names the fields.";
+        readonly meaning: "A path, query or body value the operation refuses; the message names the first. When the operation's schema refused it, details.issues names the fields (the first 20: each its path, as keys and list indexes, and a message). A path is into the operation's input; for an address it names the field within that address, and where the operation checks a normalised form of its input (products.create, orders.create), it is into that form.";
+        readonly details: {
+            readonly type: "object";
+            readonly properties: Record<string, unknown>;
+            readonly required: string[];
+        };
     };
     readonly invalid_cursor: {
         readonly status: 400;
@@ -5862,7 +5868,7 @@ export declare const APP_ERROR_CODES: {
     };
     readonly rate_limited: {
         readonly status: 429;
-        readonly meaning: "Too many calls; retry after details.retryAfterSeconds.";
+        readonly meaning: "Too many calls; retry later. An app's limits are per minute; an HTTP answer's Retry-After header says when.";
     };
     readonly internal_error: {
         readonly status: 500;
@@ -6015,6 +6021,11 @@ export declare const APP_ERROR_CODES: {
     readonly admin_order_create_request_mismatch: {
         readonly status: 409;
         readonly meaning: "The order request's key already belongs to another request: details.state is committed (details.orderId is the order it placed: read it, never place it again), processing (retry shortly) or failed (details.canRetryWithNewKey).";
+        readonly details: {
+            readonly type: "object";
+            readonly properties: Record<string, unknown>;
+            readonly required: string[];
+        };
     };
     readonly return_revision_conflict: {
         readonly status: 409;
@@ -6094,7 +6105,12 @@ export declare const APP_ERROR_CODES: {
     };
     readonly handle_unresolved: {
         readonly status: 422;
-        readonly meaning: "No category or collection has the handle; details.unresolved lists them.";
+        readonly meaning: "No category or collection has the handle; details.unresolved lists them (the first 20, each its kind and handle).";
+        readonly details: {
+            readonly type: "object";
+            readonly properties: Record<string, unknown>;
+            readonly required: string[];
+        };
     };
     readonly section_not_found: {
         readonly status: 404;
@@ -6151,6 +6167,11 @@ export declare const APP_ERROR_CODES: {
     readonly payout_request_mismatch: {
         readonly status: 409;
         readonly meaning: "The Idempotency-Key already sent a different payout (details.payoutId); use a new key for a new payout.";
+        readonly details: {
+            readonly type: "object";
+            readonly properties: Record<string, unknown>;
+            readonly required: string[];
+        };
     };
     readonly payout_reversal_unsupported: {
         readonly status: 422;
@@ -6159,26 +6180,56 @@ export declare const APP_ERROR_CODES: {
     readonly payout_not_reversible: {
         readonly status: 409;
         readonly meaning: "Only a paid payout can be reversed (details.status is the payout's).";
+        readonly details: {
+            readonly type: "object";
+            readonly properties: Record<string, unknown>;
+            readonly required: string[];
+        };
     };
     readonly payout_reversal_exceeds_payout: {
         readonly status: 409;
         readonly meaning: "The reversal takes back more than the payout has left to give back (details.reversibleMinor), or the payout already has 20 reversals.";
+        readonly details: {
+            readonly type: "object";
+            readonly properties: Record<string, unknown>;
+            readonly required: string[];
+        };
     };
     readonly payout_reversal_currency_mismatch: {
         readonly status: 422;
         readonly meaning: "A reversal is in its payout's currency (details.currency).";
+        readonly details: {
+            readonly type: "object";
+            readonly properties: Record<string, unknown>;
+            readonly required: string[];
+        };
     };
     readonly payout_reversal_request_mismatch: {
         readonly status: 409;
         readonly meaning: "The Idempotency-Key already reversed another amount or payout (details.reversalId); use a new key for a new reversal.";
+        readonly details: {
+            readonly type: "object";
+            readonly properties: Record<string, unknown>;
+            readonly required: string[];
+        };
     };
     readonly payout_reversal_outcome_unknown: {
         readonly status: 503;
         readonly meaning: "The reversal is recorded (details.reversalId) but the provider's answer is unknown; repeat the same request with the same Idempotency-Key to resume it, never applied twice.";
+        readonly details: {
+            readonly type: "object";
+            readonly properties: Record<string, unknown>;
+            readonly required: string[];
+        };
     };
     readonly payout_outcome_unknown: {
         readonly status: 503;
         readonly meaning: "The payout is recorded (details.payoutId) but the provider's answer is unknown; repeat the same request with the same Idempotency-Key to resubmit it, never sent twice.";
+        readonly details: {
+            readonly type: "object";
+            readonly properties: Record<string, unknown>;
+            readonly required: string[];
+        };
     };
     readonly conversation_channel_unavailable: {
         readonly status: 422;
@@ -6187,6 +6238,11 @@ export declare const APP_ERROR_CODES: {
     readonly sales_channel_product_unpublished: {
         readonly status: 422;
         readonly meaning: "An order or quote on an app's sales channel names a product not published to it (details.productIds); publish it to the channel first. Nothing was written.";
+        readonly details: {
+            readonly type: "object";
+            readonly properties: Record<string, unknown>;
+            readonly required: string[];
+        };
     };
     readonly pos_sales_channel_not_owned: {
         readonly status: 403;
@@ -6255,6 +6311,11 @@ export declare const APP_ERROR_CODES: {
     readonly review_exists: {
         readonly status: 409;
         readonly meaning: "The buyer already has a live review of the product, or the order line has its review; details.reviewId names it.";
+        readonly details: {
+            readonly type: "object";
+            readonly properties: Record<string, unknown>;
+            readonly required: string[];
+        };
     };
     readonly review_not_eligible: {
         readonly status: 409;
@@ -6493,6 +6554,7 @@ export type AppErrorCode = "not_found" | "validation_error" | "invalid_cursor" |
 export interface AppErrorCodeEntry {
     readonly status: number;
     readonly meaning: string;
+    readonly details?: Readonly<Record<string, unknown>>;
 }
 export declare function isAppErrorCode(value: unknown): value is AppErrorCode;
 
@@ -9558,6 +9620,7 @@ export interface StorefrontEmbedRule {
 export declare function storefrontEmbedRule(unit: "section" | "component" | StorefrontSkinTarget): StorefrontEmbedRule;
 export declare const STOREFRONT_ISLAND_HYDRATION: readonly ["load", "idle", "visible", "interaction"];
 export type StorefrontIslandHydration = (typeof STOREFRONT_ISLAND_HYDRATION)[number];
+export declare const STOREFRONT_STYLE_FUNCTIONS: readonly ["var", "calc", "min", "max", "clamp", "rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color-mix", "linear-gradient", "radial-gradient", "conic-gradient", "repeating-linear-gradient", "repeating-radial-gradient", "repeating-conic-gradient", "translate", "translatex", "translatey", "translate3d", "rotate", "scale", "scalex", "scaley", "skew", "skewx", "skewy", "matrix", "cubic-bezier", "steps", "minmax", "repeat", "fit-content"];
 export declare const STOREFRONT_COMPONENT_LIMITS: {
     readonly moduleBytes: number;
     readonly stylesheetBytes: number;
@@ -10449,10 +10512,14 @@ export interface PluginUiDocument {
 }
 export type PluginUiImageSource = string | { media: string; } | { app: string; };
 export type PluginUiInput = (InputBase & { type: "text-field"; value?: string; placeholder?: string; minLength?: number; maxLength?: number; format?: "text" | "email" | "url" | "tel"; }) | (InputBase & { type: "textarea"; value?: string; placeholder?: string; maxLength?: number; rows?: number; }) | (InputBase & { type: "number-field"; value?: number | null; min?: number; max?: number; step?: number; integer?: boolean; }) | (InputBase & { type: "select"; value?: string | null; options: Array<{ value: string; label: string; }>; placeholder?: string; }) | (InputBase & { type: "checkbox"; value?: boolean; }) | (InputBase & { type: "date-field"; value?: string | null; min?: string; max?: string; }) | (InputBase & { type: "file-field"; accept?: Array<(typeof ADMIN_UPLOAD_TYPES)[number]>; maxBytes?: number; });
-export type PluginUiNode = { type: "page"; title?: string; description?: string; actions?: PluginUiButton[]; children: PluginUiNode[]; } | { type: "section"; title?: string; description?: string; children: PluginUiNode[]; } | { type: "card"; title?: string; description?: string; actions?: PluginUiButton[]; children: PluginUiNode[]; } | { type: "stack"; direction?: "vertical" | "horizontal"; gap?: "sm" | "md" | "lg"; tone?: PluginUiTone; children: PluginUiNode[]; } | { type: "columns"; children: PluginUiNode[]; } | { type: "heading"; text: string; level?: 2 | 3 | 4; } | { type: "text"; text: string; tone?: PluginUiTone; size?: "sm" | "md"; emphasis?: "strong" | "mono"; } | { type: "badge"; text: string; tone?: PluginUiTone; } | { type: "banner"; tone: PluginUiTone; title?: string; text?: string; actions?: PluginUiButton[]; } | { type: "key-value"; items: Array<{ label: string; value: string | number | boolean | null; tone?: PluginUiTone; }>; } | { type: "stat"; label: string; value: string | number; help?: string; } | { type: "table"; caption?: string; columns: PluginUiTableColumn[]; rows: PluginUiTableRow[]; pagination?: { previous?: string | null; next?: string | null; total?: number | null; }; empty?: { title: string; text?: string; }; } | { type: "empty-state"; title: string; text?: string; action?: PluginUiButton; } | { type: "image"; src: PluginUiImageSource; alt: string; width?: number; height?: number; } | { type: "link"; text: string; to: PluginUiTarget; } | { type: "divider"; } | PluginUiButton | { type: "form"; action: PluginUiRouteAction; submitLabel: string; confirm?: z.infer<typeof pluginUiConfirmSchema>; children: PluginUiNode[]; } | PluginUiInput | { type: "field"; attribute: string; choices?: Array<{ value: string; label: string; }>; } | { type: "progress"; label: string; value: number; max: number; help?: string; live?: boolean; } | { type: "disclosure"; summary: string; open?: boolean; children: PluginUiNode[]; } | { type: "mark"; tone: PluginUiTone; };
+export type PluginUiNode = { type: "page"; title?: string; description?: string; actions?: PluginUiButton[]; children: PluginUiNode[]; } | { type: "section"; title?: string; description?: string; children: PluginUiNode[]; } | { type: "card"; title?: string; description?: string; actions?: PluginUiButton[]; children: PluginUiNode[]; } | { type: "stack"; direction?: "vertical" | "horizontal"; gap?: "sm" | "md" | "lg"; tone?: PluginUiTone; children: PluginUiNode[]; } | { type: "columns"; children: PluginUiNode[]; } | { type: "heading"; text: string; level?: 2 | 3 | 4; } | { type: "text"; text: string | PluginUiSpan[]; tone?: PluginUiTone; size?: "sm" | "md"; emphasis?: "strong" | "mono"; } | { type: "badge"; text: string; tone?: PluginUiTone; } | { type: "banner"; tone: PluginUiTone; title?: string; text?: string; actions?: PluginUiButton[]; } | { type: "key-value"; items: Array<{ label: string; value: string | number | boolean | null; tone?: PluginUiTone; }>; } | { type: "stat"; label: string; value: string | number; help?: string; } | { type: "table"; caption?: string; columns: PluginUiTableColumn[]; rows: PluginUiTableRow[]; pagination?: { previous?: string | null; next?: string | null; total?: number | null; }; empty?: { title: string; text?: string; }; } | { type: "empty-state"; title: string; text?: string; action?: PluginUiButton; } | { type: "image"; src: PluginUiImageSource; alt: string; width?: number; height?: number; } | { type: "link"; text: string; to: PluginUiTarget; } | { type: "divider"; } | PluginUiButton | { type: "form"; action: PluginUiRouteAction; submitLabel: string; confirm?: z.infer<typeof pluginUiConfirmSchema>; children: PluginUiNode[]; } | PluginUiInput | { type: "field"; attribute: string; choices?: Array<{ value: string; label: string; }>; } | { type: "progress"; label: string; value: number; max: number; help?: string; live?: boolean; } | { type: "disclosure"; summary: string; open?: boolean; children: PluginUiNode[]; } | { type: "mark"; tone: PluginUiTone; };
 export type PluginUiParseResult = { ok: true; document: PluginUiDocument; } | { ok: false; reason: "version" | "invalid" | "too_large"; issues: Array<{ path: string; message: string; }>; };
 export type PluginUiRouteAction = { kind: "route"; route: string; subpath?: string | undefined; method?: "POST" | "PUT" | "PATCH" | "DELETE" | undefined; body?: Record<string, unknown> | undefined; };
 export declare function pluginUiRouteActions(root: PluginUiNode): PluginUiRouteAction[];
+export interface PluginUiSpan {
+    text: string;
+    to?: PluginUiTarget;
+}
 export type PluginUiSurface = "admin" | "buyer";
 export interface PluginUiTableColumn {
     key: string;

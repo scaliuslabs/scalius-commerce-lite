@@ -208,7 +208,7 @@ export async function withWireRefusals<T>(write: () => Promise<T>): Promise<T> {
 
 function wireRefusal(error: z.ZodError): ValidationError {
   const issues = error.issues.map((issue) => ({
-    path: issue.path.map((segment) => (typeof segment === "string" ? WIRE_PATH[segment] ?? segment : segment)).join("."),
+    path: issue.path.flatMap<string | number>((segment) => (typeof segment === "string" ? [WIRE_PATH[segment] ?? segment] : typeof segment === "number" ? [segment] : [])),
     message: issue.message,
   }));
   return new ValidationError(issues[0]?.message ?? "Check the discount.", { issues });
