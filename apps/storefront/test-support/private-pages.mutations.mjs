@@ -301,7 +301,7 @@ export const MUTATIONS = {
     why: "the theme's page paint shows behind the default look, whose rows no table checks on it",
     // With the layout's guard too (review 5, S4), which draws no paint on a cart not in token mode.
     rewrites: [
-      rewrite("packages/shared/src/storefront-theme/private-layout.ts", "painted && privatePageHasOwnPage(page) ? {} : null", "null"),
+      rewrite("packages/shared/src/storefront-theme/private-layout.ts", "painted && privatePageHasOwnPage(page) && privatePageNamed({ pages, tokens: value.tokens }, page) ? {} : null", "null"),
       rewrite("apps/storefront/src/layouts/Layout.astro", "themePaint(privateStyle !== undefined && !privateTokens ? { ...storefrontTheme, tokens: unpaintedTokens } : storefrontTheme, resolvedTheme)", "themePaint(storefrontTheme, resolvedTheme)"),
     ],
     cases: ["a dark page paint, no private tokens"],
