@@ -511,6 +511,12 @@ export const MUTATIONS = {
     cases: ["the phone tab bar in the customer's look, on the account, English and Bangla"],
     expect: /tab bar: a tab's icon is drawn/,
   },
+  "H-q a tab's label sits under its own icon's height": {
+    why: "each tab centres its own icon and label (its own rows, not the bar's): the current tab's larger chip pushes its label below the others', and a label on two lines lifts its tab",
+    rewrites: [rewrite("apps/storefront/src/components/header/MobileTabBar.astro", "    grid-template-rows: subgrid;\n    justify-items: center;", "    grid-template-rows: 1fr auto auto 1fr;\n    justify-items: center;")],
+    cases: ["the phone tab bar in the customer's look, on the account, English and Bangla"],
+    expect: /tab bar: the tabs' labels start on different lines/,
+  },
   "H-o every tab's weight reaches the current tab": {
     why: "a theme's weight for every tab is written on the current tab too, with no weight of its own beside it: the check counted the store's 700 the page never draws",
     rewrites: [rewrite("packages/shared/src/storefront-theme/private-tab-bar.ts", "writeCurrent: current !== undefined || tab !== undefined,", "writeCurrent: current !== undefined,")],
@@ -620,6 +626,11 @@ export const CHROME_MUTATIONS = {
     why: "with scripts off the theme's drawer has no button that opens it",
     rewrites: [rewrite(CHROME, "{drawers.length > 0 && (", "{false && (")],
     expect: /^no script: the store draws no button/,
+  },
+  "C12 a store Menu button under a finger's target": {
+    why: "with scripts off the store's own Menu button is drawn 24px tall: the theme's dead button beside it is the easier one to press",
+    rewrites: [rewrite(CHROME, "    min-block-size: 44px;\n    padding-inline: 0.75rem;", "    min-block-size: 24px;\n    padding-inline: 0.75rem;")],
+    expect: /^no script: the store's Menu button is \d+x\d+px, under a 44px target/,
   },
   "C11 a count read once": {
     why: "the header's count reads the cart at load and never follows it",

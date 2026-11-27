@@ -201,20 +201,31 @@ const labelOf = (tab: PhoneTab): string => (tab.kind === "link" ? tab.label : co
       visibility 0s linear 200ms;
   }
 
+  /* Every tab shares two rows, centred in the bar: the icons' row as tall as the largest icon box (the current tab's
+     chip and ring included) and the labels' row as tall as the longest label. Each chip is centred in its row and
+     every label starts on the same line, whatever chip is larger or label wraps (subgrid through the item and tab). */
   :where(.mobile-tab-bar > ul) {
     display: grid;
     grid-template-columns: repeat(var(--mobile-tab-count, 5), minmax(0, 1fr));
+    grid-template-rows: 1fr auto auto 1fr;
+    row-gap: 0;
     height: var(--mobile-tabs-height);
     max-width: 40rem;
     margin-inline: auto;
   }
 
+  :where(.mobile-tab-bar > ul > li) {
+    display: grid;
+    grid-row: 1 / -1;
+    grid-template-rows: subgrid;
+    min-width: 0;
+  }
+
   :where(.mobile-tab) {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.1875rem;
+    display: grid;
+    grid-row: 1 / -1;
+    grid-template-rows: subgrid;
+    justify-items: center;
     width: 100%;
     min-width: 0;
     height: 100%;
@@ -235,7 +246,15 @@ const labelOf = (tab: PhoneTab): string => (tab.kind === "link" ? tab.label : co
 
   /* A label is never cut: a long name ("Gaming News" at 320px, in English or Bangla) takes a second line, and its box
      keeps room above and below its lines for Bangla's vowel signs (PRIVATE_TAB_BAR_LABEL). */
+  :where(.mobile-tab > :first-child) {
+    grid-row: 2;
+    align-self: center;
+  }
+
   :where(.mobile-tab [data-part="tab-label"]) {
+    grid-row: 3;
+    align-self: start;
+    margin-top: 0.1875rem;
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;

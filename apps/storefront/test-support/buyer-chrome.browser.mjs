@@ -35,8 +35,8 @@
 //   the next page and back, guest and signed in, at 390 and 1280 px;
 // - with JavaScript off (a browser context without it): the theme's signed-in
 //   and guest versions follow the server's hint on the host, and the store's
-//   own "Menu" button opens the theme's drawer as the store's panel, which
-//   Escape closes;
+//   own "Menu" button (a 44px target above the theme's header, nothing over
+//   it) opens the theme's drawer as the store's panel, which Escape closes;
 // - an account order's page: a paid order draws the theme's chrome and no
 //   payment card (no `data-payment-step`); an order the buyer can still pay
 //   draws the store's chrome, marked, with its card;
@@ -540,6 +540,17 @@ for (const signedIn of [false, true]) {
     const button = page.locator(".buyer-chrome-noscript-bar button");
     if (await button.count() !== 1 || !(await button.isVisible())) problems.push("no script: the store draws no button of its own for the theme's drawer");
     else {
+      // The store's button is the plain one to press: a 44px target, above the theme's header (whose own button opens
+      // nothing with scripts off), nothing over it.
+      const placed = await button.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        const frame = document.querySelector('[data-buyer-chrome-frame="header"]')?.getBoundingClientRect();
+        const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+        return { width: box.width, height: box.height, top: box.top, above: frame ? box.bottom <= frame.top + 0.5 : false, pressed: Boolean(hit && element.contains(hit)) };
+      });
+      if (placed.width < 44 || placed.height < 44) problems.push(`no script: the store's Menu button is ${placed.width.toFixed(0)}x${placed.height.toFixed(0)}px, under a 44px target`);
+      if (!placed.above || placed.top < 0) problems.push("no script: the store's Menu button is not above the theme's header");
+      if (!placed.pressed) problems.push("no script: something covers the store's Menu button");
       await button.click();
       await page.waitForTimeout(100);
       if (!await page.evaluate(() => document.querySelector('[data-buyer-chrome-panel="drawer"]')?.matches(":popover-open") === true)) problems.push("no script: the store's button does not open the theme's drawer");

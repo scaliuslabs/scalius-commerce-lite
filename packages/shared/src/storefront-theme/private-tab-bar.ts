@@ -186,6 +186,9 @@ function css(tokens: Record<string, Values>, palettes: readonly PrivatePalette[]
         current.padding !== undefined ? rule(SELECTORS.currentIcon, [box(Number(current.padding))]) : "",
       ];
     })(),
+    // The current tab's ring is drawn outside its chip: its icon keeps that room above and below, so the icons' row
+    // (every tab's, the store's bar shares it) holds the ring and every label starts below it, on one line.
+    current.ring !== undefined && Number(current["ring-width"] ?? 0) > 0 ? rule(SELECTORS.currentIcon, [`margin-block:${px(current["ring-width"])}`]) : "",
     bar.backdrop === "solid" ? rule(SELECTORS.bar, ["-webkit-backdrop-filter:none", "backdrop-filter:none"]) : "",
   ].join("");
   const colours = palettes.map((palette, index) => {
