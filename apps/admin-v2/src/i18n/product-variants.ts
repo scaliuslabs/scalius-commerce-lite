@@ -150,6 +150,7 @@ const variantEditorCopy = defineMessages({
     fulfilmentFor: "Fulfilment for {name}",
     fulfilmentForGroup: "Fulfilment for every {name} variant",
     fulfilmentPhysicalShort: "Physical",
+    fulfilmentDigitalShort: "Digital",
     fulfilmentServiceShort: "Service",
   },
   bn: {
@@ -296,6 +297,7 @@ const variantEditorCopy = defineMessages({
     fulfilmentFor: "{name}-এর ফুলফিলমেন্ট",
     fulfilmentForGroup: "{name}-এর সব ভ্যারিয়েন্টের ফুলফিলমেন্ট",
     fulfilmentPhysicalShort: "প্রোডাক্ট",
+    fulfilmentDigitalShort: "ডিজিটাল",
     fulfilmentServiceShort: "সার্ভিস",
   },
 });

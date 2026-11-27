@@ -836,7 +836,8 @@ const OptionMatrix = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEdit
           ) : null}
         </div>
       ) : null}
-      {digitalSimple ? (
+      {/* A bundle's items carry its stock and readiness (checkout skips the bundle's own): no file or key line of its own. */}
+      {digitalSimple && !simpleKit ? (
         <DigitalStockStatus productId={productId} variantId={defaultSku?.id} tracked={shownSimpleSku.trackInventory} />
       ) : null}
       <FieldRow>

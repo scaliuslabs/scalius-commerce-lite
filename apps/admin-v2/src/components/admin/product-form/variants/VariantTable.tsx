@@ -95,7 +95,9 @@ function rowLayout(kind: boolean, quantity: boolean): RowLayout {
   if (quantity) return kind ? ROW_LAYOUTS.kind : ROW_LAYOUTS.base;
   return kind ? ROW_LAYOUTS.noQuantityKind : ROW_LAYOUTS.noQuantity;
 }
-type EditableKind = "physical" | "service";
+/** What one SKU is: the row shows its stored kind, whatever it is (an unset kind reads as physical, as the server stores it). */
+type EditableKind = "physical" | "digital" | "service";
+const kindOf = (variant: Pick<DraftVariant, "fulfillmentKind">): EditableKind => variant.fulfillmentKind ?? "physical";
 
 type Money = ReturnType<typeof useCurrency> & {
   /** "৳12,692": a customer-facing amount without paisa when the currency is paid in whole units. */
@@ -752,7 +754,7 @@ const VariantRow = React.memo(function VariantRow({
             <span className="block text-body text-muted-foreground md:hidden">{t("fulfilment")}</span>
             <KindSelect
               readOnly={readOnly}
-              value={variant.fulfillmentKind === "service" ? "service" : "physical"}
+              value={kindOf(variant)}
               label={t("fulfilmentFor", { name })}
               onChange={(fulfillmentKind) => change({ fulfillmentKind })}
             />
@@ -888,7 +890,7 @@ const GroupRow = React.memo(function GroupRow({ readOnly, group, open, repeated,
           <div className="col-span-2 min-w-0 md:col-span-1">
             <KindSelect
               readOnly={readOnly}
-              value={same(group.variants.map((variant): EditableKind => (variant.fulfillmentKind === "service" ? "service" : "physical")))}
+              value={same(group.variants.map(kindOf))}
               label={t("fulfilmentForGroup", { name: group.label })}
               onChange={(fulfillmentKind) => onChangeMany(new Set(ids), { fulfillmentKind })}
             />
@@ -899,7 +901,10 @@ const GroupRow = React.memo(function GroupRow({ readOnly, group, open, repeated,
   );
 }, sameGroupRow);
 
-/** Physical (ship or pickup) or a service, for one row or a whole group ("Mixed" until chosen). */
+const EDITABLE_KINDS: readonly EditableKind[] = ["physical", "digital", "service"];
+const KIND_LABEL = { physical: "fulfilmentPhysicalShort", digital: "fulfilmentDigitalShort", service: "fulfilmentServiceShort" } as const;
+
+/** Physical (ship or pickup), digital or a service, for one row or a whole group ("Mixed" until chosen). */
 function KindSelect({ value, label, onChange, readOnly = false }: {
   readOnly?: boolean;
   value: EditableKind | undefined;
@@ -907,19 +912,19 @@ function KindSelect({ value, label, onChange, readOnly = false }: {
   onChange: (kind: EditableKind) => void;
 }) {
   const t = useMessages(productVariantMessages);
-  if (readOnly) return <p className="py-2 text-body"><span className="sr-only">{label}: </span>{t(value === undefined ? "mixedValues" : value === "service" ? "fulfilmentServiceShort" : "fulfilmentPhysicalShort")}</p>;
+  if (readOnly) return <p className="py-2 text-body"><span className="sr-only">{label}: </span>{t(value === undefined ? "mixedValues" : KIND_LABEL[value])}</p>;
   return (
     <SearchableSelect
       value={value ?? ""}
       ariaLabel={label}
       onValueChange={(next) => {
-        if (next === "physical" || next === "service") onChange(next);
+        const kind = EDITABLE_KINDS.find((candidate) => candidate === next);
+        if (kind) onChange(kind);
       }}
       triggerClassName="w-full"
       options={[
         ...(value === undefined ? [{ value: "", label: t("mixedValues"), disabled: true }] : []),
-        { value: "physical", label: t("fulfilmentPhysicalShort") },
-        { value: "service", label: t("fulfilmentServiceShort") },
+        ...EDITABLE_KINDS.map((kind) => ({ value: kind, label: t(KIND_LABEL[kind]) })),
       ]}
     />
   );
