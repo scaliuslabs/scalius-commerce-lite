@@ -14,7 +14,7 @@ import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import type { OrdersQuery } from "~/lib/api-query-options/orders";
 import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
-import { orderListMessages } from "~/i18n/order-list";
+import { orderListDialogMessages } from "~/i18n/order-list-dialogs";
 import {
   buildOrderExportParams,
   downloadOrderExport,
@@ -50,7 +50,7 @@ export function ExportOrdersDialog({
   total,
   totalIsCapped = false,
 }: ExportOrdersDialogProps) {
-  const t = useMessages(orderListMessages);
+  const t = useMessages(orderListDialogMessages);
   const tr = useMessages(resourceMessages);
   // Until the merchant picks, the scope follows what they are looking at.
   const [chosenScope, setScope] = useState<OrderExportScope | null>(null);

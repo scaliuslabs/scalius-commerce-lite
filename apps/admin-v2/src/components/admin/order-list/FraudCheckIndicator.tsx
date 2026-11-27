@@ -11,6 +11,7 @@ import { postApiV1AdminFraudCheckerLookup } from "@scalius/api-client/sdk";
 import { apiData } from "@/lib/api";
 import { formatNumber, useMessages } from "~/i18n";
 import { orderListMessages } from "~/i18n/order-list";
+import { orderListMoreMessages } from "~/i18n/order-list-more";
 import { countryName } from "~/lib/country-name";
 
 type RiskLevel = NonNullable<FraudLookupData["riskLevel"]>;
@@ -32,7 +33,8 @@ function riskLevel(data: FraudLookupData): RiskLevel {
  * Without a connected fraud check service (`configured: false`) it says how to connect one.
  */
 export function FraudCheckIndicator({ phone, countryCode, trigger }: { phone: string; countryCode: string | null; trigger: ReactNode }) {
-  const t = useMessages(orderListMessages);
+  const t = useMessages(orderListMoreMessages);
+  const tl = useMessages(orderListMessages);
   const [open, setOpen] = useState(true);
   const { data, error, isFetching, refetch } = useQuery({
     queryKey: ["fraud-checker", "lookup", phone, countryCode],
@@ -54,7 +56,7 @@ export function FraudCheckIndicator({ phone, countryCode, trigger }: { phone: st
           <p className="text-body font-medium">{t("deliveryHistory")}</p>
           {!notConnected && !unsupported && !unavailable ? (
             <Button variant="ghost" size="sm" onClick={() => void refetch()} disabled={isFetching}>
-              {isFetching ? <LoaderCircle className="h-4 w-4 animate-spin" /> : t("refresh")}
+              {isFetching ? <LoaderCircle className="h-4 w-4 animate-spin" /> : tl("refresh")}
             </Button>
           ) : null}
         </div>
@@ -87,12 +89,12 @@ export function FraudCheckIndicator({ phone, countryCode, trigger }: { phone: st
           <>
             <dl className="grid grid-cols-3 gap-2 text-center">
               {([
-                ["parcels", data.total_parcels],
-                ["delivered", data.total_delivered],
-                ["cancelled", data.total_cancel],
-              ] as const).map(([key, value]) => (
-                <div key={key}>
-                  <dt className="text-body text-muted-foreground">{t(key)}</dt>
+                [t("parcels"), data.total_parcels],
+                [t("delivered"), data.total_delivered],
+                [tl("cancelled"), data.total_cancel],
+              ] as const).map(([label, value]) => (
+                <div key={label}>
+                  <dt className="text-body text-muted-foreground">{label}</dt>
                   <dd className="text-heading-lg font-semibold">{formatNumber(value ?? 0)}</dd>
                 </div>
               ))}

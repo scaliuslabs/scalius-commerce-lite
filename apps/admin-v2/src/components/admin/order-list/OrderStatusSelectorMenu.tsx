@@ -14,6 +14,7 @@ import type { OrderActionBlock, OrderAdminActions } from "@scalius/shared/order-
 import { useMessages } from "~/i18n";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
 import { orderListMessages } from "~/i18n/order-list";
+import { orderListMoreMessages } from "~/i18n/order-list-more";
 
 /** React bubbles portal events to the row's click handler; keep them in the menu. */
 const stopRow = (event: SyntheticEvent) => event.stopPropagation();
@@ -38,7 +39,8 @@ export function OrderStatusSelectorMenu({
   openOrder,
   trigger,
 }: OrderStatusSelectorMenuProps) {
-  const t = useMessages(orderListMessages);
+  const t = useMessages(orderListMoreMessages);
+  const tl = useMessages(orderListMessages);
   const to = useMessages(orderMessages);
   // A status that can't be chosen stays in the menu, greyed out, with the reason under it.
   const reasonText = (reason: OrderActionBlock) => {
@@ -62,7 +64,7 @@ export function OrderStatusSelectorMenu({
         onClick={stopRow}
         onKeyDown={stopRow}
       >
-        <DropdownMenuLabel>{t("changeStatus")}</DropdownMenuLabel>
+        <DropdownMenuLabel>{tl("changeStatus")}</DropdownMenuLabel>
         <DropdownMenuRadioGroup
           value={status}
           onValueChange={onStatusUpdate}

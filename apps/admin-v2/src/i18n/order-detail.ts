@@ -247,7 +247,6 @@ export const orderDetailMessages = defineMessages({
 
 
 
-    "toast.orderCreated": "Order created",
 
     notFound: "Order not found",
     dismiss: "Dismiss",
@@ -601,7 +600,6 @@ export const orderDetailMessages = defineMessages({
 
 
 
-    "toast.orderCreated": "অর্ডার তৈরি হয়েছে",
 
     notFound: "অর্ডারটি পাওয়া যায়নি",
     dismiss: "বন্ধ করুন",
