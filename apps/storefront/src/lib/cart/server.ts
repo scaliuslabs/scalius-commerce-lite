@@ -385,20 +385,13 @@ export async function processOrder(
       }
       // Lines cash can't pay for (a key, a download, a gift card): say what can (the cart's own words).
       const names = cashUnpayableNames(validated.items);
-      if (names.length > 0) {
-        return {
-          success: false,
-          error: {
-            message: whatCanPayText(copy, {
-              items: formatList(names, numberLocale(options.languageCode || "en")),
-              gateways: options.payment?.gateways ?? [],
-              signedIn: Boolean(options.customerSessionToken),
-              giftCardsLive: options.payment?.giftCardsLive === true,
-            }),
-          },
-          details: { reason: CASH_UNPAYABLE_REASON },
-        };
-      }
+      const words = names.length === 0 ? null : whatCanPayText(copy, {
+        items: formatList(names, numberLocale(options.languageCode || "en")),
+        gateways: options.payment?.gateways ?? [],
+        signedIn: Boolean(options.customerSessionToken),
+        giftCardsLive: options.payment?.giftCardsLive === true,
+      });
+      if (words !== null) return { success: false, error: { message: words }, details: { reason: CASH_UNPAYABLE_REASON } };
       throw new CheckoutCopyError("cashOnDeliveryUnavailableText", "cash on delivery is not allowed for this cart");
     }
 

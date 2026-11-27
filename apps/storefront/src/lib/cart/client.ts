@@ -1135,7 +1135,7 @@ function paymentMessage(): string {
     gateways: pageGateways(),
     signedIn: pageBuyerSignedIn(),
     giftCardsLive: pageGiftCardsLive(),
-  });
+  }) ?? cartPaymentCopy(language).noPaymentMethods;
 }
 
 function cartRuleErrors(): CartRuleError[] {

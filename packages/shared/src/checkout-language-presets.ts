@@ -419,8 +419,8 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   // A cart of digital items or gift cards that no way to pay but a gift card can take for this buyer.
   cartOnlinePaymentRequiredText: "{items} can't be paid for in cash, and this store takes no other payment yet.",
   // The same, where the store also offers paying later ({method}) to signed-in buyers it approves: a guest, then a signed-in buyer it doesn't reach.
-  cartPayLaterSignInText: "{items} can't be paid for in cash here. Pay with a gift card, or sign in to pay with {method}.",
-  cartPayLaterNotOpenText: "{items} can't be paid for in cash here, and {method} isn't open to your account. Pay with a gift card.",
+  cartPayLaterSignInText: "{items} can't be paid for in cash here. Sign in with an approved account to pay with {method}.",
+  cartPayLaterNotOpenText: "{items} can't be paid for in cash here, and {method} isn't open to your account.",
   // The payment step, where only a gift card can pay for the order's keys.
   paymentGiftCardOnlyText: "{items} in this order can't be paid for in cash here. Pay with a gift card.",
   cartDeliveryUnavailableText: "This store isn't delivering yet, so items that need delivery can't be ordered right now. Remove them to order the rest.",
@@ -1217,8 +1217,8 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   cartItemsNeedAttentionText: "চেকআউটের আগে কার্টের {count}টি পণ্য যাচাই করা দরকার।",
   cartRulesBlockedText: "এই অর্ডারটি এখনো দেওয়া যাচ্ছে না।",
   cartOnlinePaymentRequiredText: "{items}-এর দাম ক্যাশে দেওয়া যায় না, আর এই স্টোর এখনো অন্য কোনো পেমেন্ট নেয় না।",
-  cartPayLaterSignInText: "{items}-এর দাম এখানে ক্যাশে দেওয়া যায় না। গিফট কার্ড দিয়ে দাম দিন, অথবা {method} দিয়ে দাম দিতে সাইন ইন করুন।",
-  cartPayLaterNotOpenText: "{items}-এর দাম এখানে ক্যাশে দেওয়া যায় না, আর {method} আপনার অ্যাকাউন্টে চালু নেই। গিফট কার্ড দিয়ে দাম দিন।",
+  cartPayLaterSignInText: "{items}-এর দাম এখানে ক্যাশে দেওয়া যায় না। {method} দিয়ে দাম দিতে অনুমোদিত অ্যাকাউন্টে সাইন ইন করুন।",
+  cartPayLaterNotOpenText: "{items}-এর দাম এখানে ক্যাশে দেওয়া যায় না, আর {method} আপনার অ্যাকাউন্টে চালু নেই।",
   paymentGiftCardOnlyText: "এই অর্ডারের {items}-এর দাম এখানে ক্যাশে দেওয়া যায় না। গিফট কার্ড দিয়ে দাম দিন।",
   cartDeliveryUnavailableText: "এই স্টোর এখনো ডেলিভারি দিচ্ছে না, তাই ডেলিভারি লাগে এমন পণ্য এখন অর্ডার করা যাবে না। বাকিগুলো অর্ডার করতে সেগুলো সরিয়ে দিন।",
   orderPlacedSuccessText: "আপনার অর্ডারটি সফলভাবে দেওয়া হয়েছে। অর্ডার আইডি: {orderId}",

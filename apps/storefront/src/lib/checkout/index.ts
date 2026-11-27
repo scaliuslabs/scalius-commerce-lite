@@ -1057,23 +1057,20 @@ function drawPaymentChoices(
 }
 
 /**
- * What can pay for this order when no method this buyer has can. Cash can't
- * pay for its keys, downloads and gift cards on a store that lists nothing
- * else but a pay-later method: say what can (`whatCanPayText`, the cart's
- * words). Otherwise (no such line, or a gateway is listed and refuses this
- * order, its amount limits) the neutral words: a gift card is not the answer.
+ * What can pay for this order when no method this buyer has can: cash can't
+ * pay for its keys, downloads and gift cards, so say what can
+ * (`whatCanPayText`, the cart's words); otherwise (no such line, or a listed
+ * gateway refuses this order, its amount limits) the neutral words.
  */
 function whatCanPayHere(config: CheckoutConfig, quote: CheckoutTaxQuote): string {
   const names = cashUnpayableNames(quote.items);
-  const gatewayListed = config.gateways.some((gateway) => gateway.paymentKind !== "cash_on_delivery"
-    && gateway.flow !== "deferred" && gateway.id !== "net_terms");
-  if (names.length === 0 || gatewayListed) return checkoutCopy.noPaymentMethodsText;
+  if (names.length === 0) return checkoutCopy.noPaymentMethodsText;
   return whatCanPayText(checkoutCopy, {
     items: formatList(names, numberLocale(pageLanguage() || "en", storeRegion())),
     gateways: config.gateways,
     signedIn: pageBuyerSignedIn(),
     giftCardsLive: config.giftCardsLive === true,
-  });
+  }) ?? checkoutCopy.noPaymentMethodsText;
 }
 
 async function renderGateways(): Promise<void> {
